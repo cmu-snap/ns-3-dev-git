@@ -132,8 +132,8 @@ main(int argc, char* argv[])
         AddressValue remote_address(InetSocketAddress(dumbbell_helper.GetRightIpv4Address(i), port));
         source_helper.SetAttribute("Remote", remote_address);
         source_apps.Add(source_helper.Install(dumbbell_helper.GetLeft(0)));
+        source_apps.Start(Seconds(1.0)); // TODO: add jitter
     }
-    source_apps.Start(Seconds(1.0)); // TODO: add jitter
     source_apps.Stop(Seconds(10.0)); // TODO: config burst time
 
     // TODO

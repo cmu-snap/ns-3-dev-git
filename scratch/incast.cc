@@ -119,20 +119,87 @@ main(int argc, char* argv[])
     address.SetBase("10.0.0.0", "255.255.255.0");
     Ipv4InterfaceContainer ip_requester_switch = address.Assign(requester_switch);
 
-    address.SetBase("10.0.2.0", "255.255.255.0");
+    address.SetBase("10.2.0.0", "255.255.255.0");
     Ipv4InterfaceContainer ip_switch_switch = address.Assign(switch_switch);
 
-    address.SetBase("10.0.1.0", "255.255.255.0");
+    address.SetBase("10.1.0.0", "255.255.255.0");
     std::vector<Ipv4InterfaceContainer> ip_switch_worker_vector;
 
     for (uint32_t i = 0; i < num_workers; ++i) {
         NetDeviceContainer switch_worker = switch_worker_vector[i];
         Ipv4InterfaceContainer ip_switch_worker = address.Assign(switch_worker);
         ip_switch_worker_vector.push_back(ip_switch_worker);
+        address.NewNetwork();
     }
 
     NS_LOG_INFO("Routing packets from the requester to the workers...");
-    // TODO
+
+    // Route packets from the requester to the workers
+    ApplicationContainer requester_source_apps;
+    ApplicationContainer worker_sink_apps;
+    std::vector<Ptr<PacketSink>> worker_sinks;
+    worker_sinks.reserve(num_workers);
+
+    for (uint32_t i = 0; i < num_workers; ++i) {
+        uint16_t port = 5000 + i;
+
+        OnOffHelper source_helper("ns3::TcpSocketFactory", Address());
+        source_helper.SetAttribute("OnTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
+        source_helper.SetAttribute("OffTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
+        source_helper.SetAttribute("PacketSize", UintegerValue(1000));
+        
+        Ipv4Address worker_address = ip_switch_worker_vector[i].GetAddress(1);
+        AddressValue remote_address(InetSocketAddress(worker_address, port));
+        source_helper.SetAttribute("Remote", remote_address);
+        requester_source_apps.Add(source_helper.Install(requester.Get(0)));
+        requester_source_apps.Start(MilliSeconds(100)); // TODO: add jitter
+        
+        
+        Address sink_address = InetSocketAddress(Ipv4Address::GetAny(), port);
+        PacketSinkHelper sink_helper("ns3::TcpSocketFactory", sink_address);
+        worker_sink_apps.Add(sink_helper.Install(workers.Get(i)));
+
+        Ptr<PacketSink> worker_sink = worker_sink_apps.Get(0)->GetObject<PacketSink>();
+        worker_sinks.push_back(worker_sink);
+    }
+
+    requester_source_apps.Stop(MilliSeconds(500)); // TODO: replace time
+    worker_sink_apps.Start(MilliSeconds(100));
+    worker_sink_apps.Stop(MilliSeconds(500)); // TODO: replace time
+
+    NS_LOG_INFO("Routing packets from the workers to the requester...");
+
+    // Route packets from the workers to the requester
+    ApplicationContainer worker_source_apps;
+    ApplicationContainer requester_sink_apps;
+    std::vector<Ptr<PacketSink>> requester_sinks;
+    requester_sinks.reserve(num_workers);
+
+    for (uint32_t i = 0; i < num_workers; ++i) {
+        uint16_t port = 5000 + i;
+
+        OnOffHelper source_helper("ns3::TcpSocketFactory", Address());
+        source_helper.SetAttribute("OnTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
+        source_helper.SetAttribute("OffTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
+        source_helper.SetAttribute("PacketSize", UintegerValue(1000));
+
+        Ipv4Address requester_address = ip_requester_switch.GetAddress(0);
+        AddressValue remote_address(InetSocketAddress(requester_address, port));
+        source_helper.SetAttribute("Remote", remote_address);
+        worker_source_apps.Add(source_helper.Install(workers.Get(i)));
+        worker_source_apps.Start(MilliSeconds(100)); // TODO: add jitter
+
+        Address sink_address = InetSocketAddress(Ipv4Address::GetAny(), port);
+        PacketSinkHelper sink_helper("ns3::TcpSocketFactory", sink_address);
+        requester_sink_apps.Add(sink_helper.Install(requester));
+        
+        Ptr<PacketSink> requester_sink = requester_sink_apps.Get(0)->GetObject<PacketSink>();
+        requester_sinks.push_back(requester_sink);
+    }
+
+    worker_source_apps.Stop(MilliSeconds(500)); // TODO: replace time
+    requester_sink_apps.Start(MilliSeconds(100));
+    requester_sink_apps.Stop(MilliSeconds(500)); // TODO: replace time
 
     // Enable logging for the requester's switch
     if (verbose) {
@@ -145,8 +212,9 @@ main(int argc, char* argv[])
     if (tracing) {
         NS_LOG_INFO("Enabling tracing...");
         large_link.EnablePcapAll("incast");
-        // AsciiTraceHelper ascii;
-        // large_link.EnableAsciiAll(ascii.CreateFileStream ("traces/incast.tr"));
+        AsciiTraceHelper ascii;
+        large_link.EnableAsciiAll(ascii.CreateFileStream ("traces/incast.tr"));
+        // TODO: disable tracing for most nodes
     }
 
     NS_LOG_INFO("Enabling static global routing...");
