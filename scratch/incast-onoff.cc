@@ -190,9 +190,10 @@ main(int argc, char* argv[])
 
     OnOffHelper worker_source_helper("ns3::TcpSocketFactory", Address());
     worker_source_helper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=.5]"));
-    worker_source_helper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=.5]"));
-    worker_source_helper.SetAttribute("PacketSize", UintegerValue(response_bytes));
-    worker_source_helper.SetAttribute("MaxBytes", UintegerValue(response_bytes));
+    worker_source_helper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1.]"));
+    worker_source_helper.SetAttribute("PacketSize", UintegerValue(500));
+    worker_source_helper.SetAttribute("MaxBytes", UintegerValue(0));
+    worker_source_helper.SetAttribute("DataRate", large_rate);
 
     for (uint32_t i = 0; i < num_workers; ++i) {
         uint16_t port = 5000 + i;
