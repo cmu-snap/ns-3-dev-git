@@ -27,7 +27,10 @@ main(int argc, char* argv[])
     // Initialize variables
     bool verbose = true;
     uint32_t num_workers = 50;
-    uint32_t requests_per_second = 50;
+    uint32_t request_bytes = 50;
+    uint32_t response_bytes = 15000;
+    uint64_t rtt_ms = 200;
+    // uint32_t requests_per_second = 50; 
     bool experimenting = false;
     bool tracing = true;
 
@@ -44,10 +47,20 @@ main(int argc, char* argv[])
         num_workers
     );
     cmd.AddValue(
-        "requests_per_second", 
-        "Requests per second (default: 50)", 
-        requests_per_second
+        "request_bytes", 
+        "Number of bytes sent from the requester to all workers (default: 50)", 
+        request_bytes
     );
+    cmd.AddValue(
+        "response_bytes", 
+        "Number of bytes sent from each worker to the requester (default: 1500)", 
+        response_bytes
+    );
+    // cmd.AddValue(
+    //     "requests_per_second", 
+    //     "Requests per second (default: 50)", 
+    //     requests_per_second
+    // );
     cmd.AddValue(
         "experimenting", 
         "Use experimentation link parameters (default: false)", 
@@ -140,20 +153,20 @@ main(int argc, char* argv[])
     std::vector<Ptr<PacketSink>> worker_sinks;
     worker_sinks.reserve(num_workers);
 
+    OnOffHelper requester_source_helper("ns3::TcpSocketFactory", Address());
+    requester_source_helper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=.5]"));
+    requester_source_helper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=.5]"));
+    requester_source_helper.SetAttribute("PacketSize", UintegerValue(request_bytes / num_workers));
+    requester_source_helper.SetAttribute("MaxBytes", UintegerValue(request_bytes / num_workers));
+
     for (uint32_t i = 0; i < num_workers; ++i) {
         uint16_t port = 5000 + i;
-
-        OnOffHelper source_helper("ns3::TcpSocketFactory", Address());
-        source_helper.SetAttribute("OnTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
-        source_helper.SetAttribute("OffTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
-        source_helper.SetAttribute("PacketSize", UintegerValue(1000));
-        
         Ipv4Address worker_address = ip_switch_worker_vector[i].GetAddress(1);
+
         AddressValue remote_address(InetSocketAddress(worker_address, port));
-        source_helper.SetAttribute("Remote", remote_address);
-        requester_source_apps.Add(source_helper.Install(requester.Get(0)));
-        requester_source_apps.Start(MilliSeconds(100)); // TODO: add jitter
-        
+        requester_source_helper.SetAttribute("Remote", remote_address);
+        requester_source_apps.Add(requester_source_helper.Install(requester.Get(0)));
+        requester_source_apps.Start(MilliSeconds(100 + rand() % 5));
         
         Address sink_address = InetSocketAddress(Ipv4Address::GetAny(), port);
         PacketSinkHelper sink_helper("ns3::TcpSocketFactory", sink_address);
@@ -163,9 +176,9 @@ main(int argc, char* argv[])
         worker_sinks.push_back(worker_sink);
     }
 
-    requester_source_apps.Stop(MilliSeconds(500)); // TODO: replace time
+    requester_source_apps.Stop(MilliSeconds(5000)); // TODO: replace time
     worker_sink_apps.Start(MilliSeconds(100));
-    worker_sink_apps.Stop(MilliSeconds(500)); // TODO: replace time
+    worker_sink_apps.Stop(MilliSeconds(5000)); // TODO: replace time
 
     NS_LOG_INFO("Routing packets from the workers to the requester...");
 
@@ -175,19 +188,20 @@ main(int argc, char* argv[])
     std::vector<Ptr<PacketSink>> requester_sinks;
     requester_sinks.reserve(num_workers);
 
+    OnOffHelper worker_source_helper("ns3::TcpSocketFactory", Address());
+    worker_source_helper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=.5]"));
+    worker_source_helper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=.5]"));
+    worker_source_helper.SetAttribute("PacketSize", UintegerValue(response_bytes));
+    worker_source_helper.SetAttribute("MaxBytes", UintegerValue(response_bytes));
+
     for (uint32_t i = 0; i < num_workers; ++i) {
         uint16_t port = 5000 + i;
 
-        OnOffHelper source_helper("ns3::TcpSocketFactory", Address());
-        source_helper.SetAttribute("OnTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
-        source_helper.SetAttribute("OffTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
-        source_helper.SetAttribute("PacketSize", UintegerValue(1000));
-
         Ipv4Address requester_address = ip_requester_switch.GetAddress(0);
         AddressValue remote_address(InetSocketAddress(requester_address, port));
-        source_helper.SetAttribute("Remote", remote_address);
-        worker_source_apps.Add(source_helper.Install(workers.Get(i)));
-        worker_source_apps.Start(MilliSeconds(100)); // TODO: add jitter
+        worker_source_helper.SetAttribute("Remote", remote_address);
+        worker_source_apps.Add(worker_source_helper.Install(workers.Get(i)));
+        worker_source_apps.Start(MilliSeconds(100 + rtt_ms/2 + rand() % 5));
 
         Address sink_address = InetSocketAddress(Ipv4Address::GetAny(), port);
         PacketSinkHelper sink_helper("ns3::TcpSocketFactory", sink_address);
@@ -197,9 +211,9 @@ main(int argc, char* argv[])
         requester_sinks.push_back(requester_sink);
     }
 
-    worker_source_apps.Stop(MilliSeconds(500)); // TODO: replace time
+    worker_source_apps.Stop(MilliSeconds(5000)); // TODO: replace time
     requester_sink_apps.Start(MilliSeconds(100));
-    requester_sink_apps.Stop(MilliSeconds(500)); // TODO: replace time
+    requester_sink_apps.Stop(MilliSeconds(5000)); // TODO: replace time
 
     // Enable logging for the requester's switch
     if (verbose) {
@@ -211,9 +225,9 @@ main(int argc, char* argv[])
     // Enable tracing across the middle link
     if (tracing) {
         NS_LOG_INFO("Enabling tracing...");
-        large_link.EnablePcapAll("incast");
-        AsciiTraceHelper ascii;
-        large_link.EnableAsciiAll(ascii.CreateFileStream ("traces/incast.tr"));
+        large_link.EnablePcap("scratch/traces/incast", 1, 1);
+        // AsciiTraceHelper ascii;
+        // large_link.EnableAsciiAll(ascii.CreateFileStream ("traces/incast.tr"));
         // TODO: disable tracing for most nodes
     }
 
