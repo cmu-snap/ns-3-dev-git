@@ -22,6 +22,7 @@
 #include "ns3/uinteger.h"
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
+#include "ns3/tcp-congestion-ops.h"
 #include "incast-agg.h"
 
 NS_LOG_COMPONENT_DEFINE ("IncastAggregator");
@@ -47,7 +48,8 @@ IncastAggregator::GetTypeId()
                    MakeBooleanAccessor (&IncastAggregator::m_init),
                    MakeBooleanChecker ())
     .AddAttribute ("Protocol", "The type of connection-oriented protocol to use.",
-                   TypeIdValue (TcpSocketFactory::GetTypeId()),
+                  //  TypeIdValue (TcpNewReno::GetTypeId()),
+                   TypeIdValue(TcpSocketFactory::GetTypeId()),
                    MakeTypeIdAccessor (&IncastAggregator::m_tid),
                    MakeTypeIdChecker ())
   ;
@@ -99,7 +101,7 @@ void IncastAggregator::StartApplication (void) // Called at time specified by St
     { // Connection initiator. Connect to each peer and wait for data.
       for (std::list<Ipv4Address>::iterator i = m_senders.begin (); i != m_senders.end (); ++i)
         {
-          Ptr<TcpSocketBase> s = GetNode ()->GetObject<TcpL4Protocol> ()->CreateSocket(m_tid)->GetObject<TcpSocketBase> ();
+          Ptr<TcpSocketBase> s = Socket::CreateSocket(GetNode (), m_tid)->GetObject<TcpSocketBase> ();
           // Fatal error if socket type is not NS3_SOCK_STREAM or NS3_SOCK_SEQPACKET
           if (s->GetSocketType () != Socket::NS3_SOCK_STREAM &&
               s->GetSocketType () != Socket::NS3_SOCK_SEQPACKET)
@@ -123,7 +125,7 @@ void IncastAggregator::StartApplication (void) // Called at time specified by St
     }
   else if (!m_listened)
     { // Connection responder. Wait for connection.
-      Ptr<TcpSocketBase> s = GetNode ()->GetObject<TcpL4Protocol> ()->CreateSocket(m_tid)->GetObject<TcpSocketBase> ();
+      Ptr<TcpSocketBase> s = Socket::CreateSocket(GetNode (), m_tid)->GetObject<TcpSocketBase> ();
       s->Bind (InetSocketAddress (Ipv4Address::GetAny (), m_port));
       s->Listen ();
       s->ShutdownSend ();

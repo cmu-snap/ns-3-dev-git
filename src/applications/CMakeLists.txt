@@ -24,6 +24,8 @@ build_lib(
     model/udp-echo-server.cc
     model/udp-server.cc
     model/udp-trace-client.cc
+    model/incast-agg.cc
+    model/incast-send.cc
   HEADER_FILES
     helper/bulk-send-helper.h
     helper/on-off-helper.h
@@ -48,6 +50,8 @@ build_lib(
     model/udp-echo-server.h
     model/udp-server.h
     model/udp-trace-client.h
+    model/incast-agg.h
+    model/incast-send.h
   LIBRARIES_TO_LINK ${libinternet}
                     ${libstats}
   TEST_SOURCES

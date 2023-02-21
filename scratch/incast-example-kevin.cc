@@ -30,8 +30,8 @@
 #include "ns3/applications-module.h"
 #include "ns3/point-to-point-layout-module.h"
 #include "ns3/drop-tail-queue.h"
-#include "incast-example-kevin/incast-agg.h"
-#include "incast-example-kevin/incast-send.h"
+#include "ns3/incast-agg.h"
+#include "ns3/incast-send.h"
 
 // Network topology (default)
 //
@@ -49,7 +49,7 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("IncastSim");
 
-int 
+int
 main (int argc, char *argv[])
 {
   //
@@ -75,17 +75,17 @@ main (int argc, char *argv[])
   NS_LOG_INFO ("Build star topology.");
   PointToPointHelper pointToPoint;
   pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("1000Mbps"));
-  pointToPoint.SetDeviceAttribute ("UnitSize", UintegerValue (unitsize));
+  // pointToPoint.SetDeviceAttribute ("UnitSize", UintegerValue (unitsize));
   pointToPoint.SetChannelAttribute ("Delay", StringValue ("25us"));
-  pointToPoint.SetQueue("ns3::DropTailQueue",
-    // "Mode", EnumValue(DropTailQueue::BYTES),
-    "MaxBytes", UintegerValue(bufSize));
+  // pointToPoint.SetQueue("ns3::DropTailQueue",
+  //   // "Mode", EnumValue(DropTailQueue::BYTES),
+  //   "MaxBytes", UintegerValue(bufSize));
   PointToPointStarHelper star (nIncaster+1, pointToPoint);
 
   NS_LOG_INFO ("Install internet stack on all nodes.");
   Config::SetDefault ("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
   Config::SetDefault ("ns3::TcpSocketBase::MaxWindowSize", UintegerValue(maxwin));
-  Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
+  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
   //Config::SetDefault ("ns3::TcpSocket::DelAckCount", UintegerValue(0));
   InternetStackHelper internet;
   star.InstallStack (internet);
@@ -104,7 +104,7 @@ main (int argc, char *argv[])
 
   //
   // Create a packet sink on spoke 0 to receive packets.
-  // 
+  //
   Ptr<IncastAggregator> app = CreateObject<IncastAggregator> ();
   app->SetSenders (senders);
   app->SetStartTime (Seconds (1.0));

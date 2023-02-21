@@ -22,6 +22,7 @@
 #include "ns3/uinteger.h"
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
+#include "ns3/tcp-congestion-ops.h"
 #include "incast-send.h"
 
 NS_LOG_COMPONENT_DEFINE ("IncastSender");
@@ -56,6 +57,7 @@ IncastSender::GetTypeId (void)
                    MakeIpv4AddressAccessor (&IncastSender::m_agg),
                    MakeIpv4AddressChecker ())
     .AddAttribute ("Protocol", "The type of connection-oriented protocol to use.",
+                  //  TypeIdValue(TcpNewReno::GetTypeId()),
                    TypeIdValue(TcpSocketFactory::GetTypeId()),
                    MakeTypeIdAccessor (&IncastSender::m_tid),
                    MakeTypeIdChecker ())
@@ -90,7 +92,7 @@ void IncastSender::StartApplication (void) // Called at time specified by Start
 
   if (m_init)
     { // Connection initiator. Make a new socket, connect to aggregator and send data.
-      m_socket = GetNode ()->GetObject<TcpL4Protocol> ()->CreateSocket(m_tid);
+      m_socket = Socket::CreateSocket(GetNode (), m_tid);
       // Fatal error if socket type is not NS3_SOCK_STREAM or NS3_SOCK_SEQPACKET
       if (m_socket->GetSocketType () != Socket::NS3_SOCK_STREAM &&
           m_socket->GetSocketType () != Socket::NS3_SOCK_SEQPACKET)
@@ -108,7 +110,8 @@ void IncastSender::StartApplication (void) // Called at time specified by Start
   else
     { // Connection responder. Wait for connection and send data.
       m_sentCount = 0;
-      m_socket  = GetNode ()->GetObject<TcpL4Protocol> ()->CreateSocket(m_tid);
+      // m_socket  = GetNode ()->GetObject<TcpL4Protocol> ()->CreateSocket(m_tid);
+      m_socket = Socket::CreateSocket(GetNode (), m_tid);
       m_socket->Bind (InetSocketAddress (Ipv4Address::GetAny (), m_port));
       m_socket->Listen ();
       m_socket->ShutdownRecv ();
