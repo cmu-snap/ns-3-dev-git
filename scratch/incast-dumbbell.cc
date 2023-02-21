@@ -25,10 +25,13 @@ NS_LOG_COMPONENT_DEFINE("Incast");
 int
 main(int argc, char* argv[])
 {
-    // Initialize variables
+     // Initialize variables
     bool verbose = true;
     uint32_t num_workers = 50;
-    uint32_t requests_per_second = 50;
+    uint32_t request_bytes = 50;
+    uint32_t response_bytes = 15000;
+    uint64_t rtt_ms = 200;
+    // uint32_t requests_per_second = 50; 
     bool experimenting = false;
     bool tracing = true;
 
@@ -45,10 +48,20 @@ main(int argc, char* argv[])
         num_workers
     );
     cmd.AddValue(
-        "requests_per_second", 
-        "Requests per second (default: 50)", 
-        requests_per_second
+        "request_bytes", 
+        "Number of bytes sent from the requester to all workers (default: 50)", 
+        request_bytes
     );
+    cmd.AddValue(
+        "response_bytes", 
+        "Number of bytes sent from each worker to the requester (default: 1500)", 
+        response_bytes
+    );
+    // cmd.AddValue(
+    //     "requests_per_second", 
+    //     "Requests per second (default: 50)", 
+    //     requests_per_second
+    // );
     cmd.AddValue(
         "experimenting", 
         "Use experimentation link parameters (default: false)", 
@@ -110,47 +123,84 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Sending packets to all workers...");
 
-    // Create sinks for all workers
-    uint16_t port = 5000;
-    Address sink_address(InetSocketAddress(Ipv4Address::GetAny(), port));
-    PacketSinkHelper sink_helper("ns3::TcpSocketFactory", sink_address);
-    ApplicationContainer sink_apps;
+    ApplicationContainer requester_source_apps;
+    ApplicationContainer worker_sink_apps;
 
-    for (uint32_t i = 0; i < dumbbell_helper.RightCount(); ++i) {
-        sink_apps.Add(sink_helper.Install(dumbbell_helper.GetRight(i)));
+    OnOffHelper requester_source_helper("ns3::TcpSocketFactory", Address());
+    requester_source_helper.SetAttribute("OnTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
+    requester_source_helper.SetAttribute("OffTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
+    requester_source_helper.SetAttribute("PacketSize", UintegerValue(request_bytes / num_workers));
+    requester_source_helper.SetAttribute("DataRate", small_rate);
+    
+    for (uint32_t i = 0; i < num_workers; ++i) {
+        uint16_t port = 5000 + i;
+        Ipv4Address worker_address = dumbbell_helper.GetRightIpv4Address(i);
+        AddressValue remote_address(InetSocketAddress(worker_address, port));
+        requester_source_helper.SetAttribute("Remote", remote_address);
+
+        Ptr<Node> requester = dumbbell_helper.GetLeft(0);
+        requester_source_apps.Add(requester_source_helper.Install(requester));
+        requester_source_apps.Start(MilliSeconds(100 + rtt_ms/2 + rand() % 5)); 
+
+        Address worker_sink_address(InetSocketAddress(Ipv4Address::GetAny(), port));
+        PacketSinkHelper worker_sink_helper("ns3::TcpSocketFactory", worker_sink_address);
+        
+        Ptr<Node> worker = dumbbell_helper.GetRight(i);
+        worker_sink_apps.Add(worker_sink_helper.Install(worker));
     }
-    sink_apps.Start(Seconds(0.0));
-    sink_apps.Stop(Seconds(20.0)); // TODO: config burst time
 
-    // Install on/off apps on the requester
-    OnOffHelper source_helper("ns3::TcpSocketFactory", Address());
-    source_helper.SetAttribute("OnTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
-    source_helper.SetAttribute("OffTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
-    ApplicationContainer source_apps;
+    requester_source_apps.Stop(MilliSeconds(5000)); // TODO: config burst time
+    worker_sink_apps.Start(MilliSeconds(100));
+    worker_sink_apps.Stop(MilliSeconds(5000)); // TODO: config burst time
 
-    for (uint32_t i = 0; i < dumbbell_helper.RightCount(); ++i) {
-        AddressValue remote_address(InetSocketAddress(dumbbell_helper.GetRightIpv4Address(i), port));
-        source_helper.SetAttribute("Remote", remote_address);
-        source_apps.Add(source_helper.Install(dumbbell_helper.GetLeft(0)));
-        source_apps.Start(Seconds(1.0)); // TODO: add jitter
+    NS_LOG_INFO("Sending packets back to the requester...");
+
+    // Send packets from the workers to the requester
+    ApplicationContainer worker_source_apps;
+    ApplicationContainer requester_sink_apps;
+
+    OnOffHelper worker_source_helper("ns3::TcpSocketFactory", Address());
+    worker_source_helper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=.5]"));
+    worker_source_helper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=1.]"));
+    worker_source_helper.SetAttribute("PacketSize", UintegerValue(500));
+    worker_source_helper.SetAttribute("DataRate", large_rate);
+
+    for (uint32_t i = 0; i < num_workers; ++i) {
+        uint16_t port = 5000 + i;
+
+        Ipv4Address requester_address = dumbbell_helper.GetLeftIpv4Address(0);
+        AddressValue remote_address(InetSocketAddress(requester_address, port));
+        worker_source_helper.SetAttribute("Remote", remote_address);
+
+        Ptr<Node> worker = dumbbell_helper.GetRight(i);
+        worker_source_apps.Add(worker_source_helper.Install(worker));
+        worker_source_apps.Start(MilliSeconds(100 + rtt_ms/2 + rand() % 5));
+
+        Address requester_sink_address = InetSocketAddress(Ipv4Address::GetAny(), port);
+        PacketSinkHelper requester_sink_helper("ns3::TcpSocketFactory", requester_sink_address);
+
+        Ptr<Node> requester = dumbbell_helper.GetLeft(0);
+        requester_sink_apps.Add(requester_sink_helper.Install(requester));
     }
-    source_apps.Stop(Seconds(10.0)); // TODO: config burst time
 
-    // TODO
+    worker_source_apps.Stop(MilliSeconds(5000)); // TODO: replace time
+    requester_sink_apps.Start(MilliSeconds(100));
+    requester_sink_apps.Stop(MilliSeconds(5000)); // TODO: replace time
 
     // Enable logging for the requester's switch
     if (verbose) {
         NS_LOG_INFO("Enabling logging...");
-        // TODO: add logging for left switch 
+        // TODO: add logging for left-most switch 
         // Levels: LOG_LEVEL_INFO, LOG_PREFIX_FUNC, LOG_PREFIX_TIME
     }
 
     // Enable tracing across the middle link
     if (tracing) {
         NS_LOG_INFO("Enabling tracing...");
-        large_link.EnablePcapAll("incast");
-        AsciiTraceHelper ascii;
-        large_link.EnableAsciiAll(ascii.CreateFileStream ("scratch/traces/incast.tr"));
+        large_link.EnablePcap("scratch/traces/incast-dumbbell", 1, 0);
+        // AsciiTraceHelper ascii;
+        // large_link.EnableAsciiAll(ascii.CreateFileStream ("traces/incast.tr"));
+        // TODO: disable tracing for most nodes
     }
 
     NS_LOG_INFO("Enabling static global routing...");

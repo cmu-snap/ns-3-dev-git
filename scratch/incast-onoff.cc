@@ -145,9 +145,9 @@ main(int argc, char* argv[])
         address.NewNetwork();
     }
 
-    NS_LOG_INFO("Routing packets from the requester to the workers...");
+    NS_LOG_INFO("Sending packets to all workers...");
 
-    // Route packets from the requester to the workers
+    // Send packets from the requester to the workers
     ApplicationContainer requester_source_apps;
     ApplicationContainer worker_sink_apps;
     std::vector<Ptr<PacketSink>> worker_sinks;
@@ -180,9 +180,9 @@ main(int argc, char* argv[])
     worker_sink_apps.Start(MilliSeconds(100));
     worker_sink_apps.Stop(MilliSeconds(5000)); // TODO: replace time
 
-    NS_LOG_INFO("Routing packets from the workers to the requester...");
+    NS_LOG_INFO("Sending packets back to the requester...");
 
-    // Route packets from the workers to the requester
+    // Send packets from the workers to the requester
     ApplicationContainer worker_source_apps;
     ApplicationContainer requester_sink_apps;
     std::vector<Ptr<PacketSink>> requester_sinks;
@@ -226,7 +226,7 @@ main(int argc, char* argv[])
     // Enable tracing across the middle link
     if (tracing) {
         NS_LOG_INFO("Enabling tracing...");
-        large_link.EnablePcap("scratch/traces/incast", 1, 1);
+        large_link.EnablePcap("scratch/traces/incast-onoff", 1, 1);
         // AsciiTraceHelper ascii;
         // large_link.EnableAsciiAll(ascii.CreateFileStream ("traces/incast.tr"));
         // TODO: disable tracing for most nodes
