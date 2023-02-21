@@ -24,6 +24,8 @@
 #include "ns3/internet-module.h"
 #include "ns3/tcp-congestion-ops.h"
 #include "incast-agg.h"
+#include <unistd.h>
+
 
 NS_LOG_COMPONENT_DEFINE ("IncastAggregator");
 
@@ -52,6 +54,12 @@ IncastAggregator::GetTypeId()
                    TypeIdValue(TcpSocketFactory::GetTypeId()),
                    MakeTypeIdAccessor (&IncastAggregator::m_tid),
                    MakeTypeIdChecker ())
+    .AddAttribute ("BurstCount",
+                  //  "TCP port number for the incast applications",
+                  "",
+                   UintegerValue (10),
+                   MakeUintegerAccessor (&IncastAggregator::m_burstCount),
+                   MakeUintegerChecker<uint32_t> ())
   ;
   return tid;
 }
@@ -97,47 +105,34 @@ void IncastAggregator::StartApplication (void) // Called at time specified by St
   m_running = true;
   m_closeCount = 0;
 
-  if (m_init)
-    { // Connection initiator. Connect to each peer and wait for data.
-      for (std::list<Ipv4Address>::iterator i = m_senders.begin (); i != m_senders.end (); ++i)
-        {
-          Ptr<TcpSocketBase> s = Socket::CreateSocket(GetNode (), m_tid)->GetObject<TcpSocketBase> ();
-          // Fatal error if socket type is not NS3_SOCK_STREAM or NS3_SOCK_SEQPACKET
-          if (s->GetSocketType () != Socket::NS3_SOCK_STREAM &&
-              s->GetSocketType () != Socket::NS3_SOCK_SEQPACKET)
-            {
-              NS_FATAL_ERROR ("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
-            }
+  for (uint32_t i = 0; i < m_burstCount; i++) {
+    // Connection initiator. Connect to each peer and wait for data.
+    for (std::list<Ipv4Address>::iterator i = m_senders.begin (); i != m_senders.end (); ++i)
+      {
+        Ptr<TcpSocketBase> s = Socket::CreateSocket(GetNode (), m_tid)->GetObject<TcpSocketBase> ();
+        // Fatal error if socket type is not NS3_SOCK_STREAM or NS3_SOCK_SEQPACKET
+        if (s->GetSocketType () != Socket::NS3_SOCK_STREAM &&
+            s->GetSocketType () != Socket::NS3_SOCK_SEQPACKET)
+          {
+            NS_FATAL_ERROR ("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
+          }
 
-          // Bind, connect, and wait for data
-          NS_LOG_LOGIC ("Connect to " << *i);
-          s->Bind ();
-          s->Connect (InetSocketAddress (*i, m_port));
-          s->ShutdownSend ();
-          s->SetRecvCallback (MakeCallback (&IncastAggregator::HandleRead, this));
-          s->SetCloseCallbacks (
-            MakeCallback (&IncastAggregator::HandleClose, this),
-            MakeCallback (&IncastAggregator::HandleClose, this));
-          // s->SetAdmCtrlCallback (MakeCallback (&IncastAggregator::HandleAdmCtrl, this));
-          // Remember this socket, in case we need to terminate all of them prematurely
-          m_sockets.push_back(s);
-        }
-    }
-  else if (!m_listened)
-    { // Connection responder. Wait for connection.
-      Ptr<TcpSocketBase> s = Socket::CreateSocket(GetNode (), m_tid)->GetObject<TcpSocketBase> ();
-      s->Bind (InetSocketAddress (Ipv4Address::GetAny (), m_port));
-      s->Listen ();
-      s->ShutdownSend ();
-      s->SetRecvCallback (MakeCallback (&IncastAggregator::HandleRead, this));
-      s->SetAcceptCallback (
-        MakeNullCallback<bool, Ptr<Socket>, const Address &> (),
-        MakeCallback (&IncastAggregator::HandleAccept, this));
-      // s->SetAdmCtrlCallback (MakeCallback (&IncastAggregator::HandleAdmCtrl, this));
-      m_listened = true;
-      // Remember this listening socket, terminate this when application finishes
-      m_sockets.push_back(s);
-    };
+        // Bind, connect, and wait for data
+        NS_LOG_LOGIC ("Connect to " << *i);
+        s->Bind ();
+        s->Connect (InetSocketAddress (*i, m_port));
+        s->ShutdownSend ();
+        s->SetRecvCallback (MakeCallback (&IncastAggregator::HandleRead, this));
+        s->SetCloseCallbacks (
+          MakeCallback (&IncastAggregator::HandleClose, this),
+          MakeCallback (&IncastAggregator::HandleClose, this));
+        // s->SetAdmCtrlCallback (MakeCallback (&IncastAggregator::HandleAdmCtrl, this));
+        // Remember this socket, in case we need to terminate all of them prematurely
+        m_sockets.push_back(s);
+      }
+
+    sleep(0.5);
+  }
 }
 
 void IncastAggregator::HandleAdmCtrl (Ptr<TcpSocketBase> sock, Ipv4Address addr, uint16_t port)

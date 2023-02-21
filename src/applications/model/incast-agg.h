@@ -77,6 +77,7 @@ private:
   std::list<uint32_t> m_byteCount;
 
   Callback<void>  m_roundFinish;  //< Round-finish callback
+  uint32_t m_burstCount;
 
 private:
   void HandleAccept (Ptr<Socket> socket, const Address& from);

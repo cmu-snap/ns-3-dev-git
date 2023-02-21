@@ -61,6 +61,12 @@ IncastSender::GetTypeId (void)
                    TypeIdValue(TcpSocketFactory::GetTypeId()),
                    MakeTypeIdAccessor (&IncastSender::m_tid),
                    MakeTypeIdChecker ())
+    .AddAttribute ("BurstCount",
+                  //  "TCP port number for the incast applications",
+                  "",
+                   UintegerValue (10),
+                   MakeUintegerAccessor (&IncastSender::m_burstCount),
+                   MakeUintegerChecker<uint32_t> ())
   ;
   return tid;
 }
@@ -90,36 +96,19 @@ void IncastSender::StartApplication (void) // Called at time specified by Start
 {
   NS_LOG_FUNCTION (this);
 
-  if (m_init)
-    { // Connection initiator. Make a new socket, connect to aggregator and send data.
-      m_socket = Socket::CreateSocket(GetNode (), m_tid);
-      // Fatal error if socket type is not NS3_SOCK_STREAM or NS3_SOCK_SEQPACKET
-      if (m_socket->GetSocketType () != Socket::NS3_SOCK_STREAM &&
-          m_socket->GetSocketType () != Socket::NS3_SOCK_SEQPACKET)
-        {
-          NS_FATAL_ERROR ("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
-        }
-
-      // Bind, connect, and send data
-      m_sentCount = 0;
-      m_socket->Bind ();
-      m_socket->Connect (InetSocketAddress (m_agg, m_port));
-      m_socket->ShutdownRecv ();
-      m_socket->SetSendCallback (MakeCallback (&IncastSender::HandleSend, this));
-    }
-  else
-    { // Connection responder. Wait for connection and send data.
-      m_sentCount = 0;
-      // m_socket  = GetNode ()->GetObject<TcpL4Protocol> ()->CreateSocket(m_tid);
-      m_socket = Socket::CreateSocket(GetNode (), m_tid);
-      m_socket->Bind (InetSocketAddress (Ipv4Address::GetAny (), m_port));
-      m_socket->Listen ();
-      m_socket->ShutdownRecv ();
-      m_socket->SetSendCallback (MakeCallback (&IncastSender::HandleSend, this));
-      m_socket->SetAcceptCallback (
-        MakeNullCallback<bool, Ptr<Socket>, const Address &> (),
-        MakeCallback (&IncastSender::HandleAccept, this));
-    };
+  for (uint32_t i = 0; i < m_burstCount; ++i) {
+    // Connection responder. Wait for connection and send data.
+    m_sentCount = 0;
+    // m_socket  = GetNode ()->GetObject<TcpL4Protocol> ()->CreateSocket(m_tid);
+    m_socket = Socket::CreateSocket(GetNode (), m_tid);
+    m_socket->Bind (InetSocketAddress (Ipv4Address::GetAny (), m_port));
+    m_socket->Listen ();
+    m_socket->ShutdownRecv ();
+    m_socket->SetSendCallback (MakeCallback (&IncastSender::HandleSend, this));
+    m_socket->SetAcceptCallback (
+      MakeNullCallback<bool, Ptr<Socket>, const Address &> (),
+      MakeCallback (&IncastSender::HandleAccept, this));
+  }
 }
 
 void IncastSender::HandleSend (Ptr<Socket> socket, uint32_t n)

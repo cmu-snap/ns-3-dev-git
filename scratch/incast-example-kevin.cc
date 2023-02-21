@@ -60,7 +60,8 @@ main (int argc, char *argv[])
   uint32_t sru = 4096;
   uint32_t unitsize = 3000;
   uint16_t maxwin = 65535;
-  bool useStdout = true;
+  bool useStdout = false;
+  uint32_t burstcount = 10;
 
   CommandLine cmd;
   cmd.AddValue ("incaster", "Number of incast senders", nIncaster);
@@ -69,12 +70,13 @@ main (int argc, char *argv[])
   cmd.AddValue ("sru", "Size of server request unit in bytes", sru);
   cmd.AddValue ("unitsize", "Size of virtual bytes increment upon SYN packets", unitsize);
   cmd.AddValue ("maxwin", "Maximum size of advertised window", maxwin);
+  cmd.AddValue ("burstcount", "Size of server request unit in bytes", burstcount);
 
   cmd.Parse (argc, argv);
 
   NS_LOG_INFO ("Build star topology.");
   PointToPointHelper pointToPoint;
-  pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("1000Mbps"));
+  pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("10Mbps"));
   // pointToPoint.SetDeviceAttribute ("UnitSize", UintegerValue (unitsize));
   pointToPoint.SetChannelAttribute ("Delay", StringValue ("25us"));
   // pointToPoint.SetQueue("ns3::DropTailQueue",
@@ -108,6 +110,7 @@ main (int argc, char *argv[])
   Ptr<IncastAggregator> app = CreateObject<IncastAggregator> ();
   app->SetSenders (senders);
   app->SetStartTime (Seconds (1.0));
+  app->SetAttribute ("BurstCount", UintegerValue(burstcount));
   star.GetSpokeNode (0)->AddApplication(app);
 
   //
@@ -118,6 +121,7 @@ main (int argc, char *argv[])
       Ptr<IncastSender> sendApp = CreateObject<IncastSender> ();
       sendApp->SetAttribute ("Aggregator", Ipv4AddressValue(star.GetSpokeIpv4Address (0)));
       sendApp->SetAttribute ("SRU", UintegerValue(sru));
+      sendApp->SetAttribute ("BurstCount", UintegerValue(burstcount));
       sendApp->SetStartTime (Seconds (1.0));
       star.GetSpokeNode (i)->AddApplication(sendApp);
     }
@@ -128,23 +132,31 @@ main (int argc, char *argv[])
   //
   Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 
-  //
-  // Turn on trace
-  //
-  if (useStdout)
-    {
-      std::cout << std::setprecision(9) << std::fixed;
-      std::cerr << std::setprecision(9) << std::fixed;
-      std::clog << std::setprecision(9) << std::fixed;
-      pointToPoint.EnableAsciiAll (Create<OutputStreamWrapper>(&std::clog));
-    }
-  else
-    {
-      AsciiTraceHelper ascii;
-      Ptr<OutputStreamWrapper> tracefile = ascii.CreateFileStream ("incast.tr");
-      *(tracefile->GetStream()) << std::setprecision(9) << std::fixed;
-      pointToPoint.EnableAsciiAll (tracefile);
-    }
+  // //
+  // // Turn on trace
+  // //
+  // if (useStdout)
+  //   {
+  //     std::cout << std::setprecision(9) << std::fixed;
+  //     std::cerr << std::setprecision(9) << std::fixed;
+  //     std::clog << std::setprecision(9) << std::fixed;
+  //     pointToPoint.EnableAsciiAll (Create<OutputStreamWrapper>(&std::clog));
+  //   }
+  // else
+  //   {
+  //     AsciiTraceHelper ascii;
+  //     Ptr<OutputStreamWrapper> tracefile = ascii.CreateFileStream ("scratch/incast.tr");
+  //     *(tracefile->GetStream()) << std::setprecision(9) << std::fixed;
+  //     pointToPoint.EnableAsciiAll (tracefile);
+  //   }
+
+  // Enable tracing across the middle link
+
+  NS_LOG_INFO("Enabling tracing...");
+  pointToPoint.EnablePcapAll("scratch/traces/incast");
+  // AsciiTraceHelper ascii;
+  // large_link.EnableAsciiAll(ascii.CreateFileStream ("traces/incast.tr"));
+  // TODO: disable tracing for most nodes
 
   NS_LOG_INFO ("Run Simulation.");
   Simulator::Run ();

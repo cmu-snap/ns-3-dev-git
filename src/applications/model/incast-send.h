@@ -60,6 +60,7 @@ private:
   Ipv4Address     m_agg;          //< Address of the aggregator, use when senders are connection initiators
   TypeId          m_tid;          //< Socket's TypeId
   Ptr<Socket>     m_socket;       //< TCP socket
+  uint32_t        m_burstCount;
 
 private:
   void HandleAccept (Ptr<Socket> socket, const Address& from);
