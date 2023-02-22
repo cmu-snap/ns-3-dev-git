@@ -38,6 +38,16 @@ public:
    */
   void SetRoundFinishCallback(Callback<void> cb);
 
+  /**
+   * @brief TODO
+   */
+  void StartEvent();
+
+  /**
+   * @brief TODO
+   */
+  void StopEvent();
+
 protected:
   /**
    * @brief TODO
@@ -54,6 +64,16 @@ private:
    * @brief TODO
    */
   void StopApplication() override;  
+
+  /**
+   * @brief TODO
+   */
+  void ScheduleStartEvent(uint32_t burstCount);
+
+  /**
+   * @brief TODO
+   */
+  void StartBurst();
 
   /**
    * @brief TODO

@@ -49,6 +49,10 @@ IncastAggregator::~IncastAggregator() {
   NS_LOG_FUNCTION(this); 
 }
 
+void IncastAggregator::StartEvent() {
+  NS_LOG_FUNCTION(this);
+}
+
 void IncastAggregator::DoDispose() {
   NS_LOG_FUNCTION(this);
 
@@ -74,29 +78,42 @@ void IncastAggregator::StartApplication()
   m_numClosed = 0;
 
   for (uint32_t burstCount = 0; burstCount < m_numBursts; ++burstCount) {
-    // Connect to each peer and wait for data
-    for (Ipv4Address sender: m_senders) {
-      Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
-      
-      if (socket->GetSocketType() != Socket::NS3_SOCK_STREAM &&
-        socket->GetSocketType() != Socket::NS3_SOCK_SEQPACKET) {
-        NS_FATAL_ERROR("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
-      }
+    ScheduleStartEvent(burstCount);
+  }
+}
 
-      // Bind, connect, and wait for data
-      NS_LOG_LOGIC("Connect to " << sender);
-      socket->Bind();
-      socket->Connect(InetSocketAddress(sender, m_port));
-      socket->ShutdownSend();
-      socket->SetRecvCallback(
-        MakeCallback(&IncastAggregator::HandleRead, this)
-      );
-      socket->SetCloseCallbacks(
-        MakeCallback(&IncastAggregator::HandleClose, this),
-        MakeCallback(&IncastAggregator::HandleClose, this)
-      );
-      m_sockets.push_back(socket);
+void IncastAggregator::ScheduleStartEvent(uint32_t burstCount) {
+  NS_LOG_FUNCTION(this);
+
+  Time time = Seconds(burstCount);
+  NS_LOG_LOGIC("Start at " << time.As(Time::S));
+  Simulator::Schedule(time, &IncastAggregator::StartBurst, this);
+} 
+
+void IncastAggregator::StartBurst()
+{
+  NS_LOG_FUNCTION(this);
+  for (Ipv4Address sender: m_senders) {
+    Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
+    
+    if (socket->GetSocketType() != Socket::NS3_SOCK_STREAM &&
+      socket->GetSocketType() != Socket::NS3_SOCK_SEQPACKET) {
+      NS_FATAL_ERROR("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
     }
+
+    // Bind, connect, and wait for data
+    NS_LOG_LOGIC("Connect to " << sender);
+    socket->Bind();
+    socket->Connect(InetSocketAddress(sender, m_port));
+    socket->ShutdownSend();
+    socket->SetRecvCallback(
+      MakeCallback(&IncastAggregator::HandleRead, this)
+    );
+    socket->SetCloseCallbacks(
+      MakeCallback(&IncastAggregator::HandleClose, this),
+      MakeCallback(&IncastAggregator::HandleClose, this)
+    );
+    m_sockets.push_back(socket);
   }
 }
 
