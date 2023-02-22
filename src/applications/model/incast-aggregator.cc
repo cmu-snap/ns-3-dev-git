@@ -41,7 +41,7 @@ TypeId IncastAggregator::GetTypeId() {
   return tid;
 }
 
-IncastAggregator::IncastAggregator() {
+IncastAggregator::IncastAggregator() : m_numClosed(0) {
   NS_LOG_FUNCTION(this);
 }
 
@@ -69,20 +69,38 @@ void IncastAggregator::StartApplication()
 {
   NS_LOG_FUNCTION(this);
 
-  // Do nothing if incast is running
-  if (m_isRunning) {
-    return;
+  // // Do nothing if incast is running
+  // if (m_isRunning) {
+  //   return;
+  // }
+
+  // m_isRunning = true;
+
+  for (Ipv4Address sender: m_senders) {
+    Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
+    
+    if (socket->GetSocketType() != Socket::NS3_SOCK_STREAM &&
+      socket->GetSocketType() != Socket::NS3_SOCK_SEQPACKET) {
+      NS_FATAL_ERROR("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
+    }
+
+    // Connect to each sender
+    NS_LOG_LOGIC("Connect to " << sender);
+    socket->Bind();
+    socket->Connect(InetSocketAddress(sender, m_port));
+    // socket->ShutdownSend();
+    socket->SetRecvCallback(
+      MakeCallback(&IncastAggregator::HandleRead, this)
+    );
+    m_sockets.push_back(socket);
   }
 
-  m_isRunning = true;
-  m_numClosed = 0;
-
   for (uint32_t burstCount = 0; burstCount < m_numBursts; ++burstCount) {
-    ScheduleStartEvent(burstCount);
+    ScheduleBurst(burstCount);
   }
 }
 
-void IncastAggregator::ScheduleStartEvent(uint32_t burstCount) {
+void IncastAggregator::ScheduleBurst(uint32_t burstCount) {
   NS_LOG_FUNCTION(this);
 
   Time time = Seconds(burstCount);
@@ -93,38 +111,26 @@ void IncastAggregator::ScheduleStartEvent(uint32_t burstCount) {
 void IncastAggregator::StartBurst()
 {
   NS_LOG_FUNCTION(this);
-  for (Ipv4Address sender: m_senders) {
-    Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
-    
-    if (socket->GetSocketType() != Socket::NS3_SOCK_STREAM &&
-      socket->GetSocketType() != Socket::NS3_SOCK_SEQPACKET) {
-      NS_FATAL_ERROR("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
-    }
+  std::cout << "Start burst " << std::endl;
 
-    // Bind, connect, and wait for data
-    NS_LOG_LOGIC("Connect to " << sender);
-    socket->Bind();
-    socket->Connect(InetSocketAddress(sender, m_port));
-    socket->ShutdownSend();
-    socket->SetRecvCallback(
-      MakeCallback(&IncastAggregator::HandleRead, this)
-    );
-    socket->SetCloseCallbacks(
-      MakeCallback(&IncastAggregator::HandleClose, this),
-      MakeCallback(&IncastAggregator::HandleClose, this)
-    );
-    m_sockets.push_back(socket);
+  for (Ptr<Socket> socket: m_sockets) {
+    // Send a small packet to start a burst
+    std::cout << "Sent to " << socket << std::endl;
+    Ptr<Packet> packet = Create<Packet>(50);
+    socket->Send(packet);
   }
 }
 
 void IncastAggregator::HandleRead(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
+  std::cout << "AGG: HandleRead()" << std::endl;
 
   Ptr<Packet> packet;
   uint32_t byteCount = 0;
 
   while (packet == socket->Recv()) {
     byteCount += packet->GetSize();
+    std::cout << "AGG: received" <<  byteCount << std::endl;
   };
 
   NS_LOG_LOGIC("received " << byteCount << " bytes");  
@@ -176,51 +182,54 @@ void IncastAggregator::HandleClose(Ptr<Socket> socket) {
     m_runningSockets.erase(q);
   }
 
-  if (m_numClosed == m_senders.size()) {
-    // Start next round of incast
-    m_isRunning = false;
-    Simulator::ScheduleNow(&IncastAggregator::RoundFinish, this);
-  } else if (!m_suspendedSockets.empty()) {
-    // Replace the terminated connection with a suspended one
-    Ptr<TcpSocketBase> socket = m_suspendedSockets.front();
-    m_suspendedSockets.pop_front();
-    // socket->ResumeConnection();
-  }
+  // if (m_numClosed == m_senders.size()) {
+  //   // Start next round of incast
+  //   // m_isRunning = false;
+  //   // Simulator::ScheduleNow(&IncastAggregator::RoundFinish, this);
+  // } else if (!m_suspendedSockets.empty()) {
+  //   // Replace the terminated connection with a suspended one
+  //   Ptr<TcpSocketBase> socket = m_suspendedSockets.front();
+  //   m_suspendedSockets.pop_front();
+  //   // socket->ResumeConnection();
+  // }
 }
 
-void IncastAggregator::RoundFinish() {
-  NS_LOG_FUNCTION(this);
+// void IncastAggregator::RoundFinish() {
+//   NS_LOG_FUNCTION(this);
 
-  if (!m_roundFinish.IsNull()) {
-    m_roundFinish();
-  }
-}
+//   if (!m_roundFinish.IsNull()) {
+//     m_roundFinish();
+//   }
+// }
 
-void IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
-  NS_LOG_FUNCTION(this << socket << from);
+// void IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
+//   NS_LOG_FUNCTION(this << socket << from);
 
-  socket->SetRecvCallback(
-    MakeCallback(&IncastAggregator::HandleRead, this)
-  );
-  socket->SetCloseCallbacks(
-    MakeCallback(&IncastAggregator::HandleClose, this),
-    MakeCallback(&IncastAggregator::HandleClose, this)
-  );
-}
+//   socket->SetRecvCallback(
+//     MakeCallback(&IncastAggregator::HandleRead, this)
+//   );
+//   socket->SetCloseCallbacks(
+//     MakeCallback(&IncastAggregator::HandleClose, this),
+//     MakeCallback(&IncastAggregator::HandleClose, this)
+//   );
+// }
 
 void IncastAggregator::StopApplication() 
 {
   NS_LOG_FUNCTION(this);
 
   for (Ptr<Socket> socket: m_sockets) {
+    // Send a large packet
+    Ptr<Packet> packet = Create<Packet>(500);
+    socket->Send(packet);
     socket->Close();
   }
 }
 
-void IncastAggregator::SetRoundFinishCallback(Callback<void> callback) {
-  NS_LOG_FUNCTION(this);
+// void IncastAggregator::SetRoundFinishCallback(Callback<void> callback) {
+//   NS_LOG_FUNCTION(this);
 
-  m_roundFinish = callback;
-};
+//   m_roundFinish = callback;
+// };
 
 } // Namespace ns3

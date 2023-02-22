@@ -39,7 +39,12 @@ private:
   /**
    * @brief TODO
    */ 
-  void StopApplication() override;   
+  void StopApplication() override; 
+
+  /**
+   * @brief TODO
+   */
+  void HandleSend(Ptr<Socket> socket, uint32_t n);  
 
   /**
    * @brief TODO
@@ -49,10 +54,7 @@ private:
   /**
    * @brief TODO
    */
-  void HandleSend (Ptr<Socket> socket, uint32_t n);
-
-  // Number of bursts to simulate      
-  uint32_t m_numBursts;
+  void HandleRead (Ptr<Socket> socket);
 
   // Number of bytes to send for each burst
   uint32_t m_totalBytes;

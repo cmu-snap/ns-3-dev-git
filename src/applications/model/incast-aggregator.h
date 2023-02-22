@@ -68,7 +68,7 @@ private:
   /**
    * @brief TODO
    */
-  void ScheduleStartEvent(uint32_t burstCount);
+  void ScheduleBurst(uint32_t burstCount);
 
   /**
    * @brief TODO
@@ -104,9 +104,6 @@ private:
   // TypeId of the protocol used
   TypeId m_tid;      
 
-  // Whether the incast is already running
-  bool m_isRunning;   
-
   // Number of closed connections     
   uint32_t m_numClosed; 
 
@@ -122,9 +119,10 @@ private:
   // List of running TCP sockets 
   std::list<Ptr<Socket>> m_runningSockets;
 
-  // Callback for finished round 
-  Callback<void> m_roundFinish; 
+  // // Callback for finished round 
+  // Callback<void> m_roundFinish; 
 
+  // bool m_isRunning;   
   // std::list<uint32_t> m_byteCounts;
 };
 

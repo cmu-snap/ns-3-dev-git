@@ -86,7 +86,6 @@ int main(int argc, char *argv[]) {
     Ptr<IncastSender> sendApp = CreateObject<IncastSender>();
     sendApp->SetAttribute("Aggregator", Ipv4AddressValue(star.GetSpokeIpv4Address(0)));
     sendApp->SetAttribute("TotalBytes", UintegerValue(totalBytes));
-    sendApp->SetAttribute("NumBursts", UintegerValue(numBursts));
     sendApp->SetStartTime(Seconds(1.0));
     star.GetSpokeNode(i)->AddApplication(sendApp);
   }
@@ -95,7 +94,6 @@ int main(int argc, char *argv[]) {
   
   // Turn on global static routing 
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
-
 
   // Enable tracing across the middle link
   NS_LOG_INFO("Enabling tracing...");
