@@ -89,13 +89,12 @@ void IncastSender::StartApplication()
 }
 
 void IncastSender::HandleRead(Ptr<Socket> socket) {
+  std::cout << "Just about to receive from sender\n";
   NS_LOG_FUNCTION(this << socket);
 
   Ptr<Packet> packet;
 
-  std::cout << "Just about to receive from sender\n";
-
-  while (packet == socket->Recv()) {
+  while (packet = socket->Recv()) {
     std::cout << "Received!!!\n";
     size_t size = packet->GetSize();
 

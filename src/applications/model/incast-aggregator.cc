@@ -128,7 +128,7 @@ void IncastAggregator::HandleRead(Ptr<Socket> socket) {
   Ptr<Packet> packet;
   uint32_t byteCount = 0;
 
-  while (packet == socket->Recv()) {
+  while (packet = socket->Recv()) {
     byteCount += packet->GetSize();
     std::cout << "AGG: received" <<  byteCount << std::endl;
   };
