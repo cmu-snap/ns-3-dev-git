@@ -26,7 +26,7 @@ TypeId IncastAggregator::GetTypeId() {
     .AddAttribute(
       "Port", 
       "TCP port for all applications",
-      UintegerValue(5000),
+      UintegerValue(8888),
       MakeUintegerAccessor(&IncastAggregator::m_port),
       MakeUintegerChecker<uint16_t>()
     )

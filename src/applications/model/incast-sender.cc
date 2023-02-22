@@ -32,7 +32,7 @@ TypeId IncastSender::GetTypeId() {
       .AddAttribute(
         "Port", 
         "TCP port for all applications",
-        UintegerValue(5000),
+        UintegerValue(8888),
         MakeUintegerAccessor(&IncastSender::m_port),
         MakeUintegerChecker<uint16_t>()
       )
