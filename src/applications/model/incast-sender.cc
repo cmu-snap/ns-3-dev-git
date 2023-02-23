@@ -30,6 +30,13 @@ TypeId IncastSender::GetTypeId() {
         MakeUintegerChecker<uint32_t>()
       )
       .AddAttribute(
+        "ResponseJitterUs",
+        "Max random jitter in sending responses, in microseconds",
+        UintegerValue(10),
+        MakeUintegerAccessor(&IncastSender::m_responseJitterUs),
+        MakeUintegerChecker<uint32_t>()
+      )
+      .AddAttribute(
         "Port",
         "TCP port for all applications",
         UintegerValue(8888),
@@ -105,50 +112,34 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
     size_t size = packet->GetSize();
 
     if (size < 100) {
-      size_t sentBytes = 0;
-
-      while (sentBytes < m_totalBytes && socket->GetTxAvailable()) {
-        int toSend = m_totalBytes - sentBytes;
-        Ptr<Packet> packet = Create<Packet>(toSend);
-        int newSentBytes = socket->Send(packet);
-
-        if (newSentBytes > 0) {
-          sentBytes += newSentBytes;
-          NS_LOG_LOGIC("Sent " << toSend << " bytes");
-          std::cout << "Sent " << toSend << " bytes\n";
-        } else {
-          NS_LOG_LOGIC("Error: could not send " << toSend << " bytes");
-          std::cout << "Error: could not send " << toSend << " bytes\n";
-          break;
-        }
-      }
+      Time time = Seconds((rand() % m_responseJitterUs) / 1000000);
+      Simulator::Schedule(time, &IncastSender::SendBurst, this, socket, m_totalBytes);
     } else {
       break;
     }
   }
-
-  StopApplication();
 }
 
-// void IncastSender::HandleSend(Ptr<Socket> socket, uint32_t n) {
-//   NS_LOG_FUNCTION(this);
+void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
+  NS_LOG_FUNCTION(this);
 
-//   while (m_sentBytes < m_totalBytes && socket->GetTxAvailable()) {
-//     Ptr<Packet> packet = Create<Packet>(std::min(m_totalBytes - m_sentBytes, n));
-//     int sentBytes = socket->Send(packet);
+  size_t sentBytes = 0;
+  while (sentBytes < burstBytes && socket->GetTxAvailable()) {
+    int toSend = burstBytes - sentBytes;
+    Ptr<Packet> packet = Create<Packet>(toSend);
+    int newSentBytes = socket->Send(packet);
 
-//     if (sentBytes > 0) {
-//       m_sentBytes += sentBytes;
-//     }
-
-//     NS_LOG_LOGIC("Sent " << sentBytes << " bytes");
-//   }
-
-//   if (m_sentBytes == m_totalBytes) {
-//     NS_LOG_LOGIC("Closing socket");
-//     socket->Close();
-//   }
-// }
+    if (newSentBytes > 0) {
+      sentBytes += newSentBytes;
+      NS_LOG_LOGIC("Sent " << toSend << " bytes");
+      std::cout << "Sent " << toSend << " bytes\n";
+    } else {
+      NS_LOG_LOGIC("Error: could not send " << toSend << " bytes");
+      std::cout << "Error: could not send " << toSend << " bytes\n";
+      break;
+    }
+  }
+}
 
 void IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   NS_LOG_FUNCTION(this << socket << from);

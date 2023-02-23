@@ -34,17 +34,17 @@ private:
   /**
    * @brief TODO
    */
-  void StartApplication() override; 
-
-  /**
-   * @brief TODO
-   */ 
-  void StopApplication() override; 
+  void StartApplication() override;
 
   /**
    * @brief TODO
    */
-  void HandleSend(Ptr<Socket> socket, uint32_t n);  
+  void StopApplication() override;
+
+  /**
+   * @brief TODO
+   */
+  void SendBurst(Ptr<Socket> socket, uint32_t burstBytes);
 
   /**
    * @brief TODO
@@ -59,20 +59,23 @@ private:
   // Number of bytes to send for each burst
   uint32_t m_totalBytes;
 
-  // Number of bytes sent 
+  // Number of bytes sent
   uint32_t m_sentBytes;
 
   // TCP port for all applications
-  uint16_t m_port;      
+  uint16_t m_port;
 
-  // TypeId of the protocol used      
-  TypeId m_tid;      
+  // TypeId of the protocol used
+  TypeId m_tid;
 
   // Address of the associated aggregator
   Ipv4Address m_aggregator;
 
-  // Socket for communication with the aggregator     
-  Ptr<Socket> m_socket;  
+  // Socket for communication with the aggregator
+  Ptr<Socket> m_socket;
+
+  // Max random jitter in microseconds
+  uint32_t m_responseJitterUs;
 };
 
 } // namespace ns3

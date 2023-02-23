@@ -35,6 +35,7 @@ int main(int argc, char *argv[]) {
   uint16_t maxWin = 65535;
   bool useStdout = false;
   uint32_t numBursts = 10;
+  uint32_t jitterUs = 10;
 
   CommandLine cmd;
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
@@ -44,6 +45,7 @@ int main(int argc, char *argv[]) {
   cmd.AddValue("unitSize", "Size of virtual bytes increment upon SYN packets", unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
+  cmd.AddValue("jitterUs", "Max random jitter in sending request and responses, in microseconds", jitterUs);
   cmd.Parse(argc, argv);
 
   NS_LOG_INFO("Build star topology.");
@@ -79,6 +81,7 @@ int main(int argc, char *argv[]) {
   app->SetSenders(senders);
   app->SetStartTime(Seconds(1.0));
   app->SetAttribute("NumBursts", UintegerValue(numBursts));
+  app->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   star.GetSpokeNode(0)->AddApplication(app);
 
   // Create send applications to send TCP to spoke 0
@@ -86,6 +89,7 @@ int main(int argc, char *argv[]) {
     Ptr<IncastSender> sendApp = CreateObject<IncastSender>();
     sendApp->SetAttribute("Aggregator", Ipv4AddressValue(star.GetSpokeIpv4Address(0)));
     sendApp->SetAttribute("TotalBytes", UintegerValue(totalBytes));
+    sendApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
     sendApp->SetStartTime(Seconds(1.0));
     star.GetSpokeNode(i)->AddApplication(sendApp);
   }

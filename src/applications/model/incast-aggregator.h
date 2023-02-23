@@ -58,12 +58,12 @@ private:
   /**
    * @brief TODO
    */
-  void StartApplication() override; 
+  void StartApplication() override;
 
   /**
    * @brief TODO
    */
-  void StopApplication() override;  
+  void StopApplication() override;
 
   /**
    * @brief TODO
@@ -99,30 +99,33 @@ private:
   uint32_t m_numBursts;
 
   // TCP port for all applications
-  uint16_t m_port;    
+  uint16_t m_port;
 
   // TypeId of the protocol used
-  TypeId m_tid;      
+  TypeId m_tid;
 
-  // Number of closed connections     
-  uint32_t m_numClosed; 
+  // Number of closed connections
+  uint32_t m_numClosed;
 
   // List of associated sockets
-  std::list<Ptr<Socket>> m_sockets;   
+  std::list<Ptr<Socket>> m_sockets;
 
-  // List of addresses for associated senders             
-  std::list<Ipv4Address> m_senders;        
+  // List of addresses for associated senders
+  std::list<Ipv4Address> m_senders;
 
-  // List of suspended TCP sockets        
-  std::list<Ptr<TcpSocketBase>> m_suspendedSockets; 
+  // List of suspended TCP sockets
+  std::list<Ptr<TcpSocketBase>> m_suspendedSockets;
 
-  // List of running TCP sockets 
+  // List of running TCP sockets
   std::list<Ptr<Socket>> m_runningSockets;
 
-  // // Callback for finished round 
-  // Callback<void> m_roundFinish; 
+  // Max random jitter in microseconds
+  uint32_t m_requestJitterUs;
 
-  // bool m_isRunning;   
+  // // Callback for finished round
+  // Callback<void> m_roundFinish;
+
+  // bool m_isRunning;
   // std::list<uint32_t> m_byteCounts;
 };
 
