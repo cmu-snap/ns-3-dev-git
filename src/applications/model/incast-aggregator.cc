@@ -96,7 +96,11 @@ void IncastAggregator::StartApplication()
     socket->SetRecvCallback(
       MakeCallback(&IncastAggregator::HandleRead, this)
     );
-    std::cout << "Aggregator registered recv callback\n";
+    // socket->SetAcceptCallback(
+    //   MakeNullCallback<bool, Ptr<Socket>, const Address &>(),
+    //   MakeCallback(&IncastAggregator::HandleAccept, this)
+    // );
+    std::cout << "Aggregator registered accept callback\n";
 
     socket->Connect(InetSocketAddress(sender, m_port));
     // socket->ShutdownSend();
@@ -124,14 +128,14 @@ void IncastAggregator::StartBurst()
   for (Ptr<Socket> socket: m_sockets) {
     // Send a small packet to start a burst
     std::cout << "Sent to " << socket << std::endl;
-    Ptr<Packet> packet = Create<Packet>(500);
+    Ptr<Packet> packet = Create<Packet>(50);
     socket->Send(packet);
   }
 }
 
 void IncastAggregator::HandleRead(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
-  std::cout << "AGG: HandleRead()" << std::endl;
+  std::cout << "Aggregator: HandleRead()" << std::endl;
 
   Ptr<Packet> packet;
   uint32_t byteCount = 0;
@@ -210,17 +214,14 @@ void IncastAggregator::HandleClose(Ptr<Socket> socket) {
 //   }
 // }
 
-// void IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
-//   NS_LOG_FUNCTION(this << socket << from);
+void IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
+  NS_LOG_FUNCTION(this << socket << from);
+  std::cout << "Aggregator: HandleAccept()" << std::endl;
 
-//   socket->SetRecvCallback(
-//     MakeCallback(&IncastAggregator::HandleRead, this)
-//   );
-//   socket->SetCloseCallbacks(
-//     MakeCallback(&IncastAggregator::HandleClose, this),
-//     MakeCallback(&IncastAggregator::HandleClose, this)
-//   );
-// }
+  socket->SetRecvCallback(
+    MakeCallback(&IncastAggregator::HandleRead, this)
+  );
+}
 
 void IncastAggregator::StopApplication()
 {
@@ -228,7 +229,7 @@ void IncastAggregator::StopApplication()
 
   for (Ptr<Socket> socket: m_sockets) {
     // Send a large packet
-    Ptr<Packet> packet = Create<Packet>(500);
+    Ptr<Packet> packet = Create<Packet>(50);
     socket->Send(packet);
     socket->Close();
   }

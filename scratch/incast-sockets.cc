@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Build star topology.");
   PointToPointHelper pointToPoint;
-  pointToPoint.SetDeviceAttribute("DataRate", StringValue("10Mbps"));
+  pointToPoint.SetDeviceAttribute("DataRate", StringValue("12.5Gbps"));
   // pointToPoint.SetDeviceAttribute ("UnitSize", UintegerValue (unitsize));
   pointToPoint.SetChannelAttribute("Delay", StringValue("25us"));
   // pointToPoint.SetQueue("ns3::DropTailQueue",

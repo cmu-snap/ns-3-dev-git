@@ -80,18 +80,18 @@ void IncastSender::StartApplication()
   } else {
     std::cout << "Worker bind succeeded\n";
   }
-  m_socket->SetRecvCallback(
-    MakeCallback(&IncastSender::HandleRead, this)
-  );
-  std::cout << "Worker registered recv callback\n";
-  m_socket->Listen();
+  // m_socket->SetRecvCallback(
+  //   MakeCallback(&IncastSender::HandleRead, this)
+  // );
+  std::cout << "Worker registered accept callback\n";
   // std::cout << "Just about to register HandleRead\n";
   // m_socket->Send(Create<Packet>(42));
   // m_socket->ShutdownRecv();
-  // m_socket->SetAcceptCallback(
-  //   MakeNullCallback<bool, Ptr<Socket>, const Address &>(),
-  //   MakeCallback(&IncastSender::HandleAccept, this)
-  // );
+  m_socket->SetAcceptCallback(
+    MakeNullCallback<bool, Ptr<Socket>, const Address &>(),
+    MakeCallback(&IncastSender::HandleAccept, this)
+  );
+  m_socket->Listen();
 }
 
 void IncastSender::HandleRead(Ptr<Socket> socket) {
@@ -108,14 +108,19 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
       size_t sentBytes = 0;
 
       while (sentBytes < m_totalBytes && socket->GetTxAvailable()) {
-        Ptr<Packet> packet = Create<Packet>(m_totalBytes - sentBytes);
-        int sentBytes = m_socket->Send(packet);
+        int toSend = m_totalBytes - sentBytes;
+        Ptr<Packet> packet = Create<Packet>(toSend);
+        int newSentBytes = socket->Send(packet);
 
-        if (sentBytes > 0) {
-          sentBytes += sentBytes;
+        if (newSentBytes > 0) {
+          sentBytes += newSentBytes;
+          NS_LOG_LOGIC("Sent " << toSend << " bytes");
+          std::cout << "Sent " << toSend << " bytes\n";
+        } else {
+          NS_LOG_LOGIC("Error: could not send " << toSend << " bytes");
+          std::cout << "Error: could not send " << toSend << " bytes\n";
+          break;
         }
-
-        NS_LOG_LOGIC("Sent " << sentBytes << " bytes");
       }
     } else {
       break;
@@ -145,17 +150,18 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
 //   }
 // }
 
-// void IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
-//   NS_LOG_FUNCTION(this << socket << from);
+void IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
+  NS_LOG_FUNCTION(this << socket << from);
+  std::cout << "Worker: HandleAccept()" << std::endl;
 
-//   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
-//   NS_LOG_LOGIC("Accepting connection from " << addr.GetIpv4() << ":" << addr.GetPort());
+  InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
+  NS_LOG_LOGIC("Accepting connection from " << addr.GetIpv4() << ":" << addr.GetPort());
 
-//   // Stop listening to sockets to prevent parallel connections
-//   // m_socket->Close();
-//   m_socket = socket;
-//   socket->SetSendCallback(MakeCallback(&IncastSender::HandleSend, this));
-// }
+  // Stop listening to sockets to prevent parallel connections
+  // m_socket->Close();
+  // m_socket = socket;
+  socket->SetRecvCallback(MakeCallback(&IncastSender::HandleRead, this));
+}
 
 void IncastSender::StopApplication()
 {
