@@ -1,3 +1,22 @@
+/*
+ * Copyright (c) 2023 Carnegie Mellon University
+ * All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ */
+
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
@@ -31,50 +50,50 @@ main(int argc, char* argv[])
     uint32_t request_bytes = 50;
     uint32_t response_bytes = 15000;
     uint64_t rtt_ms = 200;
-    // uint32_t requests_per_second = 50; 
+    // uint32_t requests_per_second = 50;
     bool experimenting = false;
     bool tracing = true;
 
     // Define command line arguments
     CommandLine cmd(__FILE__);
     cmd.AddValue(
-        "verbose", 
-        "Enable logging at the requester's switch (default: true)", 
+        "verbose",
+        "Enable logging at the requester's switch (default: true)",
         verbose
     );
     cmd.AddValue(
-        "num_workers", 
-        "Number of worker nodes (default: 50)", 
+        "num_workers",
+        "Number of worker nodes (default: 50)",
         num_workers
     );
     cmd.AddValue(
-        "request_bytes", 
-        "Number of bytes sent from the requester to all workers (default: 50)", 
+        "request_bytes",
+        "Number of bytes sent from the requester to all workers (default: 50)",
         request_bytes
     );
     cmd.AddValue(
-        "response_bytes", 
-        "Number of bytes sent from each worker to the requester (default: 1500)", 
+        "response_bytes",
+        "Number of bytes sent from each worker to the requester (default: 1500)",
         response_bytes
     );
     // cmd.AddValue(
-    //     "requests_per_second", 
-    //     "Requests per second (default: 50)", 
+    //     "requests_per_second",
+    //     "Requests per second (default: 50)",
     //     requests_per_second
     // );
     cmd.AddValue(
-        "experimenting", 
-        "Use experimentation link parameters (default: false)", 
+        "experimenting",
+        "Use experimentation link parameters (default: false)",
         experimenting
     );
     cmd.AddValue(
-        "tracing", 
-        "Enable pcap tracing (default: true)", 
+        "tracing",
+        "Enable pcap tracing (default: true)",
         tracing
     );
     cmd.Parse(argc, argv);
 
-    // Configure link parameters 
+    // Configure link parameters
     StringValue small_rate = StringValue("10Mbps");
     TimeValue small_delay = TimeValue(NanoSeconds(0)); // TODO: reconfigure
     StringValue large_rate = StringValue("100Mbps");
@@ -97,7 +116,7 @@ main(int argc, char* argv[])
     large_link.SetChannelAttribute("Delay", large_delay);
 
     PointToPointDumbbellHelper dumbbell_helper(1, small_link, num_workers, small_link, large_link);
-    
+
     // Install TCP stack on all nodes
     InternetStackHelper stack;
     for (uint32_t i = 0; i < dumbbell_helper.LeftCount(); ++i)
@@ -131,7 +150,7 @@ main(int argc, char* argv[])
     requester_source_helper.SetAttribute("OffTime", StringValue("ns3::UniformRandomVariable[Min=0.|Max=1.]"));
     requester_source_helper.SetAttribute("PacketSize", UintegerValue(request_bytes / num_workers));
     requester_source_helper.SetAttribute("DataRate", small_rate);
-    
+
     for (uint32_t i = 0; i < num_workers; ++i) {
         uint16_t port = 5000 + i;
         Ipv4Address worker_address = dumbbell_helper.GetRightIpv4Address(i);
@@ -140,11 +159,11 @@ main(int argc, char* argv[])
 
         Ptr<Node> requester = dumbbell_helper.GetLeft(0);
         requester_source_apps.Add(requester_source_helper.Install(requester));
-        requester_source_apps.Start(MilliSeconds(100 + rtt_ms/2 + rand() % 5)); 
+        requester_source_apps.Start(MilliSeconds(100 + rtt_ms/2 + rand() % 5));
 
         Address worker_sink_address(InetSocketAddress(Ipv4Address::GetAny(), port));
         PacketSinkHelper worker_sink_helper("ns3::TcpSocketFactory", worker_sink_address);
-        
+
         Ptr<Node> worker = dumbbell_helper.GetRight(i);
         worker_sink_apps.Add(worker_sink_helper.Install(worker));
     }
@@ -190,7 +209,7 @@ main(int argc, char* argv[])
     // Enable logging for the requester's switch
     if (verbose) {
         NS_LOG_INFO("Enabling logging...");
-        // TODO: add logging for left-most switch 
+        // TODO: add logging for left-most switch
         // Levels: LOG_LEVEL_INFO, LOG_PREFIX_FUNC, LOG_PREFIX_TIME
     }
 

@@ -1,3 +1,22 @@
+/*
+ * Copyright (c) 2023 Carnegie Mellon University
+ * All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation;
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ *
+ */
+
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/internet-module.h"
@@ -30,50 +49,50 @@ main(int argc, char* argv[])
     uint32_t request_bytes = 50;
     uint32_t response_bytes = 15000;
     uint64_t rtt_ms = 200;
-    // uint32_t requests_per_second = 50; 
+    // uint32_t requests_per_second = 50;
     bool experimenting = false;
     bool tracing = true;
 
     // Define command line arguments
     CommandLine cmd(__FILE__);
     cmd.AddValue(
-        "verbose", 
-        "Enable logging at the requester's switch (default: true)", 
+        "verbose",
+        "Enable logging at the requester's switch (default: true)",
         verbose
     );
     cmd.AddValue(
-        "num_workers", 
-        "Number of worker nodes (default: 50)", 
+        "num_workers",
+        "Number of worker nodes (default: 50)",
         num_workers
     );
     cmd.AddValue(
-        "request_bytes", 
-        "Number of bytes sent from the requester to all workers (default: 50)", 
+        "request_bytes",
+        "Number of bytes sent from the requester to all workers (default: 50)",
         request_bytes
     );
     cmd.AddValue(
-        "response_bytes", 
-        "Number of bytes sent from each worker to the requester (default: 1500)", 
+        "response_bytes",
+        "Number of bytes sent from each worker to the requester (default: 1500)",
         response_bytes
     );
     // cmd.AddValue(
-    //     "requests_per_second", 
-    //     "Requests per second (default: 50)", 
+    //     "requests_per_second",
+    //     "Requests per second (default: 50)",
     //     requests_per_second
     // );
     cmd.AddValue(
-        "experimenting", 
-        "Use experimentation link parameters (default: false)", 
+        "experimenting",
+        "Use experimentation link parameters (default: false)",
         experimenting
     );
     cmd.AddValue(
-        "tracing", 
-        "Enable pcap tracing (default: true)", 
+        "tracing",
+        "Enable pcap tracing (default: true)",
         tracing
     );
     cmd.Parse(argc, argv);
 
-    // Configure link parameters 
+    // Configure link parameters
     StringValue small_rate = StringValue("10Mbps");
     TimeValue small_delay = TimeValue(NanoSeconds(0)); // TODO: reconfigure
     StringValue large_rate = StringValue("100Mbps");
@@ -105,7 +124,7 @@ main(int argc, char* argv[])
     large_link.SetDeviceAttribute("DataRate", large_rate);
     large_link.SetChannelAttribute("Delay", large_delay);
 
-    // Connect nodes 
+    // Connect nodes
     NetDeviceContainer requester_switch;
     requester_switch = small_link.Install(requester.Get(0), switches.Get(0));
 
@@ -127,7 +146,7 @@ main(int argc, char* argv[])
 
     NS_LOG_INFO("Assigning IP addresses...");
 
-    // Assign IP addresses 
+    // Assign IP addresses
     Ipv4AddressHelper address;
     address.SetBase("10.0.0.0", "255.255.255.0");
     Ipv4InterfaceContainer ip_requester_switch = address.Assign(requester_switch);
@@ -167,7 +186,7 @@ main(int argc, char* argv[])
         requester_source_helper.SetAttribute("Remote", remote_address);
         requester_source_apps.Add(requester_source_helper.Install(requester.Get(0)));
         requester_source_apps.Start(MilliSeconds(100 + rand() % 5));
-        
+
         Address sink_address = InetSocketAddress(Ipv4Address::GetAny(), port);
         PacketSinkHelper sink_helper("ns3::TcpSocketFactory", sink_address);
         worker_sink_apps.Add(sink_helper.Install(workers.Get(i)));
@@ -207,7 +226,7 @@ main(int argc, char* argv[])
         Address sink_address = InetSocketAddress(Ipv4Address::GetAny(), port);
         PacketSinkHelper sink_helper("ns3::TcpSocketFactory", sink_address);
         requester_sink_apps.Add(sink_helper.Install(requester));
-        
+
         Ptr<PacketSink> requester_sink = requester_sink_apps.Get(0)->GetObject<PacketSink>();
         requester_sinks.push_back(requester_sink);
     }
@@ -219,7 +238,7 @@ main(int argc, char* argv[])
     // Enable logging for the requester's switch
     if (verbose) {
         NS_LOG_INFO("Enabling logging...");
-        // TODO: add logging for left-most switch 
+        // TODO: add logging for left-most switch
         // Levels: LOG_LEVEL_INFO, LOG_PREFIX_FUNC, LOG_PREFIX_TIME
     }
 
