@@ -15,20 +15,6 @@ TypeId IncastSender::GetTypeId() {
   static TypeId tid = TypeId("ns3::IncastSender")
       .SetParent<Application>()
       .AddConstructor<IncastSender>()
-      // .AddAttribute(
-      //   "NumBursts",
-      //   "Number of bursts to simulate",
-      //   UintegerValue(10),
-      //   MakeUintegerAccessor(&IncastSender::m_numBursts),
-      //   MakeUintegerChecker<uint32_t>()
-      // )
-      .AddAttribute(
-        "TotalBytes",
-        "Number of bytes to send for each burst",
-        UintegerValue(1000),
-        MakeUintegerAccessor(&IncastSender::m_totalBytes),
-        MakeUintegerChecker<uint32_t>()
-      )
       .AddAttribute(
         "ResponseJitterUs",
         "Max random jitter in sending responses, in microseconds",
@@ -80,7 +66,6 @@ void IncastSender::StartApplication()
 {
   NS_LOG_FUNCTION(this);
 
-  // m_sentBytes = 0;
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
   if (m_socket->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_port)) == -1) {
     NS_FATAL_ERROR("Worker bind failed");
@@ -111,13 +96,23 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
     std::cout << "Received!!!\n";
     size_t size = packet->GetSize();
 
-    if (size < 100) {
+    if (size == sizeof(uint32_t)) {
+      uint32_t requestedBytes = ParseRequestedBytes(packet);
       Time time = Seconds((rand() % m_responseJitterUs) / 1000000);
-      Simulator::Schedule(time, &IncastSender::SendBurst, this, socket, m_totalBytes);
+      std::cout << "Sender requested " << requestedBytes << " bytes\n";
+      Simulator::Schedule(time, &IncastSender::SendBurst, this, socket, requestedBytes);
     } else {
       break;
     }
   }
+}
+
+uint32_t IncastSender::ParseRequestedBytes(Ptr<Packet> packet) {
+  uint8_t *buffer = new uint8_t[packet->GetSize()];
+  packet->CopyData(buffer, packet->GetSize());
+  uint32_t requestedBytes = *(uint32_t *)buffer;
+  delete[] buffer;
+  return requestedBytes;
 }
 
 void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {

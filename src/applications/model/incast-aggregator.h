@@ -98,6 +98,9 @@ private:
   // Number of bursts to simulate
   uint32_t m_numBursts;
 
+  // For each burst, the number of bytes to request from each sender
+  uint32_t m_burstBytes;
+
   // TCP port for all applications
   uint16_t m_port;
 

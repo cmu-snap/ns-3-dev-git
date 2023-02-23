@@ -81,6 +81,7 @@ int main(int argc, char *argv[]) {
   app->SetSenders(senders);
   app->SetStartTime(Seconds(1.0));
   app->SetAttribute("NumBursts", UintegerValue(numBursts));
+  app->SetAttribute("BurstBytes", UintegerValue(totalBytes));
   app->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   star.GetSpokeNode(0)->AddApplication(app);
 
@@ -88,7 +89,6 @@ int main(int argc, char *argv[]) {
   for (uint32_t i = 1; i < star.SpokeCount(); ++i) {
     Ptr<IncastSender> sendApp = CreateObject<IncastSender>();
     sendApp->SetAttribute("Aggregator", Ipv4AddressValue(star.GetSpokeIpv4Address(0)));
-    sendApp->SetAttribute("TotalBytes", UintegerValue(totalBytes));
     sendApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
     sendApp->SetStartTime(Seconds(1.0));
     star.GetSpokeNode(i)->AddApplication(sendApp);

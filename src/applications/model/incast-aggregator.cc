@@ -24,6 +24,13 @@ TypeId IncastAggregator::GetTypeId() {
       MakeUintegerChecker<uint32_t>()
     )
     .AddAttribute(
+      "BurstBytes",
+      "For each burst, the number of bytes to request from each worker",
+      UintegerValue(1448),
+      MakeUintegerAccessor(&IncastAggregator::m_burstBytes),
+      MakeUintegerChecker<uint32_t>()
+    )
+    .AddAttribute(
       "RequestJitterUs",
       "Max random jitter in sending requests, in microseconds",
       UintegerValue(10),
@@ -134,9 +141,9 @@ void IncastAggregator::StartBurst()
 
   for (Ptr<Socket> socket: m_sockets) {
     // Send a small packet to start a burst
-    std::cout << "Sent to " << socket << std::endl;
-    Ptr<Packet> packet = Create<Packet>(50);
+    Ptr<Packet> packet = Create<Packet>((uint8_t *)&m_burstBytes, sizeof(uint32_t));
     socket->Send(packet);
+    std::cout << "Sent to " << socket << std::endl;
   }
 }
 
@@ -236,8 +243,8 @@ void IncastAggregator::StopApplication()
 
   for (Ptr<Socket> socket: m_sockets) {
     // Send a large packet
-    Ptr<Packet> packet = Create<Packet>(50);
-    socket->Send(packet);
+    // Ptr<Packet> packet = Create<Packet>(50);
+    // socket->Send(packet);
     socket->Close();
   }
 }

@@ -56,11 +56,7 @@ private:
    */
   void HandleRead (Ptr<Socket> socket);
 
-  // Number of bytes to send for each burst
-  uint32_t m_totalBytes;
-
-  // Number of bytes sent
-  uint32_t m_sentBytes;
+  static uint32_t ParseRequestedBytes(Ptr<Packet> packet);
 
   // TCP port for all applications
   uint16_t m_port;
