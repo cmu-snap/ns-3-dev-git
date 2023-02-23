@@ -91,13 +91,15 @@ int main(int argc, char *argv[]) {
   }
 
   NS_LOG_INFO("Enable static global routing.");
-  
-  // Turn on global static routing 
+
+  // Turn on global static routing
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
   // Enable tracing across the middle link
   NS_LOG_INFO("Enabling tracing...");
   pointToPoint.EnablePcap("scratch/traces/incast-sockets", 0, 0);
+
+  // LogComponentEnableAll(LOG_PREFIX_TIME);
 
   NS_LOG_INFO("Run Simulation.");
   Simulator::Run();
