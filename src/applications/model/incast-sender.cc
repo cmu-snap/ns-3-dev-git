@@ -18,7 +18,7 @@ TypeId IncastSender::GetTypeId() {
       .AddAttribute(
         "ResponseJitterUs",
         "Max random jitter in sending responses, in microseconds",
-        UintegerValue(10),
+        UintegerValue(0),
         MakeUintegerAccessor(&IncastSender::m_responseJitterUs),
         MakeUintegerChecker<uint32_t>()
       )
@@ -98,7 +98,12 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
 
     if (size == sizeof(uint32_t)) {
       uint32_t requestedBytes = ParseRequestedBytes(packet);
-      Time time = Seconds(((double)(rand() % m_responseJitterUs)) / 1000000);
+
+      double jitterSec = 0;
+      if (m_responseJitterUs > 0) {
+        jitterSec = ((double)(rand() % m_responseJitterUs)) / 1000000;
+      }
+      Time time = Seconds(jitterSec);
       std::cout << "Sender requested " << requestedBytes << " bytes\n";
       Simulator::Schedule(time, &IncastSender::SendBurst, this, socket, requestedBytes);
     } else {

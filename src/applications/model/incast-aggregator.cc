@@ -33,7 +33,7 @@ TypeId IncastAggregator::GetTypeId() {
     .AddAttribute(
       "RequestJitterUs",
       "Max random jitter in sending requests, in microseconds",
-      UintegerValue(10),
+      UintegerValue(0),
       MakeUintegerAccessor(&IncastAggregator::m_requestJitterUs),
       MakeUintegerChecker<uint32_t>()
     )
@@ -129,7 +129,10 @@ void IncastAggregator::StartApplication()
 void IncastAggregator::ScheduleBurst(uint32_t burstCount) {
   NS_LOG_FUNCTION(this);
 
-  double jitterSec = ((double)(rand() % m_requestJitterUs)) / 1000000;
+  double jitterSec = 0;
+  if (m_requestJitterUs > 0) {
+    jitterSec = ((double)(rand() % m_requestJitterUs)) / 1000000;
+  }
   Time time = Seconds((double) burstCount + jitterSec);
   NS_LOG_LOGIC("Start at " << time.As(Time::S));
   Simulator::Schedule(time, &IncastAggregator::StartBurst, this);
