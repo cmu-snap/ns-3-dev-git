@@ -53,6 +53,9 @@ int main(int argc, char *argv[]) {
   std::ostringstream bwMbps_str;
   bwMbps_str << bwMbps << "Mbps";
 
+  // Use nanosecond timestamps for PCAP traces
+  Config::SetDefault ("ns3::PcapFileWrapper::NanosecMode",   BooleanValue (true));
+
   NS_LOG_INFO("Build star topology.");
   PointToPointHelper pointToPoint;
   pointToPoint.SetDeviceAttribute("DataRate", StringValue(bwMbps_str.str()));
