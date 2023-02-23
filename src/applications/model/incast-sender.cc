@@ -17,6 +17,8 @@
  *
  */
 
+// Derived from: https://code.nsnam.org/adrian/ns-3-incast
+
 #include "incast-sender.h"
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"

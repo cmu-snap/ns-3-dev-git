@@ -17,6 +17,8 @@
  *
  */
 
+// Derived from: https://code.nsnam.org/adrian/ns-3-incast
+
 #ifndef INCAST_AGGREGATOR_H
 #define INCAST_AGGREGATOR_H
 

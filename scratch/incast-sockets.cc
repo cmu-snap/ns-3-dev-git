@@ -17,6 +17,8 @@
  *
  */
 
+// Derived from: https://code.nsnam.org/adrian/ns-3-incast
+
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/drop-tail-queue.h"
