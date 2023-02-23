@@ -16,35 +16,35 @@ TypeId IncastSender::GetTypeId() {
       .SetParent<Application>()
       .AddConstructor<IncastSender>()
       // .AddAttribute(
-      //   "NumBursts", 
+      //   "NumBursts",
       //   "Number of bursts to simulate",
       //   UintegerValue(10),
       //   MakeUintegerAccessor(&IncastSender::m_numBursts),
       //   MakeUintegerChecker<uint32_t>()
       // )
       .AddAttribute(
-        "TotalBytes", 
+        "TotalBytes",
         "Number of bytes to send for each burst",
         UintegerValue(1000),
         MakeUintegerAccessor(&IncastSender::m_totalBytes),
         MakeUintegerChecker<uint32_t>()
       )
       .AddAttribute(
-        "Port", 
+        "Port",
         "TCP port for all applications",
         UintegerValue(8888),
         MakeUintegerAccessor(&IncastSender::m_port),
         MakeUintegerChecker<uint16_t>()
       )
       .AddAttribute(
-        "Protocol", 
+        "Protocol",
         "TypeId of the protocol used",
         TypeIdValue(TcpSocketFactory::GetTypeId()),
-        MakeTypeIdAccessor(&IncastSender::m_tid), 
+        MakeTypeIdAccessor(&IncastSender::m_tid),
         MakeTypeIdChecker()
       )
       .AddAttribute(
-        "Aggregator", 
+        "Aggregator",
         "Aggregator to send packets to",
         Ipv4AddressValue(),
         MakeIpv4AddressAccessor(&IncastSender::m_aggregator),
@@ -54,12 +54,12 @@ TypeId IncastSender::GetTypeId() {
   return tid;
 }
 
-IncastSender::IncastSender() : m_socket(nullptr) { 
-  NS_LOG_FUNCTION(this); 
+IncastSender::IncastSender() : m_socket(nullptr) {
+  NS_LOG_FUNCTION(this);
 }
 
-IncastSender::~IncastSender() { 
-  NS_LOG_FUNCTION(this); 
+IncastSender::~IncastSender() {
+  NS_LOG_FUNCTION(this);
 }
 
 void IncastSender::DoDispose() {
@@ -69,19 +69,25 @@ void IncastSender::DoDispose() {
   Application::DoDispose();
 }
 
-void IncastSender::StartApplication() 
+void IncastSender::StartApplication()
 {
   NS_LOG_FUNCTION(this);
 
   // m_sentBytes = 0;
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
-  m_socket->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_port));
-  m_socket->Listen();
-  m_socket->Send(Create<Packet>(42));
-  // m_socket->ShutdownRecv();
+  if (m_socket->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_port)) == -1) {
+    NS_FATAL_ERROR("Worker bind failed");
+  } else {
+    std::cout << "Worker bind succeeded\n";
+  }
   m_socket->SetRecvCallback(
     MakeCallback(&IncastSender::HandleRead, this)
   );
+  std::cout << "Worker registered recv callback\n";
+  m_socket->Listen();
+  // std::cout << "Just about to register HandleRead\n";
+  // m_socket->Send(Create<Packet>(42));
+  // m_socket->ShutdownRecv();
   // m_socket->SetAcceptCallback(
   //   MakeNullCallback<bool, Ptr<Socket>, const Address &>(),
   //   MakeCallback(&IncastSender::HandleAccept, this)
@@ -89,8 +95,8 @@ void IncastSender::StartApplication()
 }
 
 void IncastSender::HandleRead(Ptr<Socket> socket) {
-  std::cout << "Just about to receive from sender\n";
   NS_LOG_FUNCTION(this << socket);
+  std::cout << "Worker: HandleRead()" << std::endl;
 
   Ptr<Packet> packet;
 
@@ -99,15 +105,15 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
     size_t size = packet->GetSize();
 
     if (size < 100) {
-      size_t sentBytes = 0; 
+      size_t sentBytes = 0;
 
-      while (sentBytes < m_totalBytes && socket->GetTxAvailable()) { 
+      while (sentBytes < m_totalBytes && socket->GetTxAvailable()) {
         Ptr<Packet> packet = Create<Packet>(m_totalBytes - sentBytes);
         int sentBytes = m_socket->Send(packet);
 
         if (sentBytes > 0) {
           sentBytes += sentBytes;
-        } 
+        }
 
         NS_LOG_LOGIC("Sent " << sentBytes << " bytes");
       }
@@ -122,13 +128,13 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
 // void IncastSender::HandleSend(Ptr<Socket> socket, uint32_t n) {
 //   NS_LOG_FUNCTION(this);
 
-//   while (m_sentBytes < m_totalBytes && socket->GetTxAvailable()) { 
+//   while (m_sentBytes < m_totalBytes && socket->GetTxAvailable()) {
 //     Ptr<Packet> packet = Create<Packet>(std::min(m_totalBytes - m_sentBytes, n));
 //     int sentBytes = socket->Send(packet);
 
 //     if (sentBytes > 0) {
 //       m_sentBytes += sentBytes;
-//     } 
+//     }
 
 //     NS_LOG_LOGIC("Sent " << sentBytes << " bytes");
 //   }
@@ -151,7 +157,7 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
 //   socket->SetSendCallback(MakeCallback(&IncastSender::HandleSend, this));
 // }
 
-void IncastSender::StopApplication() 
+void IncastSender::StopApplication()
 {
   NS_LOG_FUNCTION(this);
 

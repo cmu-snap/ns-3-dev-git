@@ -17,24 +17,24 @@ TypeId IncastAggregator::GetTypeId() {
     .SetParent<Application>()
     .AddConstructor<IncastAggregator>()
     .AddAttribute(
-      "NumBursts", 
+      "NumBursts",
       "Number of bursts to simulate",
       UintegerValue(10),
       MakeUintegerAccessor(&IncastAggregator::m_numBursts),
       MakeUintegerChecker<uint32_t>()
     )
     .AddAttribute(
-      "Port", 
+      "Port",
       "TCP port for all applications",
       UintegerValue(8888),
       MakeUintegerAccessor(&IncastAggregator::m_port),
       MakeUintegerChecker<uint16_t>()
     )
     .AddAttribute(
-      "Protocol", 
+      "Protocol",
       "TypeId of the protocol used",
       TypeIdValue(TcpSocketFactory::GetTypeId()),
-      MakeTypeIdAccessor(&IncastAggregator::m_tid), 
+      MakeTypeIdAccessor(&IncastAggregator::m_tid),
       MakeTypeIdChecker()
     );
 
@@ -45,8 +45,8 @@ IncastAggregator::IncastAggregator() : m_numClosed(0) {
   NS_LOG_FUNCTION(this);
 }
 
-IncastAggregator::~IncastAggregator() { 
-  NS_LOG_FUNCTION(this); 
+IncastAggregator::~IncastAggregator() {
+  NS_LOG_FUNCTION(this);
 }
 
 void IncastAggregator::StartEvent() {
@@ -65,7 +65,7 @@ void IncastAggregator::SetSenders(const std::list<Ipv4Address> &senders) {
   m_senders = senders;
 }
 
-void IncastAggregator::StartApplication() 
+void IncastAggregator::StartApplication()
 {
   NS_LOG_FUNCTION(this);
 
@@ -78,7 +78,7 @@ void IncastAggregator::StartApplication()
 
   for (Ipv4Address sender: m_senders) {
     Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
-    
+
     if (socket->GetSocketType() != Socket::NS3_SOCK_STREAM &&
       socket->GetSocketType() != Socket::NS3_SOCK_SEQPACKET) {
       NS_FATAL_ERROR("Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
@@ -86,12 +86,20 @@ void IncastAggregator::StartApplication()
 
     // Connect to each sender
     NS_LOG_LOGIC("Connect to " << sender);
-    socket->Bind();
-    socket->Connect(InetSocketAddress(sender, m_port));
-    // socket->ShutdownSend();
+
+    if (socket->Bind() == -1) {
+      NS_FATAL_ERROR("Aggregator bind failed");
+    } else {
+      std::cout << "Aggregator bind succeeded\n";
+    }
+
     socket->SetRecvCallback(
       MakeCallback(&IncastAggregator::HandleRead, this)
     );
+    std::cout << "Aggregator registered recv callback\n";
+
+    socket->Connect(InetSocketAddress(sender, m_port));
+    // socket->ShutdownSend();
     m_sockets.push_back(socket);
   }
 
@@ -106,7 +114,7 @@ void IncastAggregator::ScheduleBurst(uint32_t burstCount) {
   Time time = Seconds(burstCount);
   NS_LOG_LOGIC("Start at " << time.As(Time::S));
   Simulator::Schedule(time, &IncastAggregator::StartBurst, this);
-} 
+}
 
 void IncastAggregator::StartBurst()
 {
@@ -116,7 +124,7 @@ void IncastAggregator::StartBurst()
   for (Ptr<Socket> socket: m_sockets) {
     // Send a small packet to start a burst
     std::cout << "Sent to " << socket << std::endl;
-    Ptr<Packet> packet = Create<Packet>(50);
+    Ptr<Packet> packet = Create<Packet>(500);
     socket->Send(packet);
   }
 }
@@ -133,7 +141,7 @@ void IncastAggregator::HandleRead(Ptr<Socket> socket) {
     std::cout << "AGG: received" <<  byteCount << std::endl;
   };
 
-  NS_LOG_LOGIC("received " << byteCount << " bytes");  
+  NS_LOG_LOGIC("received " << byteCount << " bytes");
 
   // auto it = std::find(m_runningSockets.begin(), m_runningSockets.end(), socket);
   // std::list<uint32_t>::iterator p = m_byteCounts.begin();
@@ -214,7 +222,7 @@ void IncastAggregator::HandleClose(Ptr<Socket> socket) {
 //   );
 // }
 
-void IncastAggregator::StopApplication() 
+void IncastAggregator::StopApplication()
 {
   NS_LOG_FUNCTION(this);
 
