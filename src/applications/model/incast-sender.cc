@@ -20,6 +20,7 @@
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 
 #include "incast-sender.h"
+
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
 #include "ns3/log.h"
@@ -33,48 +34,35 @@ namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED(IncastSender);
 
 TypeId IncastSender::GetTypeId() {
-  static TypeId tid = TypeId("ns3::IncastSender")
-      .SetParent<Application>()
-      .AddConstructor<IncastSender>()
-      .AddAttribute(
-        "ResponseJitterUs",
-        "Max random jitter in sending responses, in microseconds",
-        UintegerValue(0),
-        MakeUintegerAccessor(&IncastSender::m_responseJitterUs),
-        MakeUintegerChecker<uint32_t>()
-      )
-      .AddAttribute(
-        "Port",
-        "TCP port for all applications",
-        UintegerValue(8888),
-        MakeUintegerAccessor(&IncastSender::m_port),
-        MakeUintegerChecker<uint16_t>()
-      )
-      .AddAttribute(
-        "Protocol",
-        "TypeId of the protocol used",
-        TypeIdValue(TcpSocketFactory::GetTypeId()),
-        MakeTypeIdAccessor(&IncastSender::m_tid),
-        MakeTypeIdChecker()
-      )
-      .AddAttribute(
-        "Aggregator",
-        "Aggregator to send packets to",
-        Ipv4AddressValue(),
-        MakeIpv4AddressAccessor(&IncastSender::m_aggregator),
-        MakeIpv4AddressChecker()
-      );
+  static TypeId tid =
+      TypeId("ns3::IncastSender")
+          .SetParent<Application>()
+          .AddConstructor<IncastSender>()
+          .AddAttribute(
+              "ResponseJitterUs",
+              "Max random jitter in sending responses, in microseconds",
+              UintegerValue(0),
+              MakeUintegerAccessor(&IncastSender::m_responseJitterUs),
+              MakeUintegerChecker<uint32_t>())
+          .AddAttribute("Port", "TCP port for all applications",
+                        UintegerValue(8888),
+                        MakeUintegerAccessor(&IncastSender::m_port),
+                        MakeUintegerChecker<uint16_t>())
+          .AddAttribute("Protocol", "TypeId of the protocol used",
+                        TypeIdValue(TcpSocketFactory::GetTypeId()),
+                        MakeTypeIdAccessor(&IncastSender::m_tid),
+                        MakeTypeIdChecker())
+          .AddAttribute("Aggregator", "Aggregator to send packets to",
+                        Ipv4AddressValue(),
+                        MakeIpv4AddressAccessor(&IncastSender::m_aggregator),
+                        MakeIpv4AddressChecker());
 
   return tid;
 }
 
-IncastSender::IncastSender() : m_socket(nullptr) {
-  NS_LOG_FUNCTION(this);
-}
+IncastSender::IncastSender() : m_socket(nullptr) { NS_LOG_FUNCTION(this); }
 
-IncastSender::~IncastSender() {
-  NS_LOG_FUNCTION(this);
-}
+IncastSender::~IncastSender() { NS_LOG_FUNCTION(this); }
 
 void IncastSender::DoDispose() {
   NS_LOG_FUNCTION(this);
@@ -83,8 +71,7 @@ void IncastSender::DoDispose() {
   Application::DoDispose();
 }
 
-void IncastSender::StartApplication()
-{
+void IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
@@ -101,9 +88,8 @@ void IncastSender::StartApplication()
   // m_socket->Send(Create<Packet>(42));
   // m_socket->ShutdownRecv();
   m_socket->SetAcceptCallback(
-    MakeNullCallback<bool, Ptr<Socket>, const Address &>(),
-    MakeCallback(&IncastSender::HandleAccept, this)
-  );
+      MakeNullCallback<bool, Ptr<Socket>, const Address&>(),
+      MakeCallback(&IncastSender::HandleAccept, this));
   m_socket->Listen();
 }
 
@@ -126,7 +112,8 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
       }
       Time time = Seconds(jitterSec);
       std::cout << "Sender requested " << requestedBytes << " bytes\n";
-      Simulator::Schedule(time, &IncastSender::SendBurst, this, socket, requestedBytes);
+      Simulator::Schedule(time, &IncastSender::SendBurst, this, socket,
+                          requestedBytes);
     } else {
       break;
     }
@@ -134,9 +121,9 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
 }
 
 uint32_t IncastSender::ParseRequestedBytes(Ptr<Packet> packet) {
-  uint8_t *buffer = new uint8_t[packet->GetSize()];
+  uint8_t* buffer = new uint8_t[packet->GetSize()];
   packet->CopyData(buffer, packet->GetSize());
-  uint32_t requestedBytes = *(uint32_t *)buffer;
+  uint32_t requestedBytes = *(uint32_t*)buffer;
   delete[] buffer;
   return requestedBytes;
 }
@@ -162,12 +149,13 @@ void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
   }
 }
 
-void IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
+void IncastSender::HandleAccept(Ptr<Socket> socket, const Address& from) {
   NS_LOG_FUNCTION(this << socket << from);
   std::cout << "Worker: HandleAccept()" << std::endl;
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
-  NS_LOG_LOGIC("Accepting connection from " << addr.GetIpv4() << ":" << addr.GetPort());
+  NS_LOG_LOGIC("Accepting connection from " << addr.GetIpv4() << ":"
+                                            << addr.GetPort());
 
   // Stop listening to sockets to prevent parallel connections
   // m_socket->Close();
@@ -175,8 +163,7 @@ void IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   socket->SetRecvCallback(MakeCallback(&IncastSender::HandleRead, this));
 }
 
-void IncastSender::StopApplication()
-{
+void IncastSender::StopApplication() {
   NS_LOG_FUNCTION(this);
 
   if (m_socket) {
@@ -184,4 +171,4 @@ void IncastSender::StopApplication()
   }
 }
 
-} // Namespace ns3
+}  // Namespace ns3

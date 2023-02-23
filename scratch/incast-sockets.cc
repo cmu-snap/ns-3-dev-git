@@ -19,6 +19,10 @@
 
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/drop-tail-queue.h"
@@ -29,9 +33,6 @@
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-layout-module.h"
 #include "ns3/point-to-point-module.h"
-#include <fstream>
-#include <iomanip>
-#include <iostream>
 
 // Network topology (default)
 //
@@ -48,7 +49,7 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("IncastSim");
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
   uint32_t numSenders = 3;
   // uint32_t bufferSize = 32768;
   uint32_t totalBytes = 4096;
@@ -62,20 +63,26 @@ int main(int argc, char *argv[]) {
   CommandLine cmd;
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
   cmd.AddValue("useStdout", "Output packet trace to stdout", useStdout);
-  // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes", bufferSize);
-  cmd.AddValue("totalBytes", "Number of bytes to send for each burst", totalBytes);
+  // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes",
+  // bufferSize);
+  cmd.AddValue("totalBytes", "Number of bytes to send for each burst",
+               totalBytes);
   cmd.AddValue("bwMbps", "Link bandwidth, in Mbps", bwMbps);
-  cmd.AddValue("unitSize", "Size of virtual bytes increment upon SYN packets", unitSize);
+  cmd.AddValue("unitSize", "Size of virtual bytes increment upon SYN packets",
+               unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
-  cmd.AddValue("jitterUs", "Max random jitter in sending request and responses, in microseconds", jitterUs);
+  cmd.AddValue(
+      "jitterUs",
+      "Max random jitter in sending request and responses, in microseconds",
+      jitterUs);
   cmd.Parse(argc, argv);
 
   std::ostringstream bwMbps_str;
   bwMbps_str << bwMbps << "Mbps";
 
   // Use nanosecond timestamps for PCAP traces
-  Config::SetDefault ("ns3::PcapFileWrapper::NanosecMode",   BooleanValue (true));
+  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
 
   NS_LOG_INFO("Build star topology.");
   PointToPointHelper pointToPoint;
@@ -89,7 +96,8 @@ int main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Install internet stack on all nodes.");
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
-  Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize", UintegerValue(maxWin));
+  Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
+                     UintegerValue(maxWin));
   // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
   // Config::SetDefault ("ns3::TcpSocket::DelAckCount", UintegerValue(0));
   InternetStackHelper internet;
@@ -117,7 +125,8 @@ int main(int argc, char *argv[]) {
   // Create send applications to send TCP to spoke 0
   for (uint32_t i = 1; i < star.SpokeCount(); ++i) {
     Ptr<IncastSender> sendApp = CreateObject<IncastSender>();
-    sendApp->SetAttribute("Aggregator", Ipv4AddressValue(star.GetSpokeIpv4Address(0)));
+    sendApp->SetAttribute("Aggregator",
+                          Ipv4AddressValue(star.GetSpokeIpv4Address(0)));
     sendApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
     sendApp->SetStartTime(Seconds(1.0));
     star.GetSpokeNode(i)->AddApplication(sendApp);

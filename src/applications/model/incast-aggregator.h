@@ -33,7 +33,7 @@ namespace ns3 {
  * @brief TODO
  */
 class IncastAggregator : public Application {
-public:
+ public:
   /**
    * @brief TODO
    */
@@ -52,7 +52,7 @@ public:
   /**
    * @brief TODO
    */
-  void SetSenders(const std::list<Ipv4Address> &n);
+  void SetSenders(const std::list<Ipv4Address>& n);
 
   /**
    * @brief TODO
@@ -69,13 +69,13 @@ public:
    */
   void StopEvent();
 
-protected:
+ protected:
   /**
    * @brief TODO
    */
   void DoDispose() override;
 
-private:
+ private:
   /**
    * @brief TODO
    */
@@ -99,7 +99,7 @@ private:
   /**
    * @brief TODO
    */
-  void HandleAccept(Ptr<Socket> socket, const Address &from);
+  void HandleAccept(Ptr<Socket> socket, const Address& from);
 
   /**
    * @brief TODO
@@ -153,6 +153,6 @@ private:
   // std::list<uint32_t> m_byteCounts;
 };
 
-} // namespace ns3
+}  // namespace ns3
 
 #endif /* INCAST_AGGREGATOR_H */

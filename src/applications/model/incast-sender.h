@@ -23,8 +23,8 @@
 #define INCAST_SENDER_H
 
 #include "ns3/application.h"
-#include "ns3/ipv4-interface-container.h"
 #include "ns3/inet-socket-address.h"
+#include "ns3/ipv4-interface-container.h"
 
 namespace ns3 {
 
@@ -32,7 +32,7 @@ namespace ns3 {
  * @brief TODO
  */
 class IncastSender : public Application {
-public:
+ public:
   /**
    * @brief TODO
    */
@@ -48,10 +48,10 @@ public:
    */
   ~IncastSender() override;
 
-protected:
+ protected:
   void DoDispose() override;
 
-private:
+ private:
   /**
    * @brief TODO
    */
@@ -70,12 +70,12 @@ private:
   /**
    * @brief TODO
    */
-  void HandleAccept (Ptr<Socket> socket, const Address& from);
+  void HandleAccept(Ptr<Socket> socket, const Address& from);
 
   /**
    * @brief TODO
    */
-  void HandleRead (Ptr<Socket> socket);
+  void HandleRead(Ptr<Socket> socket);
 
   static uint32_t ParseRequestedBytes(Ptr<Packet> packet);
 
@@ -95,6 +95,6 @@ private:
   uint32_t m_responseJitterUs;
 };
 
-} // namespace ns3
+}  // namespace ns3
 
 #endif /* INCAST_SENDER_H */
