@@ -36,21 +36,26 @@ int main(int argc, char *argv[]) {
   bool useStdout = false;
   uint32_t numBursts = 10;
   uint32_t jitterUs = 10;
+  float bwMbps = 12.5;
 
   CommandLine cmd;
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
   cmd.AddValue("useStdout", "Output packet trace to stdout", useStdout);
   // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes", bufferSize);
   cmd.AddValue("totalBytes", "Number of bytes to send for each burst", totalBytes);
+  cmd.AddValue("bwMbps", "Link bandwidth, in Mbps", bwMbps);
   cmd.AddValue("unitSize", "Size of virtual bytes increment upon SYN packets", unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
   cmd.AddValue("jitterUs", "Max random jitter in sending request and responses, in microseconds", jitterUs);
   cmd.Parse(argc, argv);
 
+  std::ostringstream bwMbps_str;
+  bwMbps_str << bwMbps << "Mbps";
+
   NS_LOG_INFO("Build star topology.");
   PointToPointHelper pointToPoint;
-  pointToPoint.SetDeviceAttribute("DataRate", StringValue("12.5Gbps"));
+  pointToPoint.SetDeviceAttribute("DataRate", StringValue(bwMbps_str.str()));
   // pointToPoint.SetDeviceAttribute ("UnitSize", UintegerValue (unitsize));
   pointToPoint.SetChannelAttribute("Delay", StringValue("25us"));
   // pointToPoint.SetQueue("ns3::DropTailQueue",
