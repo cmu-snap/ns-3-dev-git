@@ -98,7 +98,7 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
 
     if (size == sizeof(uint32_t)) {
       uint32_t requestedBytes = ParseRequestedBytes(packet);
-      Time time = Seconds((rand() % m_responseJitterUs) / 1000000);
+      Time time = Seconds(((double)(rand() % m_responseJitterUs)) / 1000000);
       std::cout << "Sender requested " << requestedBytes << " bytes\n";
       Simulator::Schedule(time, &IncastSender::SendBurst, this, socket, requestedBytes);
     } else {

@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
   uint16_t maxWin = 65535;
   bool useStdout = false;
   uint32_t numBursts = 10;
-  uint32_t jitterUs = 10;
+  uint32_t jitterUs = 0;
   float bwMbps = 12.5;
 
   CommandLine cmd;

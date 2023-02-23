@@ -129,7 +129,8 @@ void IncastAggregator::StartApplication()
 void IncastAggregator::ScheduleBurst(uint32_t burstCount) {
   NS_LOG_FUNCTION(this);
 
-  Time time = Seconds(burstCount + (rand() % m_requestJitterUs) / 1000000);
+  double jitterSec = ((double)(rand() % m_requestJitterUs)) / 1000000;
+  Time time = Seconds((double) burstCount + jitterSec);
   NS_LOG_LOGIC("Start at " << time.As(Time::S));
   Simulator::Schedule(time, &IncastAggregator::StartBurst, this);
 }
