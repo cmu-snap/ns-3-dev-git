@@ -75,33 +75,24 @@ void IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
-  if (m_socket->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_port)) == -1) {
+  InetSocketAddress local_address =
+      InetSocketAddress(Ipv4Address::GetAny(), m_port);
+  if (m_socket->Bind(local_address) == -1) {
     NS_FATAL_ERROR("Worker bind failed");
   }
-  //  else {
-  //   std::cout << "Worker bind succeeded\n";
-  // }
-  // m_socket->SetRecvCallback(
-  //   MakeCallback(&IncastSender::HandleRead, this)
-  // );
-  // std::cout << "Worker registered accept callback\n";
-  // std::cout << "Just about to register HandleRead\n";
-  // m_socket->Send(Create<Packet>(42));
-  // m_socket->ShutdownRecv();
+
   m_socket->SetAcceptCallback(
-      MakeNullCallback<bool, Ptr<Socket>, const Address&>(),
+      MakeNullCallback<bool, Ptr<Socket>, const Address &>(),
       MakeCallback(&IncastSender::HandleAccept, this));
   m_socket->Listen();
 }
 
 void IncastSender::HandleRead(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
-  // std::cout << "Worker: HandleRead()" << std::endl;
 
   Ptr<Packet> packet;
 
-  while (packet = socket->Recv()) {
-    // std::cout << "Received!!!\n";
+  while ((packet = socket->Recv())) {
     size_t size = packet->GetSize();
 
     if (size == sizeof(uint32_t)) {
@@ -112,7 +103,6 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
         jitterSec = ((double)(rand() % m_responseJitterUs)) / 1000000;
       }
       Time time = Seconds(jitterSec);
-      // std::cout << "Sender requested " << requestedBytes << " bytes\n";
       Simulator::Schedule(time, &IncastSender::SendBurst, this, socket,
                           requestedBytes);
     } else {
@@ -122,9 +112,9 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
 }
 
 uint32_t IncastSender::ParseRequestedBytes(Ptr<Packet> packet) {
-  uint8_t* buffer = new uint8_t[packet->GetSize()];
+  uint8_t *buffer = new uint8_t[packet->GetSize()];
   packet->CopyData(buffer, packet->GetSize());
-  uint32_t requestedBytes = *(uint32_t*)buffer;
+  uint32_t requestedBytes = *(uint32_t *)buffer;
   delete[] buffer;
   return requestedBytes;
 }
@@ -133,6 +123,7 @@ void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
   NS_LOG_FUNCTION(this);
 
   size_t sentBytes = 0;
+  
   while (sentBytes < burstBytes && socket->GetTxAvailable()) {
     int toSend = burstBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
@@ -140,8 +131,6 @@ void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
 
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;
-      // NS_LOG_LOGIC("Sent " << toSend << " bytes");
-      // std::cout << "Sent " << toSend << " bytes\n";
     } else {
       NS_LOG_LOGIC("Error: could not send " << toSend << " bytes");
       std::cout << "Error: could not send " << toSend << " bytes\n";
@@ -150,17 +139,13 @@ void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
   }
 }
 
-void IncastSender::HandleAccept(Ptr<Socket> socket, const Address& from) {
+void IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   NS_LOG_FUNCTION(this << socket << from);
-  // std::cout << "Worker: HandleAccept()" << std::endl;
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
   NS_LOG_LOGIC("Accepting connection from " << addr.GetIpv4() << ":"
                                             << addr.GetPort());
 
-  // Stop listening to sockets to prevent parallel connections
-  // m_socket->Close();
-  // m_socket = socket;
   socket->SetRecvCallback(MakeCallback(&IncastSender::HandleRead, this));
 }
 
@@ -172,4 +157,4 @@ void IncastSender::StopApplication() {
   }
 }
 
-}  // Namespace ns3
+} // Namespace ns3

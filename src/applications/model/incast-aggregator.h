@@ -69,6 +69,9 @@ class IncastAggregator : public Application {
    */
   void StopEvent();
 
+  /**
+   * @brief TODO
+   */
   std::vector<Time> GetBurstDurations();
 
  protected:
@@ -98,6 +101,9 @@ class IncastAggregator : public Application {
    */
   void StartBurst();
 
+  /**
+   * @brief TODO
+   */
   void SendRequest(Ptr<Socket> socket);
 
   /**
@@ -147,15 +153,11 @@ class IncastAggregator : public Application {
   // Max random jitter in microseconds
   uint32_t m_requestJitterUs;
 
+  // Start time of the current burst
   Time m_currentBurstStartTimeSec;
 
+  // List of all burst durations
   std::vector<Time> m_burstDurationsSec;
-
-  // // Callback for finished round
-  // Callback<void> m_roundFinish;
-
-  // bool m_isRunning;
-  // std::list<uint32_t> m_byteCounts;
 };
 
 }  // namespace ns3
