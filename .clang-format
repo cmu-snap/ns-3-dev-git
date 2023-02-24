@@ -1,6 +1,6 @@
 ---
 Language: Cpp
-BasedOnStyle: Microsoft
+BasedOnStyle: Google
 
 AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
@@ -8,8 +8,9 @@ AlwaysBreakAfterReturnType: TopLevelDefinitions
 AlwaysBreakTemplateDeclarations: Yes
 BinPackArguments: false
 BinPackParameters: false
-ColumnLimit: 100
+ColumnLimit: 80
 DeriveLineEnding: false
+ExperimentalAutoDetectBinPacking: false
 IncludeBlocks: Regroup
 IncludeCategories:
   - Regex: '^(<|")ns3/'
