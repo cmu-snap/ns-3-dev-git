@@ -20,7 +20,8 @@
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 //
 // Run with:
-//     $ NS_LOG='' ./ns3 run "scratch/incast-sockets --totalBytes=31250 --numBursts=5 --numSenders=500 --bwMbps=12500"
+//     $ NS_LOG='' ./ns3 run "scratch/incast-sockets --totalBytes=31250 \
+//           --numBursts=5 --numSenders=500 --bwMbps=12500"
 
 #include <fstream>
 #include <iomanip>
