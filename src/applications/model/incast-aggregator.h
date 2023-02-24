@@ -69,6 +69,8 @@ class IncastAggregator : public Application {
    */
   void StopEvent();
 
+  std::vector<Time> GetBurstDurations();
+
  protected:
   /**
    * @brief TODO
@@ -89,12 +91,14 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void ScheduleBurst(uint32_t burstCount);
+  void ScheduleNextBurst();
 
   /**
    * @brief TODO
    */
   void StartBurst();
+
+  void SendRequest(Ptr<Socket> socket);
 
   /**
    * @brief TODO
@@ -119,8 +123,14 @@ class IncastAggregator : public Application {
   // Number of bursts to simulate
   uint32_t m_numBursts;
 
+  // Which burst is currently running
+  uint32_t m_burstCount;
+
   // For each burst, the number of bytes to request from each sender
   uint32_t m_burstBytes;
+
+  // The number of total bytes received from all workers in the current burst
+  uint32_t m_totalBytesSoFar;
 
   // TCP port for all applications
   uint16_t m_port;
@@ -128,23 +138,18 @@ class IncastAggregator : public Application {
   // TypeId of the protocol used
   TypeId m_tid;
 
-  // Number of closed connections
-  uint32_t m_numClosed;
-
   // List of associated sockets
   std::list<Ptr<Socket>> m_sockets;
 
   // List of addresses for associated senders
   std::list<Ipv4Address> m_senders;
 
-  // List of suspended TCP sockets
-  std::list<Ptr<TcpSocketBase>> m_suspendedSockets;
-
-  // List of running TCP sockets
-  std::list<Ptr<Socket>> m_runningSockets;
-
   // Max random jitter in microseconds
   uint32_t m_requestJitterUs;
+
+  Time m_currentBurstStartTimeSec;
+
+  std::vector<Time> m_burstDurationsSec;
 
   // // Callback for finished round
   // Callback<void> m_roundFinish;

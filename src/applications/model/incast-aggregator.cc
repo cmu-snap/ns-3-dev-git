@@ -68,7 +68,9 @@ TypeId IncastAggregator::GetTypeId() {
   return tid;
 }
 
-IncastAggregator::IncastAggregator() : m_numClosed(0) { NS_LOG_FUNCTION(this); }
+IncastAggregator::IncastAggregator() : m_burstCount(0), m_totalBytesSoFar(0) {
+  NS_LOG_FUNCTION(this);
+}
 
 IncastAggregator::~IncastAggregator() { NS_LOG_FUNCTION(this); }
 
@@ -126,116 +128,70 @@ void IncastAggregator::StartApplication() {
     m_sockets.push_back(socket);
   }
 
-  for (uint32_t burstCount = 0; burstCount < m_numBursts; ++burstCount) {
-    ScheduleBurst(burstCount);
-  }
+  // for (uint32_t burstCount = 0; burstCount < m_numBursts; ++burstCount) {
+  //   ScheduleBurst(burstCount);
+  // }
+  ScheduleNextBurst();
 }
 
-void IncastAggregator::ScheduleBurst(uint32_t burstCount) {
+void IncastAggregator::ScheduleNextBurst() {
   NS_LOG_FUNCTION(this);
 
-  double jitterSec = 0;
-  if (m_requestJitterUs > 0) {
-    jitterSec = ((double)(rand() % m_requestJitterUs)) / 1000000;
+  std::cout << "Aggregator: Schedule next burst " << m_burstCount << ", "
+            << m_numBursts << std::endl;
+
+  ++m_burstCount;
+
+  if (m_burstCount > m_numBursts) {
+    Simulator::Schedule(Seconds(0), &IncastAggregator::StopApplication, this);
+    return;
   }
-  Time time = Seconds((double)burstCount + jitterSec);
-  NS_LOG_LOGIC("Start at " << time.As(Time::S));
-  Simulator::Schedule(time, &IncastAggregator::StartBurst, this);
+
+  // Schedule the next burst for 1 second later
+  Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
 }
 
 void IncastAggregator::StartBurst() {
   NS_LOG_FUNCTION(this);
   std::cout << "Start burst " << std::endl;
 
+  m_totalBytesSoFar = 0;
+  m_currentBurstStartTimeSec = Simulator::Now();
+
   for (Ptr<Socket> socket : m_sockets) {
-    // Send a small packet to start a burst
-    Ptr<Packet> packet =
-        Create<Packet>((uint8_t*)&m_burstBytes, sizeof(uint32_t));
-    socket->Send(packet);
-    std::cout << "Sent to " << socket << std::endl;
+    double jitterSec = 0;
+    if (m_requestJitterUs > 0) {
+      jitterSec = ((double)(rand() % m_requestJitterUs)) / 1000000;
+    }
+
+    Simulator::Schedule(Seconds(jitterSec), &IncastAggregator::SendRequest,
+                        this, socket);
   }
+}
+
+void IncastAggregator::SendRequest(Ptr<Socket> socket) {
+  Ptr<Packet> packet =
+      Create<Packet>((uint8_t*)&m_burstBytes, sizeof(uint32_t));
+  socket->Send(packet);
 }
 
 void IncastAggregator::HandleRead(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
-  std::cout << "Aggregator: HandleRead()" << std::endl;
-
+  // std::cout << "Aggregator: HandleRead()" << std::endl;
   Ptr<Packet> packet;
-  uint32_t byteCount = 0;
-
   while (packet = socket->Recv()) {
-    byteCount += packet->GetSize();
-    std::cout << "AGG: received" << byteCount << std::endl;
+    m_totalBytesSoFar += packet->GetSize();
   };
 
-  NS_LOG_LOGIC("received " << byteCount << " bytes");
-
-  // auto it = std::find(m_runningSockets.begin(), m_runningSockets.end(),
-  // socket); std::list<uint32_t>::iterator p = m_byteCounts.begin();
-
-  // if (it == m_runningSockets.end()) {
-  //   m_runningSockets.push_back(socket);
-  //   p = m_byteCounts.insert(m_byteCounts.end(), byteCount);
-  // } else {
-  //   std::list<Ptr<Socket>>::iterator q = m_runningSockets.begin();
-  //   while (q != it) {
-  //     ++q;
-  //     ++p;
-  //   }
-  //   *p += byteCount;
-  // }
-
-  // std::list<uint32_t>::iterator minCount;
-  // std::list<uint32_t>::iterator maxCount;
-
-  // minCount = std::min_element(m_byteCounts.begin(), m_byteCounts.end());
-  // maxCount = std::max_element(m_byteCounts.begin(), m_byteCounts.end());
-
-  // if ((*maxCount - *minCount >= 4096) && (*maxCount - *p <= 2048)) {
-  //   socket->SetAttribute("MaxWindowSize", UintegerValue(6000));
-  // } else {
-  //   socket->SetAttribute("MaxWindowSize", UintegerValue(65535));
-  // }
-}
-
-void IncastAggregator::HandleClose(Ptr<Socket> socket) {
-  NS_LOG_FUNCTION(this << socket);
-
-  ++m_numClosed;
-  m_sockets.remove(socket);
-
-  // std::list<uint32_t>::iterator p = m_byteCounts.begin();
-  std::list<Ptr<Socket>>::iterator q = m_runningSockets.begin();
-
-  while (*q != socket && q != m_runningSockets.end()) {
-    ++q;
-    // ++p;
+  if (m_totalBytesSoFar == m_burstBytes * m_senders.size()) {
+    std::cout << "Aggregator: All bytes received" << std::endl;
+    m_burstDurationsSec.push_back(Simulator::Now() -
+                                  m_currentBurstStartTimeSec);
+    ScheduleNextBurst();
+  } else if (m_totalBytesSoFar > m_burstBytes * m_senders.size()) {
+    NS_FATAL_ERROR("Aggregator: Received too many bytes");
   }
-
-  if (q != m_runningSockets.end()) {
-    // m_byteCounts.erase(p);
-    m_runningSockets.erase(q);
-  }
-
-  // if (m_numClosed == m_senders.size()) {
-  //   // Start next round of incast
-  //   // m_isRunning = false;
-  //   // Simulator::ScheduleNow(&IncastAggregator::RoundFinish, this);
-  // } else if (!m_suspendedSockets.empty()) {
-  //   // Replace the terminated connection with a suspended one
-  //   Ptr<TcpSocketBase> socket = m_suspendedSockets.front();
-  //   m_suspendedSockets.pop_front();
-  //   // socket->ResumeConnection();
-  // }
 }
-
-// void IncastAggregator::RoundFinish() {
-//   NS_LOG_FUNCTION(this);
-
-//   if (!m_roundFinish.IsNull()) {
-//     m_roundFinish();
-//   }
-// }
 
 void IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address& from) {
   NS_LOG_FUNCTION(this << socket << from);
@@ -244,8 +200,13 @@ void IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address& from) {
   socket->SetRecvCallback(MakeCallback(&IncastAggregator::HandleRead, this));
 }
 
+std::vector<Time> IncastAggregator::GetBurstDurations() {
+  return m_burstDurationsSec;
+}
+
 void IncastAggregator::StopApplication() {
   NS_LOG_FUNCTION(this);
+  std::cout << "Aggregator: StopApplication()" << std::endl;
 
   for (Ptr<Socket> socket : m_sockets) {
     // Send a large packet

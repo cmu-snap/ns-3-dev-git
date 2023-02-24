@@ -145,8 +145,17 @@ int main(int argc, char* argv[]) {
 
   NS_LOG_INFO("Run Simulation.");
   Simulator::Run();
+  Simulator::Stop();
   Simulator::Destroy();
   NS_LOG_INFO("Done.");
+
+  std::cout << "Ideal burst duration: "
+            << (double)totalBytes * numSenders * 8 / (bwMbps * 1000) << "ms"
+            << std::endl;
+  std::cout << "Burst durations:" << std::endl;
+  for (const auto& burstDurationSec : app->GetBurstDurations()) {
+    std::cout << "\t" << burstDurationSec.As(Time::MS) << std::endl;
+  }
 
   return 0;
 }

@@ -77,13 +77,14 @@ void IncastSender::StartApplication() {
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
   if (m_socket->Bind(InetSocketAddress(Ipv4Address::GetAny(), m_port)) == -1) {
     NS_FATAL_ERROR("Worker bind failed");
-  } else {
-    std::cout << "Worker bind succeeded\n";
   }
+  //  else {
+  //   std::cout << "Worker bind succeeded\n";
+  // }
   // m_socket->SetRecvCallback(
   //   MakeCallback(&IncastSender::HandleRead, this)
   // );
-  std::cout << "Worker registered accept callback\n";
+  // std::cout << "Worker registered accept callback\n";
   // std::cout << "Just about to register HandleRead\n";
   // m_socket->Send(Create<Packet>(42));
   // m_socket->ShutdownRecv();
@@ -95,12 +96,12 @@ void IncastSender::StartApplication() {
 
 void IncastSender::HandleRead(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
-  std::cout << "Worker: HandleRead()" << std::endl;
+  // std::cout << "Worker: HandleRead()" << std::endl;
 
   Ptr<Packet> packet;
 
   while (packet = socket->Recv()) {
-    std::cout << "Received!!!\n";
+    // std::cout << "Received!!!\n";
     size_t size = packet->GetSize();
 
     if (size == sizeof(uint32_t)) {
@@ -111,7 +112,7 @@ void IncastSender::HandleRead(Ptr<Socket> socket) {
         jitterSec = ((double)(rand() % m_responseJitterUs)) / 1000000;
       }
       Time time = Seconds(jitterSec);
-      std::cout << "Sender requested " << requestedBytes << " bytes\n";
+      // std::cout << "Sender requested " << requestedBytes << " bytes\n";
       Simulator::Schedule(time, &IncastSender::SendBurst, this, socket,
                           requestedBytes);
     } else {
@@ -139,8 +140,8 @@ void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
 
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;
-      NS_LOG_LOGIC("Sent " << toSend << " bytes");
-      std::cout << "Sent " << toSend << " bytes\n";
+      // NS_LOG_LOGIC("Sent " << toSend << " bytes");
+      // std::cout << "Sent " << toSend << " bytes\n";
     } else {
       NS_LOG_LOGIC("Error: could not send " << toSend << " bytes");
       std::cout << "Error: could not send " << toSend << " bytes\n";
@@ -151,7 +152,7 @@ void IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
 
 void IncastSender::HandleAccept(Ptr<Socket> socket, const Address& from) {
   NS_LOG_FUNCTION(this << socket << from);
-  std::cout << "Worker: HandleAccept()" << std::endl;
+  // std::cout << "Worker: HandleAccept()" << std::endl;
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
   NS_LOG_LOGIC("Accepting connection from " << addr.GetIpv4() << ":"
