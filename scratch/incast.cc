@@ -29,25 +29,23 @@
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
-#include "ns3/drop-tail-queue.h"
+// #include "ns3/drop-tail-queue.h"
 #include "ns3/incast-aggregator.h"
 #include "ns3/incast-sender.h"
 #include "ns3/internet-module.h"
-#include "ns3/netanim-module.h"
+// #include "ns3/netanim-module.h"
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-layout-module.h"
 #include "ns3/point-to-point-module.h"
+#include "ns3/traffic-control-module.h"
 
-// Network topology (default)
-//
-//        n2 n3 n4              .
-//         \ | /                .
-//          \|/                 .
-//     n1--- n0---n5            .
-//          /|\                 .
-//         / | \                .
-//        n8 n7 n6              .
-//
+/*
+ * Incast Topology
+ *
+ *    Left(i)            Left()             Right()          Right(i)
+ * [aggregator] --1-- [ToR switch] ==2== [ToR switch] --1-- [senders]
+ *
+ */
 
 using namespace ns3;
 
@@ -60,16 +58,15 @@ int main(int argc, char *argv[]) {
   uint32_t burstBytes = 4096;
   uint32_t unitSize = 3000;
   uint16_t maxWin = 65535;
-  bool useStdout = false;
   uint32_t numBursts = 10;
   uint32_t jitterUs = 0;
+  float delayUs = 25; // TODO: reconfigure
   float smallBandwidthMbps = 12.5;
   float largeBandwidthMbps = 800.0;
-
+  
   // Define command line arguments
   CommandLine cmd;
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
-  cmd.AddValue("useStdout", "Output packet trace to stdout", useStdout);
   // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes",
   // bufferSize);
   cmd.AddValue("burstBytes",
@@ -91,25 +88,31 @@ int main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Building incast topology...");
 
-  // Convert bandwidth values to strings
-  std::ostringstream smallBandwidthMbpsStr;
-  smallBandwidthMbpsStr << smallBandwidthMbps << "Mbps";
+  // Convert float values to string values
+  std::ostringstream delayUsString;
+  delayUsString << delayUs << "us";
+  StringValue delayUsStringValue = StringValue(delayUsString.str());
 
-  std::ostringstream largeBandwidthMbpsStr;
-  largeBandwidthMbpsStr << largeBandwidthMbps << "Mbps";
+  std::ostringstream smallBandwidthMbpsString;
+  smallBandwidthMbpsString << smallBandwidthMbps << "Mbps";
+  StringValue smallBandwidthMbpsStringValue = StringValue(smallBandwidthMbpsString.str());
+
+  std::ostringstream largeBandwidthMbpsString;
+  largeBandwidthMbpsString << largeBandwidthMbps << "Mbps";
+  StringValue largeBandwidthMbpsStringValue = StringValue(largeBandwidthMbpsString.str());
 
   // Create links
   PointToPointHelper smallLink;
   smallLink.SetDeviceAttribute("DataRate",
-                               StringValue(smallBandwidthMbpsStr.str()));
+                               smallBandwidthMbpsStringValue);
   smallLink.SetChannelAttribute("Delay",
-                                StringValue("25us")); // TODO: reconfigure
+                               delayUsStringValue); 
 
   PointToPointHelper largeLink;
   largeLink.SetDeviceAttribute("DataRate",
-                               StringValue(largeBandwidthMbpsStr.str()));
+                               largeBandwidthMbpsStringValue);
   largeLink.SetChannelAttribute("Delay",
-                                StringValue("25us")); // TODO: reconfigure
+                                delayUsStringValue); 
 
   // Create dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(1, smallLink, numSenders, smallLink,
@@ -140,9 +143,14 @@ int main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Configuring queue settings...");
 
-  // pointToPoint.SetQueue("ns3::DropTailQueue",
-  //   // "Mode", EnumValue(DropTailQueue::BYTES),
-  //   "MaxBytes", UintegerValue(bufferSize));
+  TrafficControlHelper redHelper;
+  redHelper.SetRootQueueDisc("ns3::RedQueueDisc", "LinkBandwidth",
+                             largeBandwidthMbpsStringValue,
+                             "LinkDelay",
+                             delayUsStringValue); 
+  NetDeviceContainer switchDevices =
+      largeLink.Install(dumbbellHelper.GetLeft(), dumbbellHelper.GetRight());
+  QueueDiscContainer queueDiscs1 = redHelper.Install(switchDevices);
 
   NS_LOG_INFO("Creating applications...");
 
@@ -182,7 +190,7 @@ int main(int argc, char *argv[]) {
   // Enable tracing across the large link
   largeLink.EnablePcap("scratch/traces/incast-sockets", 0, 0);
 
-  NS_LOG_INFO("Configuring global settings...");
+  NS_LOG_INFO("Configuring various default parameters...");
 
   // Use nanosecond timestamps for PCAP traces
   Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
@@ -194,6 +202,23 @@ int main(int argc, char *argv[]) {
   //                    UintegerValue(maxWin));
   // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
   // Config::SetDefault ("ns3::TcpSocket::DelAckCount", UintegerValue(0));
+
+  // Set default parameters for RED queue disc
+  // Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+  // // ARED may be used but the queueing delays will increase; it is disabled
+  // // here because the SIGCOMM paper did not mention it
+  // // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
+  // // Config::SetDefault ("ns3::RedQueueDisc::Gentle", BooleanValue (true));
+  // Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
+  // Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
+  // // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
+  // // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
+  // Config::SetDefault("ns3::RedQueueDisc::MaxSize",
+  // QueueSizeValue(QueueSize("2666p")));
+  // // DCTCP tracks instantaneous queue length only; so set QW = 1
+  // Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
+  // Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
+  // Config::SetDefault("ns3::RedQueueDisc::MaxTh", DoubleValue(60));
 
   NS_LOG_INFO("Run Simulation.");
   Simulator::Run();
