@@ -53,25 +53,32 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("IncastSim");
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
+  // Initialize variables
   uint32_t numSenders = 3;
   // uint32_t bufferSize = 32768;
-  uint32_t totalBytes = 4096;
+  uint32_t burstBytes = 4096;
   uint32_t unitSize = 3000;
   uint16_t maxWin = 65535;
   bool useStdout = false;
   uint32_t numBursts = 10;
   uint32_t jitterUs = 0;
-  float bwMbps = 12.5;
+  float smallBandwidthMbps = 12.5;
+  float largeBandwidthMbps = 800.0;
 
+  // Define command line arguments
   CommandLine cmd;
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
   cmd.AddValue("useStdout", "Output packet trace to stdout", useStdout);
   // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes",
   // bufferSize);
-  cmd.AddValue("totalBytes", "Number of bytes to send for each burst",
-               totalBytes);
-  cmd.AddValue("bwMbps", "Link bandwidth, in Mbps", bwMbps);
+  cmd.AddValue("burstBytes",
+               "Number of bytes for each worker to send for each burst",
+               burstBytes);
+  cmd.AddValue("smallBandwidthMbps", "Small link bandwidth (in Mbps)",
+               smallBandwidthMbps);
+  cmd.AddValue("largeBandwidthMbps", "Large link bandwidth (in Mbps)",
+               largeBandwidthMbps);
   cmd.AddValue("unitSize", "Size of virtual bytes increment upon SYN packets",
                unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
@@ -82,70 +89,111 @@ int main(int argc, char* argv[]) {
       jitterUs);
   cmd.Parse(argc, argv);
 
-  std::ostringstream bwMbps_str;
-  bwMbps_str << bwMbps << "Mbps";
+  NS_LOG_INFO("Building incast topology...");
 
-  // Use nanosecond timestamps for PCAP traces
-  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
+  // Convert bandwidth values to strings
+  std::ostringstream smallBandwidthMbpsStr;
+  smallBandwidthMbpsStr << smallBandwidthMbps << "Mbps";
 
-  NS_LOG_INFO("Build star topology.");
-  PointToPointHelper pointToPoint;
-  pointToPoint.SetDeviceAttribute("DataRate", StringValue(bwMbps_str.str()));
-  // pointToPoint.SetDeviceAttribute ("UnitSize", UintegerValue (unitsize));
-  pointToPoint.SetChannelAttribute("Delay", StringValue("25us"));
+  std::ostringstream largeBandwidthMbpsStr;
+  largeBandwidthMbpsStr << largeBandwidthMbps << "Mbps";
+
+  // Create links
+  PointToPointHelper smallLink;
+  smallLink.SetDeviceAttribute("DataRate",
+                               StringValue(smallBandwidthMbpsStr.str()));
+  smallLink.SetChannelAttribute("Delay",
+                                StringValue("25us")); // TODO: reconfigure
+
+  PointToPointHelper largeLink;
+  largeLink.SetDeviceAttribute("DataRate",
+                               StringValue(largeBandwidthMbpsStr.str()));
+  largeLink.SetChannelAttribute("Delay",
+                                StringValue("25us")); // TODO: reconfigure
+
+  // Create dumbbell topology
+  PointToPointDumbbellHelper dumbbellHelper(1, smallLink, numSenders, smallLink,
+                                            largeLink);
+
+  NS_LOG_INFO("Installing TCP stack on all nodes...");
+
+  // Install TCP stack on all nodes
+  InternetStackHelper stack;
+
+  for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
+    stack.Install(dumbbellHelper.GetLeft(i));
+  }
+  for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    stack.Install(dumbbellHelper.GetRight(i));
+  }
+
+  stack.Install(dumbbellHelper.GetLeft());
+  stack.Install(dumbbellHelper.GetRight());
+
+  NS_LOG_INFO("Assigning IP addresses...");
+
+  // Assign IP Addresses
+  dumbbellHelper.AssignIpv4Addresses(
+      Ipv4AddressHelper("10.0.0.0", "255.255.255.0"),
+      Ipv4AddressHelper("10.1.0.0", "255.255.255.0"),
+      Ipv4AddressHelper("10.2.0.0", "255.255.255.0"));
+
+  NS_LOG_INFO("Configuring queue settings...");
+
   // pointToPoint.SetQueue("ns3::DropTailQueue",
   //   // "Mode", EnumValue(DropTailQueue::BYTES),
   //   "MaxBytes", UintegerValue(bufferSize));
-  PointToPointStarHelper star(numSenders + 1, pointToPoint);
 
-  NS_LOG_INFO("Install internet stack on all nodes.");
-  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
-  Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
-                     UintegerValue(maxWin));
-  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
-  // Config::SetDefault ("ns3::TcpSocket::DelAckCount", UintegerValue(0));
-  InternetStackHelper internet;
-  star.InstallStack(internet);
+  NS_LOG_INFO("Creating applications...");
 
-  NS_LOG_INFO("Assign IP Addresses.");
-  star.AssignIpv4Addresses(Ipv4AddressHelper("10.1.1.0", "255.255.255.0"));
-  std::list<Ipv4Address> senders;
-  for (uint32_t i = 1; i <= numSenders; i++) {
-    NS_LOG_INFO("Sender IP " << star.GetSpokeIpv4Address(i));
-    senders.push_back(star.GetSpokeIpv4Address(i));
-  };
+  // Collect sender addresses
+  std::list<Ipv4Address> senderAddresses;
 
-  NS_LOG_INFO("Create applications.");
-
-  // Create a packet sink on spoke 0 to receive packets.
-  Ptr<IncastAggregator> app = CreateObject<IncastAggregator>();
-  app->SetSenders(senders);
-  app->SetStartTime(Seconds(1.0));
-  app->SetAttribute("NumBursts", UintegerValue(numBursts));
-  app->SetAttribute("BurstBytes", UintegerValue(totalBytes));
-  app->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
-  star.GetSpokeNode(0)->AddApplication(app);
-
-  // Create send applications to send TCP to spoke 0
-  for (uint32_t i = 1; i < star.SpokeCount(); ++i) {
-    Ptr<IncastSender> sendApp = CreateObject<IncastSender>();
-    sendApp->SetAttribute("Aggregator",
-                          Ipv4AddressValue(star.GetSpokeIpv4Address(0)));
-    sendApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
-    sendApp->SetStartTime(Seconds(1.0));
-    star.GetSpokeNode(i)->AddApplication(sendApp);
+  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    senderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
   }
 
-  NS_LOG_INFO("Enable static global routing.");
+  // Create the aggregator application
+  Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
+  aggregatorApp->SetSenders(senderAddresses);
+  aggregatorApp->SetStartTime(Seconds(1.0));
+  aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
+  aggregatorApp->SetAttribute("BurstBytes", UintegerValue(burstBytes));
+  aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
+  dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
+
+  // Create the sender applications
+  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
+    senderApp->SetAttribute(
+        "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
+    senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
+    senderApp->SetStartTime(Seconds(1.0));
+    dumbbellHelper.GetRight(i)->AddApplication(senderApp);
+  }
+
+  NS_LOG_INFO("Enabling static global routing...");
 
   // Turn on global static routing
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
-  // Enable tracing across the middle link
   NS_LOG_INFO("Enabling tracing...");
-  pointToPoint.EnablePcap("scratch/traces/incast-sockets", 0, 0);
 
-  // LogComponentEnableAll(LOG_PREFIX_TIME);
+  // Enable tracing across the large link
+  largeLink.EnablePcap("scratch/traces/incast-sockets", 0, 0);
+
+  NS_LOG_INFO("Configuring global settings...");
+
+  // Use nanosecond timestamps for PCAP traces
+  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
+
+  // Set the maximum segment size to 1448 bytes
+  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
+
+  // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
+  //                    UintegerValue(maxWin));
+  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
+  // Config::SetDefault ("ns3::TcpSocket::DelAckCount", UintegerValue(0));
 
   NS_LOG_INFO("Run Simulation.");
   Simulator::Run();
@@ -154,10 +202,11 @@ int main(int argc, char* argv[]) {
   NS_LOG_INFO("Done.");
 
   std::cout << "Ideal burst duration: "
-            << (double)totalBytes * numSenders * 8 / (bwMbps * 1000) << "ms"
-            << std::endl;
+            << (double)burstBytes * numSenders * 8 / (smallBandwidthMbps * 1000)
+            << "ms" << std::endl;
   std::cout << "Burst durations:" << std::endl;
-  for (const auto& burstDurationSec : app->GetBurstDurations()) {
+
+  for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
     std::cout << "\t" << burstDurationSec.As(Time::MS) << std::endl;
   }
 
