@@ -46,7 +46,8 @@
 			"deque": "cpp",
 			"list": "cpp",
 			"unordered_map": "cpp",
-			"functional": "cpp"
+			"functional": "cpp",
+			"set": "cpp"
 		}
 	}
 }
