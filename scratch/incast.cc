@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
   float delayUs = 25; // TODO: reconfigure
   float smallBandwidthMbps = 12.5;
   float largeBandwidthMbps = 800.0;
-  
+
   // Define command line arguments
   CommandLine cmd;
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
@@ -106,13 +106,15 @@ int main(int argc, char *argv[]) {
   smallLink.SetDeviceAttribute("DataRate",
                                smallBandwidthMbpsStringValue);
   smallLink.SetChannelAttribute("Delay",
-                               delayUsStringValue); 
+                               delayUsStringValue);
+  // smallLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("150p"));
 
   PointToPointHelper largeLink;
   largeLink.SetDeviceAttribute("DataRate",
                                largeBandwidthMbpsStringValue);
   largeLink.SetChannelAttribute("Delay",
-                                delayUsStringValue); 
+                                delayUsStringValue);
+  // largeLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("150p"));
 
   // Create dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(1, smallLink, numSenders, smallLink,
@@ -147,10 +149,13 @@ int main(int argc, char *argv[]) {
   redHelper.SetRootQueueDisc("ns3::RedQueueDisc", "LinkBandwidth",
                              largeBandwidthMbpsStringValue,
                              "LinkDelay",
-                             delayUsStringValue); 
+                             delayUsStringValue);
   NetDeviceContainer switchDevices =
       largeLink.Install(dumbbellHelper.GetLeft(), dumbbellHelper.GetRight());
   QueueDiscContainer queueDiscs1 = redHelper.Install(switchDevices);
+
+  // TODO: Add the same red queue disc to all of the other links as well
+  // TODO: Two separate configurations, one for small and one for large
 
   NS_LOG_INFO("Creating applications...");
 
@@ -187,8 +192,8 @@ int main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Enabling tracing...");
 
-  // Enable tracing across the large link
-  largeLink.EnablePcap("scratch/traces/incast-sockets", 0, 0);
+  // Enable tracing at the aggregator.
+  largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
 
   NS_LOG_INFO("Configuring various default parameters...");
 
@@ -204,21 +209,20 @@ int main(int argc, char *argv[]) {
   // Config::SetDefault ("ns3::TcpSocket::DelAckCount", UintegerValue(0));
 
   // Set default parameters for RED queue disc
-  // Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
-  // // ARED may be used but the queueing delays will increase; it is disabled
-  // // here because the SIGCOMM paper did not mention it
-  // // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
-  // // Config::SetDefault ("ns3::RedQueueDisc::Gentle", BooleanValue (true));
-  // Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
-  // Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
-  // // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
-  // // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
-  // Config::SetDefault("ns3::RedQueueDisc::MaxSize",
-  // QueueSizeValue(QueueSize("2666p")));
-  // // DCTCP tracks instantaneous queue length only; so set QW = 1
-  // Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
-  // Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
-  // Config::SetDefault("ns3::RedQueueDisc::MaxTh", DoubleValue(60));
+  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+  // ARED may be used but the queueing delays will increase; it is disabled
+  // here because the SIGCOMM paper did not mention it
+  // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
+  // Config::SetDefault ("ns3::RedQueueDisc::Gentle", BooleanValue (true));
+  Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
+  Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
+  // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
+  // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
+  Config::SetDefault("ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
+  // DCTCP tracks instantaneous queue length only; so set QW = 1
+  Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
+  Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
+  Config::SetDefault("ns3::RedQueueDisc::MaxTh", DoubleValue(20));
 
   NS_LOG_INFO("Run Simulation.");
   Simulator::Run();
