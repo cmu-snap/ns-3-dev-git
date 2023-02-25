@@ -321,6 +321,12 @@ class TcpSocketBase : public TcpSocket
         return m_retxThresh;
     }
 
+    void SetOverrideWindowSize(uint16_t windowSize);
+
+    uint16_t GetOverrideWindowSize() const;
+
+    uint8_t GetRcvWindShift() const;
+
     /**
      * \brief Callback pointer for pacing rate trace chaining
      */
@@ -1389,6 +1395,8 @@ class TcpSocketBase : public TcpSocket
     TracedValue<SequenceNumber32> m_ecnCESeq{
         0}; //!< Sequence number of the last received Congestion Experienced
     TracedValue<SequenceNumber32> m_ecnCWRSeq{0}; //!< Sequence number of the last sent CWR
+
+    uint16_t m_overrideWindowSize{0}; //!< Override the receiver advertised window size (0 == do not override)
 };
 
 /**

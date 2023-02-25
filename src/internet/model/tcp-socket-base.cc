@@ -2822,7 +2822,11 @@ TcpSocketBase::SendEmptyPacket(uint8_t flags)
 
         windowSize = AdvertisedWindowSize(false);
     }
-    header.SetWindowSize(windowSize);
+    if (m_overrideWindowSize > 0) {
+        header.SetWindowSize(m_overrideWindowSize);
+    } else {
+        header.SetWindowSize(windowSize);
+    }
 
     if (flags & TcpHeader::ACK)
     { // If sending an ACK, cancel the delay ACK as well
@@ -3202,7 +3206,11 @@ TcpSocketBase::SendDataPacket(SequenceNumber32 seq, uint32_t maxSize, bool withA
         header.SetSourcePort(m_endPoint6->GetLocalPort());
         header.SetDestinationPort(m_endPoint6->GetPeerPort());
     }
-    header.SetWindowSize(AdvertisedWindowSize());
+    if (m_overrideWindowSize > 0) {
+        header.SetWindowSize(m_overrideWindowSize);
+    } else {
+        header.SetWindowSize(AdvertisedWindowSize());
+    }
     AddOptions(header);
 
     if (m_retxEvent.IsExpired())
@@ -3908,7 +3916,11 @@ TcpSocketBase::PersistTimeout()
     TcpHeader tcpHeader;
     tcpHeader.SetSequenceNumber(m_tcb->m_nextTxSequence);
     tcpHeader.SetAckNumber(m_tcb->m_rxBuffer->NextRxSequence());
-    tcpHeader.SetWindowSize(AdvertisedWindowSize());
+    if (m_overrideWindowSize > 0) {
+        tcpHeader.SetWindowSize(m_overrideWindowSize);
+    } else {
+        tcpHeader.SetWindowSize(AdvertisedWindowSize());
+    }
     if (m_endPoint != nullptr)
     {
         tcpHeader.SetSourcePort(m_endPoint->GetLocalPort());
@@ -4688,6 +4700,18 @@ RttHistory::RttHistory(const RttHistory& h)
       time(h.time),
       retx(h.retx)
 {
+}
+
+void TcpSocketBase::SetOverrideWindowSize(uint16_t windowSize) {
+    m_overrideWindowSize = windowSize;
+}
+
+uint16_t TcpSocketBase::GetOverrideWindowSize() const {
+    return m_overrideWindowSize;
+}
+
+uint8_t TcpSocketBase::GetRcvWindShift() const {
+    return m_winScalingEnabled ? m_rcvWindShift : 0;
 }
 
 } // namespace ns3

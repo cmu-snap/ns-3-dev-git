@@ -110,6 +110,12 @@ void IncastAggregator::StartApplication() {
     socket->SetRecvCallback(MakeCallback(&IncastAggregator::HandleRead, this));
     socket->Connect(InetSocketAddress(sender, m_port));
     m_sockets.push_back(socket);
+
+    // if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
+    //   // Basic static RWND tuning. Set the RWND to 64KB for all sockets.
+    //   Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+    //   tcpSocket->SetOverrideWindowSize(65535 >> tcpSocket->GetRcvWindShift());
+    // }
   }
 
   ScheduleNextBurst();
@@ -189,4 +195,4 @@ void IncastAggregator::StopApplication() {
   }
 }
 
-} // Namespace ns3
+}  // Namespace ns3
