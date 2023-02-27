@@ -252,7 +252,7 @@ main(int argc, char *argv[]) {
   double idealBurstDurationSec =
       // Time to transmit the burst.
       (double)burstBytes * numSenders * 8 / (smallBandwidthMbps * 1000000) +
-      // 1 RTT for the request and the first response to propgate.
+      // 1 RTT for the request and the first response packet to propgate.
       6 * delayUs / 1000000;
   NS_LOG_INFO("Ideal burst duration: " << idealBurstDurationSec * 1000 << "ms");
   NS_LOG_INFO("Burst durations (x ideal):");
