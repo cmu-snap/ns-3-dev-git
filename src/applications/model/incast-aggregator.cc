@@ -21,13 +21,13 @@
 
 #include "incast-aggregator.h"
 
-#include <unistd.h>
-
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
 #include "ns3/log.h"
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
+
+#include <unistd.h>
 
 NS_LOG_COMPONENT_DEFINE("IncastAggregator");
 
@@ -35,12 +35,14 @@ namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
-TypeId IncastAggregator::GetTypeId() {
+TypeId
+IncastAggregator::GetTypeId() {
   static TypeId tid =
       TypeId("ns3::IncastAggregator")
           .SetParent<Application>()
           .AddConstructor<IncastAggregator>()
-          .AddAttribute("NumBursts", "Number of bursts to simulate",
+          .AddAttribute("NumBursts",
+                        "Number of bursts to simulate",
                         UintegerValue(10),
                         MakeUintegerAccessor(&IncastAggregator::m_numBursts),
                         MakeUintegerChecker<uint32_t>())
@@ -56,11 +58,13 @@ TypeId IncastAggregator::GetTypeId() {
               UintegerValue(0),
               MakeUintegerAccessor(&IncastAggregator::m_requestJitterUs),
               MakeUintegerChecker<uint32_t>())
-          .AddAttribute("Port", "TCP port for all applications",
+          .AddAttribute("Port",
+                        "TCP port for all applications",
                         UintegerValue(8888),
                         MakeUintegerAccessor(&IncastAggregator::m_port),
                         MakeUintegerChecker<uint16_t>())
-          .AddAttribute("Protocol", "TypeId of the protocol used",
+          .AddAttribute("Protocol",
+                        "TypeId of the protocol used",
                         TypeIdValue(TcpSocketFactory::GetTypeId()),
                         MakeTypeIdAccessor(&IncastAggregator::m_tid),
                         MakeTypeIdChecker());
@@ -68,27 +72,35 @@ TypeId IncastAggregator::GetTypeId() {
   return tid;
 }
 
-IncastAggregator::IncastAggregator() : m_burstCount(0), m_totalBytesSoFar(0) {
+IncastAggregator::IncastAggregator()
+    : m_burstCount(0),
+      m_totalBytesSoFar(0) {
   NS_LOG_FUNCTION(this);
 }
 
 IncastAggregator::~IncastAggregator() { NS_LOG_FUNCTION(this); }
 
-void IncastAggregator::StartEvent() { NS_LOG_FUNCTION(this); }
+void
+IncastAggregator::StartEvent() {
+  NS_LOG_FUNCTION(this);
+}
 
-void IncastAggregator::DoDispose() {
+void
+IncastAggregator::DoDispose() {
   NS_LOG_FUNCTION(this);
 
   m_sockets.clear();
   Application::DoDispose();
 }
 
-void IncastAggregator::SetSenders(const std::list<Ipv4Address> &senders) {
+void
+IncastAggregator::SetSenders(const std::list<Ipv4Address> &senders) {
   NS_LOG_FUNCTION(this);
   m_senders = senders;
 }
 
-void IncastAggregator::StartApplication() {
+void
+IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   for (Ipv4Address sender : m_senders) {
@@ -114,14 +126,16 @@ void IncastAggregator::StartApplication() {
     // if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
     //   // Basic static RWND tuning. Set the RWND to 64KB for all sockets.
     //   Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-    //   tcpSocket->SetOverrideWindowSize(65535 >> tcpSocket->GetRcvWindShift());
+    //   tcpSocket->SetOverrideWindowSize(65535 >>
+    //   tcpSocket->GetRcvWindShift());
     // }
   }
 
   ScheduleNextBurst();
 }
 
-void IncastAggregator::ScheduleNextBurst() {
+void
+IncastAggregator::ScheduleNextBurst() {
   NS_LOG_FUNCTION(this);
 
   ++m_burstCount;
@@ -135,8 +149,10 @@ void IncastAggregator::ScheduleNextBurst() {
   Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
 }
 
-void IncastAggregator::StartBurst() {
+void
+IncastAggregator::StartBurst() {
   NS_LOG_FUNCTION(this);
+  NS_LOG_INFO("Starting burst " << m_burstCount << " of " << m_numBursts);
 
   m_totalBytesSoFar = 0;
   m_currentBurstStartTimeSec = Simulator::Now();
@@ -148,18 +164,22 @@ void IncastAggregator::StartBurst() {
     }
 
     // Add jitter
-    Simulator::Schedule(Seconds(jitterSec), &IncastAggregator::SendRequest,
-                        this, socket);
+    Simulator::Schedule(Seconds(jitterSec),
+                        &IncastAggregator::SendRequest,
+                        this,
+                        socket);
   }
 }
 
-void IncastAggregator::SendRequest(Ptr<Socket> socket) {
+void
+IncastAggregator::SendRequest(Ptr<Socket> socket) {
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_burstBytes, sizeof(uint32_t));
   socket->Send(packet);
 }
 
-void IncastAggregator::HandleRead(Ptr<Socket> socket) {
+void
+IncastAggregator::HandleRead(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
 
   Ptr<Packet> packet;
@@ -177,17 +197,20 @@ void IncastAggregator::HandleRead(Ptr<Socket> socket) {
   }
 }
 
-void IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
+void
+IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
   NS_LOG_FUNCTION(this << socket << from);
 
   socket->SetRecvCallback(MakeCallback(&IncastAggregator::HandleRead, this));
 }
 
-std::vector<Time> IncastAggregator::GetBurstDurations() {
+std::vector<Time>
+IncastAggregator::GetBurstDurations() {
   return m_burstDurationsSec;
 }
 
-void IncastAggregator::StopApplication() {
+void
+IncastAggregator::StopApplication() {
   NS_LOG_FUNCTION(this);
 
   for (Ptr<Socket> socket : m_sockets) {

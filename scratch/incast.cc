@@ -23,12 +23,12 @@
 //     $ NS_LOG='' ./ns3 run "scratch/incast-sockets --totalBytes=31250
 //           --numBursts=5 --numSenders=500 --bwMbps=12500"
 
+#include "ns3/applications-module.h"
+#include "ns3/core-module.h"
+
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-
-#include "ns3/applications-module.h"
-#include "ns3/core-module.h"
 // #include "ns3/drop-tail-queue.h"
 #include "ns3/incast-aggregator.h"
 #include "ns3/incast-sender.h"
@@ -51,7 +51,14 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("IncastSim");
 
-int main(int argc, char *argv[]) {
+int
+main(int argc, char *argv[]) {
+  LogLevel logConfig = (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME |
+                                  LOG_PREFIX_NODE | LOG_LEVEL_INFO);
+  LogComponentEnable("IncastSim", logConfig);
+  LogComponentEnable("IncastAggregator", logConfig);
+  LogComponentEnable("IncastSender", logConfig);
+
   // Initialize variables
   uint32_t numSenders = 3;
   // uint32_t bufferSize = 32768;
@@ -60,7 +67,7 @@ int main(int argc, char *argv[]) {
   uint16_t maxWin = 65535;
   uint32_t numBursts = 10;
   uint32_t jitterUs = 0;
-  float delayUs = 25; // TODO: reconfigure
+  float delayUs = 25;  // TODO: reconfigure
   float smallBandwidthMbps = 12.5;
   float largeBandwidthMbps = 800.0;
 
@@ -72,11 +79,14 @@ int main(int argc, char *argv[]) {
   cmd.AddValue("burstBytes",
                "Number of bytes for each worker to send for each burst",
                burstBytes);
-  cmd.AddValue("smallBandwidthMbps", "Small link bandwidth (in Mbps)",
+  cmd.AddValue("smallBandwidthMbps",
+               "Small link bandwidth (in Mbps)",
                smallBandwidthMbps);
-  cmd.AddValue("largeBandwidthMbps", "Large link bandwidth (in Mbps)",
+  cmd.AddValue("largeBandwidthMbps",
+               "Large link bandwidth (in Mbps)",
                largeBandwidthMbps);
-  cmd.AddValue("unitSize", "Size of virtual bytes increment upon SYN packets",
+  cmd.AddValue("unitSize",
+               "Size of virtual bytes increment upon SYN packets",
                unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
@@ -85,6 +95,13 @@ int main(int argc, char *argv[]) {
       "Max random jitter in sending request and responses, in microseconds",
       jitterUs);
   cmd.Parse(argc, argv);
+
+  uint32_t totalIncastMbps = smallBandwidthMbps * numSenders;
+  if (totalIncastMbps > largeBandwidthMbps) {
+    NS_LOG_WARN("Total incast bandwidth ("
+                << totalIncastMbps << "Mbps) exceeds large link bandwidth ("
+                << largeBandwidthMbps << "Mbps)");
+  }
 
   NS_LOG_INFO("Building incast topology...");
 
@@ -95,29 +112,30 @@ int main(int argc, char *argv[]) {
 
   std::ostringstream smallBandwidthMbpsString;
   smallBandwidthMbpsString << smallBandwidthMbps << "Mbps";
-  StringValue smallBandwidthMbpsStringValue = StringValue(smallBandwidthMbpsString.str());
+  StringValue smallBandwidthMbpsStringValue =
+      StringValue(smallBandwidthMbpsString.str());
 
   std::ostringstream largeBandwidthMbpsString;
   largeBandwidthMbpsString << largeBandwidthMbps << "Mbps";
-  StringValue largeBandwidthMbpsStringValue = StringValue(largeBandwidthMbpsString.str());
+  StringValue largeBandwidthMbpsStringValue =
+      StringValue(largeBandwidthMbpsString.str());
 
   // Create links
   PointToPointHelper smallLink;
-  smallLink.SetDeviceAttribute("DataRate",
-                               smallBandwidthMbpsStringValue);
-  smallLink.SetChannelAttribute("Delay",
-                               delayUsStringValue);
+  smallLink.SetDeviceAttribute("DataRate", smallBandwidthMbpsStringValue);
+  smallLink.SetChannelAttribute("Delay", delayUsStringValue);
   // smallLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("150p"));
 
   PointToPointHelper largeLink;
-  largeLink.SetDeviceAttribute("DataRate",
-                               largeBandwidthMbpsStringValue);
-  largeLink.SetChannelAttribute("Delay",
-                                delayUsStringValue);
+  largeLink.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
+  largeLink.SetChannelAttribute("Delay", delayUsStringValue);
   // largeLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("150p"));
 
   // Create dumbbell topology
-  PointToPointDumbbellHelper dumbbellHelper(1, smallLink, numSenders, smallLink,
+  PointToPointDumbbellHelper dumbbellHelper(1,
+                                            smallLink,
+                                            numSenders,
+                                            smallLink,
                                             largeLink);
 
   NS_LOG_INFO("Installing TCP stack on all nodes...");
@@ -146,7 +164,8 @@ int main(int argc, char *argv[]) {
   NS_LOG_INFO("Configuring queue settings...");
 
   TrafficControlHelper redHelper;
-  redHelper.SetRootQueueDisc("ns3::RedQueueDisc", "LinkBandwidth",
+  redHelper.SetRootQueueDisc("ns3::RedQueueDisc",
+                             "LinkBandwidth",
                              largeBandwidthMbpsStringValue,
                              "LinkDelay",
                              delayUsStringValue);
@@ -179,7 +198,8 @@ int main(int argc, char *argv[]) {
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
     senderApp->SetAttribute(
-        "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
+        "Aggregator",
+        Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
     senderApp->SetStartTime(Seconds(1.0));
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);
@@ -218,7 +238,8 @@ int main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
   // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
   // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
-  Config::SetDefault("ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
+  Config::SetDefault("ns3::RedQueueDisc::MaxSize",
+                     QueueSizeValue(QueueSize("2666p")));
   // DCTCP tracks instantaneous queue length only; so set QW = 1
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
   Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
@@ -230,13 +251,17 @@ int main(int argc, char *argv[]) {
   Simulator::Destroy();
   NS_LOG_INFO("Done.");
 
-  std::cout << "Ideal burst duration: "
-            << (double)burstBytes * numSenders * 8 / (smallBandwidthMbps * 1000)
-            << "ms" << std::endl;
-  std::cout << "Burst durations:" << std::endl;
-
+  double idealBurstDurationSec =
+      // Time to transmit the burst.
+      (double)burstBytes * numSenders * 8 / (smallBandwidthMbps * 1000000) +
+      // 1 RTT for the request and the first response to propgate.
+      6 * delayUs / 1000000;
+  NS_LOG_INFO("Ideal burst duration: " << idealBurstDurationSec * 1000 << "ms");
+  NS_LOG_INFO("Burst durations (x ideal):");
   for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
-    std::cout << "\t" << burstDurationSec.As(Time::MS) << std::endl;
+    NS_LOG_INFO("\t" << burstDurationSec.As(Time::MS) << " ("
+                     << burstDurationSec.GetSeconds() / idealBurstDurationSec
+                     << "x)");
   }
 
   return 0;
