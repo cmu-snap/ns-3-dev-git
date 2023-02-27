@@ -163,7 +163,6 @@ IncastAggregator::StartBurst() {
     if (m_requestJitterUs > 0) {
       jitter = MicroSeconds(rand() % m_requestJitterUs);
     }
-    NS_LOG_INFO("Request jitter: " << jitter.As(Time::US));
     Simulator::Schedule(jitter, &IncastAggregator::SendRequest, this, socket);
   }
 }

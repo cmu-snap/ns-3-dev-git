@@ -113,7 +113,6 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
       if (m_responseJitterUs > 0) {
         jitter = MicroSeconds(rand() % m_responseJitterUs);
       }
-      NS_LOG_INFO("Response jitter: " << jitter.As(Time::US));
       Simulator::Schedule(jitter,
                           &IncastSender::SendBurst,
                           this,
