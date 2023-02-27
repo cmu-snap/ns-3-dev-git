@@ -158,16 +158,13 @@ IncastAggregator::StartBurst() {
   m_currentBurstStartTimeSec = Simulator::Now();
 
   for (Ptr<Socket> socket : m_sockets) {
-    double jitterSec = 0;
+    // Add jitter to each request
+    Time jitter;
     if (m_requestJitterUs > 0) {
-      jitterSec = ((double)(rand() % m_requestJitterUs)) / 1000000;
+      jitter = MicroSeconds(rand() % m_requestJitterUs);
     }
-
-    // Add jitter
-    Simulator::Schedule(Seconds(jitterSec),
-                        &IncastAggregator::SendRequest,
-                        this,
-                        socket);
+    NS_LOG_INFO("Request jitter: " << jitter.As(Time::US));
+    Simulator::Schedule(jitter, &IncastAggregator::SendRequest, this, socket);
   }
 }
 
