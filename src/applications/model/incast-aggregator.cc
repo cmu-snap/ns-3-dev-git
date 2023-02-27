@@ -42,11 +42,12 @@ IncastAggregator::GetTypeId() {
       TypeId("ns3::IncastAggregator")
           .SetParent<Application>()
           .AddConstructor<IncastAggregator>()
-          .AddAttribute("NumBursts",
-                        "Number of bursts to simulate",
-                        UintegerValue(10),
-                        MakeUintegerAccessor(&IncastAggregator::m_numBursts),
-                        MakeUintegerChecker<uint32_t>())
+          .AddAttribute(
+              "NumBursts",
+              "Number of bursts to simulate",
+              UintegerValue(10),
+              MakeUintegerAccessor(&IncastAggregator::m_numBursts),
+              MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "BurstBytes",
               "For each burst, the number of bytes to request from each worker",
@@ -59,21 +60,24 @@ IncastAggregator::GetTypeId() {
               UintegerValue(0),
               MakeUintegerAccessor(&IncastAggregator::m_requestJitterUs),
               MakeUintegerChecker<uint32_t>())
-          .AddAttribute("Port",
-                        "TCP port for all applications",
-                        UintegerValue(8888),
-                        MakeUintegerAccessor(&IncastAggregator::m_port),
-                        MakeUintegerChecker<uint16_t>())
-          .AddAttribute("Protocol",
-                        "TypeId of the protocol used",
-                        TypeIdValue(TcpSocketFactory::GetTypeId()),
-                        MakeTypeIdAccessor(&IncastAggregator::m_tid),
-                        MakeTypeIdChecker())
-          .AddAttribute("RwndStrategy",
-                        "RWND tuning strategy to use [none, static]",
-                        StringValue("none"),
-                        MakeStringAccessor(&IncastAggregator::m_rwndStrategy),
-                        MakeStringChecker())
+          .AddAttribute(
+              "Port",
+              "TCP port for all applications",
+              UintegerValue(8888),
+              MakeUintegerAccessor(&IncastAggregator::m_port),
+              MakeUintegerChecker<uint16_t>())
+          .AddAttribute(
+              "Protocol",
+              "TypeId of the protocol used",
+              TypeIdValue(TcpSocketFactory::GetTypeId()),
+              MakeTypeIdAccessor(&IncastAggregator::m_tid),
+              MakeTypeIdChecker())
+          .AddAttribute(
+              "RwndStrategy",
+              "RWND tuning strategy to use [none, static]",
+              StringValue("none"),
+              MakeStringAccessor(&IncastAggregator::m_rwndStrategy),
+              MakeStringChecker())
           .AddAttribute(
               "StaticRwndBytes",
               "If RwndStrategy=static, then use this static RWND value",
@@ -146,8 +150,8 @@ IncastAggregator::StartApplication() {
           NS_LOG_ERROR("RWND tuning is only supported for values <= 64KB");
         }
         tcpSocket->SetAttribute("SndBufSize", UintegerValue(m_staticRwndBytes));
-        tcpSocket->SetOverrideWindowSize(m_staticRwndBytes >>
-                                         tcpSocket->GetRcvWindShift());
+        tcpSocket->SetOverrideWindowSize(
+            m_staticRwndBytes >> tcpSocket->GetRcvWindShift());
       }
     }
   }
@@ -206,8 +210,8 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   };
 
   if (m_totalBytesSoFar == m_burstBytes * m_senders.size()) {
-    m_burstDurationsSec.push_back(Simulator::Now() -
-                                  m_currentBurstStartTimeSec);
+    m_burstDurationsSec.push_back(
+        Simulator::Now() - m_currentBurstStartTimeSec);
     ScheduleNextBurst();
   } else if (m_totalBytesSoFar > m_burstBytes * m_senders.size()) {
     NS_FATAL_ERROR("Aggregator: Received too many bytes");

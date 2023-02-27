@@ -45,21 +45,24 @@ IncastSender::GetTypeId() {
               UintegerValue(0),
               MakeUintegerAccessor(&IncastSender::m_responseJitterUs),
               MakeUintegerChecker<uint32_t>())
-          .AddAttribute("Port",
-                        "TCP port for all applications",
-                        UintegerValue(8888),
-                        MakeUintegerAccessor(&IncastSender::m_port),
-                        MakeUintegerChecker<uint16_t>())
-          .AddAttribute("Protocol",
-                        "TypeId of the protocol used",
-                        TypeIdValue(TcpSocketFactory::GetTypeId()),
-                        MakeTypeIdAccessor(&IncastSender::m_tid),
-                        MakeTypeIdChecker())
-          .AddAttribute("Aggregator",
-                        "Aggregator to send packets to",
-                        Ipv4AddressValue(),
-                        MakeIpv4AddressAccessor(&IncastSender::m_aggregator),
-                        MakeIpv4AddressChecker());
+          .AddAttribute(
+              "Port",
+              "TCP port for all applications",
+              UintegerValue(8888),
+              MakeUintegerAccessor(&IncastSender::m_port),
+              MakeUintegerChecker<uint16_t>())
+          .AddAttribute(
+              "Protocol",
+              "TypeId of the protocol used",
+              TypeIdValue(TcpSocketFactory::GetTypeId()),
+              MakeTypeIdAccessor(&IncastSender::m_tid),
+              MakeTypeIdChecker())
+          .AddAttribute(
+              "Aggregator",
+              "Aggregator to send packets to",
+              Ipv4AddressValue(),
+              MakeIpv4AddressAccessor(&IncastSender::m_aggregator),
+              MakeIpv4AddressChecker());
 
   return tid;
 }
@@ -84,6 +87,12 @@ IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
+  // Enable TCP timestamp option.
+  if (m_socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
+    Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(m_socket);
+    tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
+  }
+
   InetSocketAddress local_address =
       InetSocketAddress(Ipv4Address::GetAny(), m_port);
   if (m_socket->Bind(local_address) == -1) {
@@ -113,11 +122,12 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
       if (m_responseJitterUs > 0) {
         jitter = MicroSeconds(rand() % m_responseJitterUs);
       }
-      Simulator::Schedule(jitter,
-                          &IncastSender::SendBurst,
-                          this,
-                          socket,
-                          requestedBytes);
+      Simulator::Schedule(
+          jitter,
+          &IncastSender::SendBurst,
+          this,
+          socket,
+          requestedBytes);
     } else {
       break;
     }
@@ -159,8 +169,8 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   NS_LOG_FUNCTION(this << socket << from);
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
-  NS_LOG_LOGIC("Accepting connection from " << addr.GetIpv4() << ":"
-                                            << addr.GetPort());
+  NS_LOG_LOGIC(
+      "Accepting connection from " << addr.GetIpv4() << ":" << addr.GetPort());
 
   socket->SetRecvCallback(MakeCallback(&IncastSender::HandleRead, this));
 }

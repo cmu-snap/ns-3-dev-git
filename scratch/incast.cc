@@ -53,8 +53,8 @@ NS_LOG_COMPONENT_DEFINE("IncastSim");
 
 int
 main(int argc, char *argv[]) {
-  LogLevel logConfig = (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME |
-                                  LOG_PREFIX_NODE | LOG_LEVEL_INFO);
+  LogLevel logConfig =
+      (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE | LOG_LEVEL_INFO);
   LogComponentEnable("IncastSim", logConfig);
   LogComponentEnable("IncastAggregator", logConfig);
   LogComponentEnable("IncastSender", logConfig);
@@ -78,37 +78,45 @@ main(int argc, char *argv[]) {
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
   // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes",
   // bufferSize);
-  cmd.AddValue("burstBytes",
-               "Number of bytes for each worker to send for each burst",
-               burstBytes);
-  cmd.AddValue("smallBandwidthMbps",
-               "Small link bandwidth (in Mbps)",
-               smallBandwidthMbps);
-  cmd.AddValue("largeBandwidthMbps",
-               "Large link bandwidth (in Mbps)",
-               largeBandwidthMbps);
-  cmd.AddValue("unitSize",
-               "Size of virtual bytes increment upon SYN packets",
-               unitSize);
+  cmd.AddValue(
+      "burstBytes",
+      "Number of bytes for each worker to send for each burst",
+      burstBytes);
+  cmd.AddValue(
+      "smallBandwidthMbps",
+      "Small link bandwidth (in Mbps)",
+      smallBandwidthMbps);
+  cmd.AddValue(
+      "largeBandwidthMbps",
+      "Large link bandwidth (in Mbps)",
+      largeBandwidthMbps);
+  cmd.AddValue(
+      "unitSize",
+      "Size of virtual bytes increment upon SYN packets",
+      unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
-  cmd.AddValue("jitterUs",
-               ("Max random jitter in sending request and responses, "
-                "in microseconds"),
-               jitterUs);
-  cmd.AddValue("rwndStrategy",
-               "RWND tuning strategy to use [none, static]",
-               rwndStrategy);
-  cmd.AddValue("staticRwndBytes",
-               "If --rwndStrategy=static, then use this static RWND value",
-               staticRwndBytes);
+  cmd.AddValue(
+      "jitterUs",
+      ("Max random jitter in sending request and responses, "
+       "in microseconds"),
+      jitterUs);
+  cmd.AddValue(
+      "rwndStrategy",
+      "RWND tuning strategy to use [none, static]",
+      rwndStrategy);
+  cmd.AddValue(
+      "staticRwndBytes",
+      "If --rwndStrategy=static, then use this static RWND value",
+      staticRwndBytes);
   cmd.Parse(argc, argv);
 
   uint32_t totalIncastMbps = smallBandwidthMbps * numSenders;
   if (totalIncastMbps > largeBandwidthMbps) {
-    NS_LOG_WARN("Total incast bandwidth ("
-                << totalIncastMbps << "Mbps) exceeds large link bandwidth ("
-                << largeBandwidthMbps << "Mbps)");
+    NS_LOG_WARN(
+        "Total incast bandwidth (" << totalIncastMbps
+                                   << "Mbps) exceeds large link bandwidth ("
+                                   << largeBandwidthMbps << "Mbps)");
   }
 
   NS_LOG_INFO("Building incast topology...");
@@ -140,11 +148,12 @@ main(int argc, char *argv[]) {
   // largeLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("150p"));
 
   // Create dumbbell topology
-  PointToPointDumbbellHelper dumbbellHelper(1,
-                                            smallLink,
-                                            numSenders,
-                                            smallLink,
-                                            largeLink);
+  PointToPointDumbbellHelper dumbbellHelper(
+      1,
+      smallLink,
+      numSenders,
+      smallLink,
+      largeLink);
 
   NS_LOG_INFO("Installing TCP stack on all nodes...");
 
@@ -172,11 +181,12 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Configuring queue settings...");
 
   TrafficControlHelper redHelper;
-  redHelper.SetRootQueueDisc("ns3::RedQueueDisc",
-                             "LinkBandwidth",
-                             largeBandwidthMbpsStringValue,
-                             "LinkDelay",
-                             delayUsStringValue);
+  redHelper.SetRootQueueDisc(
+      "ns3::RedQueueDisc",
+      "LinkBandwidth",
+      largeBandwidthMbpsStringValue,
+      "LinkDelay",
+      delayUsStringValue);
   NetDeviceContainer switchDevices =
       largeLink.Install(dumbbellHelper.GetLeft(), dumbbellHelper.GetRight());
   QueueDiscContainer queueDiscs1 = redHelper.Install(switchDevices);
@@ -200,8 +210,9 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute("BurstBytes", UintegerValue(burstBytes));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
-  aggregatorApp->SetAttribute("StaticRwndBytes",
-                              UintegerValue(staticRwndBytes));
+  aggregatorApp->SetAttribute(
+      "StaticRwndBytes",
+      UintegerValue(staticRwndBytes));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
@@ -246,8 +257,9 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
   // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
   // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
-  Config::SetDefault("ns3::RedQueueDisc::MaxSize",
-                     QueueSizeValue(QueueSize("2666p")));
+  Config::SetDefault(
+      "ns3::RedQueueDisc::MaxSize",
+      QueueSizeValue(QueueSize("2666p")));
   // DCTCP tracks instantaneous queue length only; so set QW = 1
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
   Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
@@ -267,9 +279,9 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Ideal burst duration: " << idealBurstDurationSec * 1000 << "ms");
   NS_LOG_INFO("Burst durations (x ideal):");
   for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
-    NS_LOG_INFO("\t" << burstDurationSec.As(Time::MS) << " ("
-                     << burstDurationSec.GetSeconds() / idealBurstDurationSec
-                     << "x)");
+    NS_LOG_INFO(
+        "\t" << burstDurationSec.As(Time::MS) << " ("
+             << burstDurationSec.GetSeconds() / idealBurstDurationSec << "x)");
   }
 
   return 0;

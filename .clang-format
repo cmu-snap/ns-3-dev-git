@@ -6,6 +6,7 @@ AllowAllArgumentsOnNextLine: false
 AllowAllParametersOfDeclarationOnNextLine: false
 AlwaysBreakAfterReturnType: TopLevelDefinitions
 AlwaysBreakTemplateDeclarations: Yes
+AlignAfterOpenBracket: AlwaysBreak
 BinPackArguments: false
 BinPackParameters: false
 ColumnLimit: 80
