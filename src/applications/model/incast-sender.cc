@@ -157,9 +157,9 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;
     } else {
-      NS_LOG_LOGIC("Error: could not send " << toSend << " bytes");
-      std::cout << "Error: could not send " << toSend << " bytes\n";
-      break;
+      NS_FATAL_ERROR(
+          "Error: could not send " << toSend
+                                   << " bytes. Check your SndBufSize.");
     }
   }
 }

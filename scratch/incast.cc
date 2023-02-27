@@ -239,6 +239,10 @@ main(int argc, char *argv[]) {
   largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
 
   NS_LOG_INFO("Configuring various default parameters...");
+  Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
+  Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
+  Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
+  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
   // Set the maximum segment size to 1448 bytes
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
 
