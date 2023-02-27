@@ -158,6 +158,12 @@ class IncastAggregator : public Application {
 
   // List of all burst durations
   std::vector<Time> m_burstDurationsSec;
+
+  // RWND tuning strategy to use [none, static]
+  std::string m_rwndStrategy;
+
+  // If m_rwndStrategy=static, then use this static RWND value
+  uint32_t m_staticRwndBytes;
 };
 
 }  // namespace ns3

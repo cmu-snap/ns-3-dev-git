@@ -24,6 +24,7 @@
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
 #include "ns3/log.h"
+#include "ns3/string.h"
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
 
@@ -67,7 +68,18 @@ IncastAggregator::GetTypeId() {
                         "TypeId of the protocol used",
                         TypeIdValue(TcpSocketFactory::GetTypeId()),
                         MakeTypeIdAccessor(&IncastAggregator::m_tid),
-                        MakeTypeIdChecker());
+                        MakeTypeIdChecker())
+          .AddAttribute("RwndStrategy",
+                        "RWND tuning strategy to use [none, static]",
+                        StringValue("none"),
+                        MakeStringAccessor(&IncastAggregator::m_rwndStrategy),
+                        MakeStringChecker())
+          .AddAttribute(
+              "StaticRwndBytes",
+              "If RwndStrategy=static, then use this static RWND value",
+              UintegerValue(65536),
+              MakeUintegerAccessor(&IncastAggregator::m_staticRwndBytes),
+              MakeUintegerChecker<uint32_t>());
 
   return tid;
 }
@@ -123,12 +135,21 @@ IncastAggregator::StartApplication() {
     socket->Connect(InetSocketAddress(sender, m_port));
     m_sockets.push_back(socket);
 
-    // if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
-    //   // Basic static RWND tuning. Set the RWND to 64KB for all sockets.
-    //   Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-    //   tcpSocket->SetOverrideWindowSize(65535 >>
-    //   tcpSocket->GetRcvWindShift());
-    // }
+    if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
+      Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+      // Enable TCP timestamp option.
+      // tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
+
+      if (m_rwndStrategy == "static") {
+        // Basic static RWND tuning. Set the RWND to 64KB for all sockets.
+        if (m_staticRwndBytes > 65536) {
+          NS_LOG_ERROR("RWND tuning is only supported for values <= 64KB");
+        }
+        tcpSocket->SetAttribute("SndBufSize", UintegerValue(m_staticRwndBytes));
+        tcpSocket->SetOverrideWindowSize(m_staticRwndBytes >>
+                                         tcpSocket->GetRcvWindShift());
+      }
+    }
   }
 
   ScheduleNextBurst();

@@ -70,6 +70,8 @@ main(int argc, char *argv[]) {
   float delayUs = 25;  // TODO: reconfigure
   float smallBandwidthMbps = 12.5;
   float largeBandwidthMbps = 800.0;
+  std::string rwndStrategy = "none";
+  uint32_t staticRwndBytes = 2 ^ 16;
 
   // Define command line arguments
   CommandLine cmd;
@@ -90,10 +92,16 @@ main(int argc, char *argv[]) {
                unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
-  cmd.AddValue(
-      "jitterUs",
-      "Max random jitter in sending request and responses, in microseconds",
-      jitterUs);
+  cmd.AddValue("jitterUs",
+               ("Max random jitter in sending request and responses, "
+                "in microseconds"),
+               jitterUs);
+  cmd.AddValue("rwndStrategy",
+               "RWND tuning strategy to use [none, static]",
+               rwndStrategy);
+  cmd.AddValue("staticRwndBytes",
+               "If --rwndStrategy=static, then use this static RWND value",
+               staticRwndBytes);
   cmd.Parse(argc, argv);
 
   uint32_t totalIncastMbps = smallBandwidthMbps * numSenders;
@@ -191,6 +199,9 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
   aggregatorApp->SetAttribute("BurstBytes", UintegerValue(burstBytes));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
+  aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
+  aggregatorApp->SetAttribute("StaticRwndBytes",
+                              UintegerValue(staticRwndBytes));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
