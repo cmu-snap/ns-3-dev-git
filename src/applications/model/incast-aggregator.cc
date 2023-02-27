@@ -177,7 +177,7 @@ IncastAggregator::ScheduleNextBurst() {
 void
 IncastAggregator::StartBurst() {
   NS_LOG_FUNCTION(this);
-  NS_LOG_INFO("Starting burst " << m_burstCount << " of " << m_numBursts);
+  NS_LOG_INFO("Burst " << m_burstCount << " of " << m_numBursts);
 
   m_totalBytesSoFar = 0;
   m_currentBurstStartTimeSec = Simulator::Now();
