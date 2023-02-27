@@ -212,14 +212,12 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Enabling tracing...");
 
+  // Use nanosecond timestamps for PCAP traces
+  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
   // Enable tracing at the aggregator.
   largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
 
   NS_LOG_INFO("Configuring various default parameters...");
-
-  // Use nanosecond timestamps for PCAP traces
-  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
-
   // Set the maximum segment size to 1448 bytes
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
 
