@@ -155,11 +155,11 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Assigning IP addresses...");
 
-  // Assign IP Addresses
+  // Assign IP Addresses.
   dumbbellHelper.AssignIpv4Addresses(
       Ipv4AddressHelper("10.0.0.0", "255.255.255.0"),
-      Ipv4AddressHelper("10.1.0.0", "255.255.255.0"),
-      Ipv4AddressHelper("10.2.0.0", "255.255.255.0"));
+      Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
+      Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
 
   NS_LOG_INFO("Configuring queue settings...");
 
@@ -180,7 +180,6 @@ main(int argc, char *argv[]) {
 
   // Collect sender addresses
   std::list<Ipv4Address> senderAddresses;
-
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     senderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
   }
