@@ -61,14 +61,14 @@ main(int argc, char *argv[]) {
   LogComponentEnable("IncastSender", logConfig);
 
   // Initialize variables
+  std::string tcpTypeId = "TcpCubic";
   uint32_t numSenders = 3;
-  // uint32_t bufferSize = 32768;
   uint32_t burstBytes = 4096;
   uint32_t unitSize = 3000;
   uint16_t maxWin = 65535;
   uint32_t numBursts = 10;
   uint32_t jitterUs = 0;
-  float delayUs = 25;  // TODO: reconfigure
+  float delayUs = 25;
   float smallBandwidthMbps = 12.5;
   float largeBandwidthMbps = 800.0;
   std::string rwndStrategy = "none";
@@ -76,6 +76,10 @@ main(int argc, char *argv[]) {
 
   // Define command line arguments
   CommandLine cmd;
+  cmd.AddValue(
+      "cca",
+      "Congestion control algorithm (e.g., TcpCubic, TcpDctcp, etc.)",
+      tcpTypeId);
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
   // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes",
   // bufferSize);
@@ -179,8 +183,7 @@ main(int argc, char *argv[]) {
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
 
-  NS_LOG_INFO("Configuring queue settings...");
-
+  NS_LOG_INFO("Creating queues...");
   TrafficControlHelper redHelper;
   redHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
@@ -230,19 +233,19 @@ main(int argc, char *argv[]) {
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
 
-  NS_LOG_INFO("Enabling static global routing...");
-
-  // Turn on global static routing
+  NS_LOG_INFO("Configuring static global routing...");
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
   NS_LOG_INFO("Enabling tracing...");
-
   // Use nanosecond timestamps for PCAP traces
   Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
   // Enable tracing at the aggregator
   largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
 
-  NS_LOG_INFO("Configuring various default parameters...");
+  NS_LOG_INFO("Configuring TCP parameters...");
+  Config::SetDefault(
+      "ns3::TcpL4Protocol::SocketType",
+      StringValue("ns3::" + tcpTypeId));
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
@@ -253,6 +256,7 @@ main(int argc, char *argv[]) {
   //                    UintegerValue(maxWin));
   // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
 
+  NS_LOG_INFO("Configuring queue parameters...");
   // Set default parameters for RED queue disc
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
   // ARED may be used but the queueing delays will increase; it is disabled
