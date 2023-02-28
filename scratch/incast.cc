@@ -216,18 +216,68 @@ main(int argc, char *argv[]) {
   // TODO: Two separate configurations, one for small and one for large
 
   NS_LOG_INFO("Creating queues...");
-  TrafficControlHelper redHelper;
-  redHelper.SetRootQueueDisc(
+
+  TrafficControlHelper smallLinkQueueHelper;
+  smallLinkQueueHelper.SetRootQueueDisc(
+      "ns3::RedQueueDisc",
+      "LinkBandwidth",
+      smallBandwidthMbpsStringValue,
+      "LinkDelay",
+      delayUsStringValue);
+
+  TrafficControlHelper largeLinkQueueHelper;
+  largeLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
       largeBandwidthMbpsStringValue,
       "LinkDelay",
       delayUsStringValue);
+
+  NetDeviceContainer aggregatorSwitchDevices =
+      smallLink.Install(dumbbellHelper.GetLeft(0), dumbbellHelper.GetLeft());
+  QueueDiscContainer aggregatorSwitchQueues =
+      smallLinkQueueHelper.Install(aggregatorSwitchDevices);
+
   NetDeviceContainer switchDevices =
       largeLink.Install(dumbbellHelper.GetLeft(), dumbbellHelper.GetRight());
-  QueueDiscContainer queueDiscs1 = redHelper.Install(switchDevices);
+  QueueDiscContainer switchQueues = largeLinkQueueHelper.Install(switchDevices);
+
+  std::list<QueueDiscContainer> allSwitchSenderQueues;
+  for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    NetDeviceContainer switchSenderDevices = smallLink.Install(
+        dumbbellHelper.GetRight(), dumbbellHelper.GetRight(i));
+    QueueDiscContainer switchSenderQueues =
+        smallLinkQueueHelper.Install(switchSenderDevices);
+    allSwitchSenderQueues.push_back(switchSenderQueues);
+  }
+
+  NS_LOG_INFO("Configuring static global routing...");
+  Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+
+  NS_LOG_INFO("Enabling tracing...");
+  // Use nanosecond timestamps for PCAP traces
+  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
+  // Enable tracing at the aggregator
+  largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
+
+  NS_LOG_INFO("Configuring TCP parameters...");
+  Config::SetDefault(
+      "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
+  Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
+  Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
+  Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
+  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
+  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
+
+  // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
+  //                    UintegerValue(maxWin));
+  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
 
   NS_LOG_INFO("Configuring queue parameters...");
+
+  // TODO: set diff parameters for diff queues
+  // CLI: smallQueueSize, largeQueueSize, minTh = 20, maxTh = 20
+
   // Set default parameters for RED queue disc
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
   // ARED may be used but the queueing delays will increase; it is disabled
@@ -289,17 +339,27 @@ main(int argc, char *argv[]) {
   Simulator::Destroy();
   NS_LOG_INFO("Done.");
 
+  int numBitsInByte = 8;
+  int numHops = 3;
+  int numMsInSec = 1000;
+  int megaToBase = pow(10, 6);
+
   double idealBurstDurationSec =
       // Time to transmit the burst.
-      (double)burstBytes * numSenders * 8 / (smallBandwidthMbps * 1000000) +
+      (double)burstBytes * numSenders * numBitsInByte /
+          (smallBandwidthMbps * megaToBase) +
       // 1 RTT for the request and the first response packet to propgate.
-      6 * delayUs / 1000000;
-  NS_LOG_INFO("Ideal burst duration: " << idealBurstDurationSec * 1000 << "ms");
+      numHops * 2 * delayUs / megaToBase;
+
+  NS_LOG_INFO(
+      "Ideal burst duration: " << idealBurstDurationSec * numMsInSec << "ms");
   NS_LOG_INFO("Burst durations (x ideal):");
+
   for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
     NS_LOG_INFO(
-        "\t" << burstDurationSec.As(Time::MS) << " ("
-             << burstDurationSec.GetSeconds() / idealBurstDurationSec << "x)");
+        burstDurationSec.As(Time::MS)
+        << " (" << burstDurationSec.GetSeconds() / idealBurstDurationSec
+        << "x)");
   }
 
   return 0;
