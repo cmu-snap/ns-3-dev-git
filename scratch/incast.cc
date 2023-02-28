@@ -206,33 +206,6 @@ main(int argc, char *argv[]) {
     senderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
   }
 
-  // Create the aggregator application
-  Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
-  aggregatorApp->SetSenders(senderAddresses);
-  aggregatorApp->SetStartTime(Seconds(1.0));
-  aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
-  aggregatorApp->SetAttribute("BurstBytes", UintegerValue(burstBytes));
-  aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
-  aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
-  aggregatorApp->SetAttribute(
-      "StaticRwndBytes",
-      UintegerValue(staticRwndBytes));
-  aggregatorApp->SetAttribute(
-      "BandwidthMbps",
-      UintegerValue(smallBandwidthMbps));
-  dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
-
-  // Create the sender applications
-  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
-    senderApp->SetAttribute(
-        "Aggregator",
-        Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
-    senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
-    senderApp->SetStartTime(Seconds(1.0));
-    dumbbellHelper.GetRight(i)->AddApplication(senderApp);
-  }
-
   NS_LOG_INFO("Configuring static global routing...");
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
@@ -274,6 +247,33 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
   Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
   Config::SetDefault("ns3::RedQueueDisc::MaxTh", DoubleValue(20));
+
+  // Create the aggregator application
+  Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
+  aggregatorApp->SetSenders(senderAddresses);
+  aggregatorApp->SetStartTime(Seconds(1.0));
+  aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
+  aggregatorApp->SetAttribute("BurstBytes", UintegerValue(burstBytes));
+  aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
+  aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
+  aggregatorApp->SetAttribute(
+      "StaticRwndBytes",
+      UintegerValue(staticRwndBytes));
+  aggregatorApp->SetAttribute(
+      "BandwidthMbps",
+      UintegerValue(smallBandwidthMbps));
+  dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
+
+  // Create the sender applications
+  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
+    senderApp->SetAttribute(
+        "Aggregator",
+        Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
+    senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
+    senderApp->SetStartTime(Seconds(1.0));
+    dumbbellHelper.GetRight(i)->AddApplication(senderApp);
+  }
 
   NS_LOG_INFO("Running Simulation...");
   Simulator::Run();
