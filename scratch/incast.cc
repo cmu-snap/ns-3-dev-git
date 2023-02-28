@@ -96,9 +96,7 @@ main(int argc, char *argv[]) {
       "Large link bandwidth (in Mbps)",
       largeBandwidthMbps);
   cmd.AddValue(
-      "unitSize",
-      "Size of virtual bytes increment upon SYN packets",
-      unitSize);
+      "unitSize", "Size of virtual bytes increment upon SYN packets", unitSize);
   cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
   cmd.AddValue(
@@ -154,11 +152,7 @@ main(int argc, char *argv[]) {
 
   // Create dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(
-      1,
-      smallLink,
-      numSenders,
-      smallLink,
-      largeLink);
+      1, smallLink, numSenders, smallLink, largeLink);
 
   NS_LOG_INFO("Installing TCP stack on all nodes...");
 
@@ -217,8 +211,7 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Configuring TCP parameters...");
   Config::SetDefault(
-      "ns3::TcpL4Protocol::SocketType",
-      StringValue("ns3::" + tcpTypeId));
+      "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
@@ -241,8 +234,7 @@ main(int argc, char *argv[]) {
   // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
   // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
   Config::SetDefault(
-      "ns3::RedQueueDisc::MaxSize",
-      QueueSizeValue(QueueSize("2666p")));
+      "ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
   // DCTCP tracks instantaneous queue length only; so set QW = 1
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
   Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
@@ -257,19 +249,16 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
   aggregatorApp->SetAttribute(
-      "StaticRwndBytes",
-      UintegerValue(staticRwndBytes));
+      "StaticRwndBytes", UintegerValue(staticRwndBytes));
   aggregatorApp->SetAttribute(
-      "BandwidthMbps",
-      UintegerValue(smallBandwidthMbps));
+      "BandwidthMbps", UintegerValue(smallBandwidthMbps));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
     senderApp->SetAttribute(
-        "Aggregator",
-        Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
+        "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
     senderApp->SetStartTime(Seconds(1.0));
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);

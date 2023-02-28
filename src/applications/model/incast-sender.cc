@@ -123,11 +123,7 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
         jitter = MicroSeconds(rand() % m_responseJitterUs);
       }
       Simulator::Schedule(
-          jitter,
-          &IncastSender::SendBurst,
-          this,
-          socket,
-          requestedBytes);
+          jitter, &IncastSender::SendBurst, this, socket, requestedBytes);
     } else {
       break;
     }
