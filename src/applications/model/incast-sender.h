@@ -80,7 +80,7 @@ class IncastSender : public Application {
   /**
    * @brief TODO
    */
-  static uint32_t ParseRequestedBytes(Ptr<Packet> packet);
+  static uint32_t ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe);
 
   // TCP port for all applications
   uint16_t m_port;

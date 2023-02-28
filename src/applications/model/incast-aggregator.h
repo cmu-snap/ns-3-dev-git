@@ -126,6 +126,16 @@ class IncastAggregator : public Application {
    */
   void RoundFinish();
 
+  /**
+   * @brief TODO
+   */
+  void ScheduleRttProbe(Time when);
+
+  /**
+   * @brief TODO
+   */
+  void SendRttProbe();
+
   // Number of bursts to simulate
   uint32_t m_numBursts;
 

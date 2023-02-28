@@ -154,28 +154,66 @@ main(int argc, char *argv[]) {
   PointToPointDumbbellHelper dumbbellHelper(
       1, smallLink, numSenders, smallLink, largeLink);
 
-  NS_LOG_INFO("Installing TCP stack on all nodes...");
+  // Print node IDs
+  std::ostringstream leftNodeIds;
+  leftNodeIds << "Left nodes: ";
+  for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
+    leftNodeIds << dumbbellHelper.GetLeft(i)->GetId() << " ";
+  }
+  std::ostringstream rightNodeIds;
+  rightNodeIds << "Right nodes: ";
+  for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    rightNodeIds << dumbbellHelper.GetRight(i)->GetId() << " ";
+  }
+  NS_LOG_INFO(
+      "Node IDs:" << std::endl
+                  << "\tLeft router: " << dumbbellHelper.GetLeft()->GetId()
+                  << std::endl
+                  << "\tRight router: " << dumbbellHelper.GetRight()->GetId()
+                  << std::endl
+                  << "\t" << leftNodeIds.str() << std::endl
+                  << "\t" << rightNodeIds.str());
 
   // Install TCP stack on all nodes
+  NS_LOG_INFO("Installing TCP stack on all nodes...");
   InternetStackHelper stack;
-
   for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
     stack.Install(dumbbellHelper.GetLeft(i));
   }
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     stack.Install(dumbbellHelper.GetRight(i));
   }
-
   stack.Install(dumbbellHelper.GetLeft());
   stack.Install(dumbbellHelper.GetRight());
 
-  NS_LOG_INFO("Assigning IP addresses...");
+  NS_LOG_INFO("Configuring TCP parameters...");
+  Config::SetDefault(
+      "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
+  Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
+  Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
+  Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
+  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
+  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
+  // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
+  //                    UintegerValue(maxWin));
+  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
 
   // Assign IP Addresses.
+  NS_LOG_INFO("Assigning IP addresses...");
   dumbbellHelper.AssignIpv4Addresses(
       Ipv4AddressHelper("10.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
+  // Collect sender addresses
+  std::list<Ipv4Address> senderAddresses;
+  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    senderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
+  }
+  NS_LOG_INFO("Configuring static global routing...");
+  Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+
+  // TODO: Add the same red queue disc to all of the other links as well
+  // TODO: Two separate configurations, one for small and one for large
 
   NS_LOG_INFO("Creating queues...");
   TrafficControlHelper redHelper;
@@ -188,39 +226,6 @@ main(int argc, char *argv[]) {
   NetDeviceContainer switchDevices =
       largeLink.Install(dumbbellHelper.GetLeft(), dumbbellHelper.GetRight());
   QueueDiscContainer queueDiscs1 = redHelper.Install(switchDevices);
-
-  // TODO: Add the same red queue disc to all of the other links as well
-  // TODO: Two separate configurations, one for small and one for large
-
-  NS_LOG_INFO("Creating applications...");
-
-  // Collect sender addresses
-  std::list<Ipv4Address> senderAddresses;
-  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    senderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
-  }
-
-  NS_LOG_INFO("Configuring static global routing...");
-  Ipv4GlobalRoutingHelper::PopulateRoutingTables();
-
-  NS_LOG_INFO("Enabling tracing...");
-  // Use nanosecond timestamps for PCAP traces
-  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
-  // Enable tracing at the aggregator
-  largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
-
-  NS_LOG_INFO("Configuring TCP parameters...");
-  Config::SetDefault(
-      "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
-  Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
-  Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
-  Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
-  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
-  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
-
-  // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
-  //                    UintegerValue(maxWin));
-  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
 
   NS_LOG_INFO("Configuring queue parameters...");
   // Set default parameters for RED queue disc
@@ -240,6 +245,7 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
   Config::SetDefault("ns3::RedQueueDisc::MaxTh", DoubleValue(20));
 
+  NS_LOG_INFO("Creating applications...");
   // Create the aggregator application
   Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
   aggregatorApp->SetSenders(senderAddresses);
@@ -253,7 +259,6 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute(
       "BandwidthMbps", UintegerValue(smallBandwidthMbps));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
-
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
@@ -264,7 +269,21 @@ main(int argc, char *argv[]) {
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
 
-  NS_LOG_INFO("Running Simulation...");
+  NS_LOG_INFO("Enabling tracing...");
+  // Use nanosecond timestamps for PCAP traces
+  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
+  // Enable tracing at the aggregator
+  largeLink.EnablePcap(
+      "scratch/traces/incast-sockets", dumbbellHelper.GetLeft(0)->GetId(), 0);
+  // Enable tracing at each sender
+  for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+    largeLink.EnablePcap(
+        "scratch/traces/incast-sockets",
+        dumbbellHelper.GetRight(i)->GetId(),
+        0);
+  }
+
+  NS_LOG_INFO("Running simulation...");
   Simulator::Run();
   Simulator::Stop();
   Simulator::Destroy();

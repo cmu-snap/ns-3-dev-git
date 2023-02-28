@@ -155,7 +155,7 @@ IncastAggregator::StartApplication() {
     if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
       Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
       // Enable TCP timestamp option.
-      // tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
+      tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
 
       if (m_rwndStrategy == "static") {
         // Basic static RWND tuning. Set the RWND to 64KB for all sockets.
@@ -178,6 +178,7 @@ IncastAggregator::ScheduleNextBurst() {
   NS_LOG_FUNCTION(this);
 
   ++m_burstCount;
+  m_totalBytesSoFar = 0;
 
   if (m_burstCount > m_numBursts) {
     Simulator::Schedule(Seconds(0), &IncastAggregator::StopApplication, this);
@@ -186,6 +187,32 @@ IncastAggregator::ScheduleNextBurst() {
 
   // Schedule the next burst for 1 second later
   Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
+  // Start the RTT probes 10ms before the next burst
+  ScheduleRttProbe(MilliSeconds(990));
+}
+
+void
+IncastAggregator::ScheduleRttProbe(Time when) {
+  NS_LOG_FUNCTION(this);
+
+  // Schedule the next RTT probe for 1ms in the future
+  Simulator::Schedule(when, &IncastAggregator::SendRttProbe, this);
+}
+
+void
+IncastAggregator::SendRttProbe() {
+  NS_LOG_FUNCTION(this);
+
+  // Send a 1-byte packet to each sender
+  for (Ptr<Socket> socket : m_sockets) {
+    Ptr<Packet> packet = Create<Packet>(1);
+    socket->Send(packet);
+  }
+
+  // If the burst is not done yet, then schedule another RTT probe
+  if (m_totalBytesSoFar < m_burstBytes * m_senders.size()) {
+    ScheduleRttProbe(MilliSeconds(1));
+  }
 }
 
 void
@@ -193,7 +220,6 @@ IncastAggregator::StartBurst() {
   NS_LOG_FUNCTION(this);
   NS_LOG_INFO("Burst " << m_burstCount << " of " << m_numBursts);
 
-  m_totalBytesSoFar = 0;
   m_currentBurstStartTimeSec = Simulator::Now();
 
   for (Ptr<Socket> socket : m_sockets) {
@@ -208,6 +234,8 @@ IncastAggregator::StartBurst() {
 
 void
 IncastAggregator::SendRequest(Ptr<Socket> socket) {
+  NS_LOG_FUNCTION(this << socket);
+
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_burstBytes, sizeof(uint32_t));
   socket->Send(packet);
@@ -272,6 +300,8 @@ IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
 
 std::vector<Time>
 IncastAggregator::GetBurstDurations() {
+  NS_LOG_FUNCTION(this);
+
   return m_burstDurationsSec;
 }
 

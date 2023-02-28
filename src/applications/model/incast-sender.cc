@@ -114,8 +114,10 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
   while ((packet = socket->Recv())) {
     size_t size = packet->GetSize();
 
-    if (size == sizeof(uint32_t)) {
-      uint32_t requestedBytes = ParseRequestedBytes(packet);
+    if (size == sizeof(uint32_t) || size == 1 + sizeof(uint32_t)) {
+      bool containsRttProbe = (size == 1 + sizeof(uint32_t));
+      uint32_t requestedBytes = ParseRequestedBytes(packet, containsRttProbe);
+      NS_LOG_INFO("Received request for " << requestedBytes << " bytes");
 
       // Add jitter to the first packet of the response
       Time jitter;
@@ -124,17 +126,20 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
       }
       Simulator::Schedule(
           jitter, &IncastSender::SendBurst, this, socket, requestedBytes);
+    } else if (size == 1) {
+      // This is an RTT probe. Do nothing.
+      NS_LOG_LOGIC("Received RTT probe");
     } else {
-      break;
+      NS_FATAL_ERROR("Strange size received: " << size);
     }
   }
 }
 
 uint32_t
-IncastSender::ParseRequestedBytes(Ptr<Packet> packet) {
+IncastSender::ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe) {
   uint8_t *buffer = new uint8_t[packet->GetSize()];
   packet->CopyData(buffer, packet->GetSize());
-  uint32_t requestedBytes = *(uint32_t *)buffer;
+  uint32_t requestedBytes = *(uint32_t *)(buffer + containsRttProbe);
   delete[] buffer;
   return requestedBytes;
 }
