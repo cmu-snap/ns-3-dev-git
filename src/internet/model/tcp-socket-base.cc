@@ -4714,4 +4714,12 @@ uint8_t TcpSocketBase::GetRcvWindShift() const {
     return m_winScalingEnabled ? m_rcvWindShift : 0;
 }
 
+Ptr<RttEstimator> TcpSocketBase::GetRttEstimator() const {
+    return m_rtt;
+}
+
+Ptr<TcpSocketState> TcpSocketBase::GetTcpSocketState() const {
+    return m_tcb;
+}
+
 } // namespace ns3

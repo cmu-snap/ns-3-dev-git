@@ -71,7 +71,7 @@ main(int argc, char *argv[]) {
   float smallBandwidthMbps = 12.5;
   float largeBandwidthMbps = 800.0;
   std::string rwndStrategy = "none";
-  uint32_t staticRwndBytes = 2 ^ 16;
+  uint32_t staticRwndBytes = 65535;
 
   // Define command line arguments
   CommandLine cmd;
@@ -103,7 +103,7 @@ main(int argc, char *argv[]) {
       jitterUs);
   cmd.AddValue(
       "rwndStrategy",
-      "RWND tuning strategy to use [none, static]",
+      "RWND tuning strategy to use [none, static, bdp+connections]",
       rwndStrategy);
   cmd.AddValue(
       "staticRwndBytes",
@@ -213,6 +213,9 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute(
       "StaticRwndBytes",
       UintegerValue(staticRwndBytes));
+  aggregatorApp->SetAttribute(
+      "BandwidthMbps",
+      UintegerValue(smallBandwidthMbps));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
@@ -235,7 +238,7 @@ main(int argc, char *argv[]) {
 
   // Use nanosecond timestamps for PCAP traces
   Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
-  // Enable tracing at the aggregator.
+  // Enable tracing at the aggregator
   largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
 
   NS_LOG_INFO("Configuring various default parameters...");
@@ -243,13 +246,11 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
-  // Set the maximum segment size to 1448 bytes
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
 
   // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
   //                    UintegerValue(maxWin));
   // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
-  // Config::SetDefault ("ns3::TcpSocket::DelAckCount", UintegerValue(0));
 
   // Set default parameters for RED queue disc
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
@@ -269,7 +270,7 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
   Config::SetDefault("ns3::RedQueueDisc::MaxTh", DoubleValue(20));
 
-  NS_LOG_INFO("Run Simulation.");
+  NS_LOG_INFO("Running Simulation...");
   Simulator::Run();
   Simulator::Stop();
   Simulator::Destroy();

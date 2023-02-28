@@ -327,6 +327,10 @@ class TcpSocketBase : public TcpSocket
 
     uint8_t GetRcvWindShift() const;
 
+    Ptr<RttEstimator> GetRttEstimator() const;
+
+    Ptr<TcpSocketState> GetTcpSocketState() const;
+
     /**
      * \brief Callback pointer for pacing rate trace chaining
      */

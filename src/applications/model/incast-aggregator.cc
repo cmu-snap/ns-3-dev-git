@@ -74,23 +74,36 @@ IncastAggregator::GetTypeId() {
               MakeTypeIdChecker())
           .AddAttribute(
               "RwndStrategy",
-              "RWND tuning strategy to use [none, static]",
+              "RWND tuning strategy to use [none, static, bdp+connections]",
               StringValue("none"),
               MakeStringAccessor(&IncastAggregator::m_rwndStrategy),
               MakeStringChecker())
           .AddAttribute(
               "StaticRwndBytes",
               "If RwndStrategy=static, then use this static RWND value",
-              UintegerValue(65536),
+              UintegerValue(65535),
               MakeUintegerAccessor(&IncastAggregator::m_staticRwndBytes),
+              MakeUintegerChecker<uint32_t>())
+          .AddAttribute(
+              "BandwidthMbps",
+              ("If RwndStrategy=bdp+connections, then assume that "
+               "this is the bottleneck bandwidth"),
+              UintegerValue(0),
+              MakeUintegerAccessor(&IncastAggregator::m_bandwidthMbps),
               MakeUintegerChecker<uint32_t>());
 
   return tid;
 }
 
 IncastAggregator::IncastAggregator()
-    : m_burstCount(0),
-      m_totalBytesSoFar(0) {
+    : m_numBursts(10),
+      m_burstCount(0),
+      m_burstBytes(1448),
+      m_totalBytesSoFar(0),
+      m_port(8888),
+      m_requestJitterUs(0),
+      m_rwndStrategy("none"),
+      m_staticRwndBytes(65535) {
   NS_LOG_FUNCTION(this);
 }
 
@@ -146,10 +159,11 @@ IncastAggregator::StartApplication() {
 
       if (m_rwndStrategy == "static") {
         // Basic static RWND tuning. Set the RWND to 64KB for all sockets.
-        if (m_staticRwndBytes > 65536) {
-          NS_LOG_ERROR("RWND tuning is only supported for values <= 64KB");
+        if (m_staticRwndBytes < 2000 || m_staticRwndBytes > 65535) {
+          NS_FATAL_ERROR(
+              "RWND tuning is only supported for values in the range [2000, "
+              "65535]");
         }
-        tcpSocket->SetAttribute("SndBufSize", UintegerValue(m_staticRwndBytes));
         tcpSocket->SetOverrideWindowSize(
             m_staticRwndBytes >> tcpSocket->GetRcvWindShift());
       }
@@ -207,6 +221,37 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   while ((packet = socket->Recv())) {
     m_totalBytesSoFar += packet->GetSize();
+
+    if (m_rwndStrategy == "bdp+connections") {
+      // Set RWND based on the number of the BDP and number of connections.
+      Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+      auto rtt = tcpSocket->GetTcpSocketState()->m_minRtt;
+      auto bdpBytes = rtt.GetSeconds() * m_bandwidthMbps * 1000000 / 8;
+      auto numConns = m_sockets.size();
+      uint16_t rwndBytes = (uint16_t)std::floor(bdpBytes / numConns);
+
+      NS_LOG_LOGIC(
+          "Rtt: " << rtt.As(Time::US) << ", Bandwidth: " << m_bandwidthMbps
+                  << " Mbps, Connections: " << numConns << ", BDP: " << bdpBytes
+                  << " bytes, RWND: " << rwndBytes << " bytes");
+      if (rwndBytes < 2000) {
+        NS_LOG_WARN(
+            "RWND tuning is only supported for values >= 2KB, but chosen RWND "
+            "is: "
+            << rwndBytes << " bytes");
+        rwndBytes = std::max(rwndBytes, (uint16_t)2000u);
+      }
+      if (rwndBytes > 65535) {
+        NS_LOG_WARN(
+            "RWND tuning is only supported for values <= 64KB, but chosen RWND "
+            "is: "
+            << rwndBytes << " bytes");
+        rwndBytes = std::min(rwndBytes, (uint16_t)65535u);
+      }
+      NS_LOG_LOGIC(rwndBytes);
+      tcpSocket->SetOverrideWindowSize(
+          rwndBytes >> tcpSocket->GetRcvWindShift());
+    }
   };
 
   if (m_totalBytesSoFar == m_burstBytes * m_senders.size()) {
