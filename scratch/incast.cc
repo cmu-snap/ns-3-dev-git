@@ -156,21 +156,21 @@ main(int argc, char *argv[]) {
 
   // Print node IDs
   std::ostringstream leftNodeIds;
-  leftNodeIds << "Left nodes: ";
+  leftNodeIds << "Left nodes (aggregator): ";
   for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
     leftNodeIds << dumbbellHelper.GetLeft(i)->GetId() << " ";
   }
   std::ostringstream rightNodeIds;
-  rightNodeIds << "Right nodes: ";
+  rightNodeIds << "Right nodes (senders): ";
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     rightNodeIds << dumbbellHelper.GetRight(i)->GetId() << " ";
   }
   NS_LOG_INFO(
       "Node IDs:" << std::endl
-                  << "\tLeft router: " << dumbbellHelper.GetLeft()->GetId()
-                  << std::endl
-                  << "\tRight router: " << dumbbellHelper.GetRight()->GetId()
-                  << std::endl
+                  << "\tLeft router (at aggregator): "
+                  << dumbbellHelper.GetLeft()->GetId() << std::endl
+                  << "\tRight router (at senders): "
+                  << dumbbellHelper.GetRight()->GetId() << std::endl
                   << "\t" << leftNodeIds.str() << std::endl
                   << "\t" << rightNodeIds.str());
 
