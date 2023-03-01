@@ -57,21 +57,6 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SetRoundFinishCallback(Callback<void> cb);
-
-  /**
-   * @brief TODO
-   */
-  void StartEvent();
-
-  /**
-   * @brief TODO
-   */
-  void StopEvent();
-
-  /**
-   * @brief TODO
-   */
   std::vector<Time> GetBurstDurations();
 
  protected:
@@ -124,12 +109,12 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void RoundFinish();
+  void StartRttProbes();
 
   /**
    * @brief TODO
    */
-  void ScheduleRttProbe(Time when);
+  void StopRttProbes();
 
   /**
    * @brief TODO
@@ -176,6 +161,12 @@ class IncastAggregator : public Application {
   uint32_t m_staticRwndBytes;
 
   uint32_t m_bandwidthMbps;
+
+  // Assumes that all senders have the same RTT.
+  Time m_physicalRtt;
+  Time m_minRtt;
+
+  bool m_probingRtt;
 };
 
 }  // namespace ns3

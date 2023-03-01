@@ -90,7 +90,13 @@ IncastAggregator::GetTypeId() {
                "this is the bottleneck bandwidth"),
               UintegerValue(0),
               MakeUintegerAccessor(&IncastAggregator::m_bandwidthMbps),
-              MakeUintegerChecker<uint32_t>());
+              MakeUintegerChecker<uint32_t>())
+          .AddAttribute(
+              "PhysicalRTT",
+              "The physical RTT.",
+              TimeValue(Seconds(0)),
+              MakeTimeAccessor(&IncastAggregator::m_physicalRtt),
+              MakeTimeChecker());
 
   return tid;
 }
@@ -103,16 +109,15 @@ IncastAggregator::IncastAggregator()
       m_port(8888),
       m_requestJitterUs(0),
       m_rwndStrategy("none"),
-      m_staticRwndBytes(65535) {
+      m_staticRwndBytes(65535),
+      m_bandwidthMbps(0),
+      m_physicalRtt(Seconds(0)),
+      m_minRtt(Seconds(0)),
+      m_probingRtt(false) {
   NS_LOG_FUNCTION(this);
 }
 
 IncastAggregator::~IncastAggregator() { NS_LOG_FUNCTION(this); }
-
-void
-IncastAggregator::StartEvent() {
-  NS_LOG_FUNCTION(this);
-}
 
 void
 IncastAggregator::DoDispose() {
@@ -177,26 +182,31 @@ void
 IncastAggregator::ScheduleNextBurst() {
   NS_LOG_FUNCTION(this);
 
-  ++m_burstCount;
-  m_totalBytesSoFar = 0;
-
-  if (m_burstCount > m_numBursts) {
-    Simulator::Schedule(Seconds(0), &IncastAggregator::StopApplication, this);
+  if (m_burstCount == m_numBursts) {
+    Simulator::Schedule(
+        MilliSeconds(10), &IncastAggregator::StopApplication, this);
     return;
   }
+
+  ++m_burstCount;
+  m_totalBytesSoFar = 0;
 
   // Schedule the next burst for 1 second later
   Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
   // Start the RTT probes 10ms before the next burst
-  ScheduleRttProbe(MilliSeconds(990));
+  Simulator::Schedule(
+      MilliSeconds(990), &IncastAggregator::StartRttProbes, this);
 }
 
 void
-IncastAggregator::ScheduleRttProbe(Time when) {
-  NS_LOG_FUNCTION(this);
+IncastAggregator::StartRttProbes() {
+  m_probingRtt = true;
+  Simulator::Schedule(Seconds(0), &IncastAggregator::SendRttProbe, this);
+}
 
-  // Schedule the next RTT probe for 1ms in the future
-  Simulator::Schedule(when, &IncastAggregator::SendRttProbe, this);
+void
+IncastAggregator::StopRttProbes() {
+  m_probingRtt = false;
 }
 
 void
@@ -209,9 +219,8 @@ IncastAggregator::SendRttProbe() {
     socket->Send(packet);
   }
 
-  // If the burst is not done yet, then schedule another RTT probe
-  if (m_totalBytesSoFar < m_burstBytes * m_senders.size()) {
-    ScheduleRttProbe(MilliSeconds(1));
+  if (m_probingRtt) {
+    Simulator::Schedule(MilliSeconds(1), &IncastAggregator::SendRttProbe, this);
   }
 }
 
@@ -253,15 +262,31 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     if (m_rwndStrategy == "bdp+connections") {
       // Set RWND based on the number of the BDP and number of connections.
       Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-      auto rtt = tcpSocket->GetTcpSocketState()->m_minRtt;
-      auto bdpBytes = rtt.GetSeconds() * m_bandwidthMbps * 1000000 / 8;
+      Time rtt = tcpSocket->GetRttEstimator()->GetEstimate();
+      if (rtt < m_physicalRtt) {
+        NS_LOG_LOGIC("Invalid RTT sample.");
+      } else {
+        if (m_minRtt == Seconds(0)) {
+          m_minRtt = rtt;
+        } else {
+          m_minRtt = Min(m_minRtt, rtt);
+        }
+      }
+      if (m_minRtt < m_physicalRtt) {
+        NS_LOG_LOGIC("Invalid or no minRtt measurement. Skipping RWND tuning.");
+        continue;
+      }
+
+      // auto rtt = tcpSocket->GetTcpSocketState()->m_minRtt;
+      auto bdpBytes = rtt.GetSeconds() * m_bandwidthMbps * pow(10, 6) / 8;
       auto numConns = m_sockets.size();
       uint16_t rwndBytes = (uint16_t)std::floor(bdpBytes / numConns);
 
       NS_LOG_LOGIC(
-          "Rtt: " << rtt.As(Time::US) << ", Bandwidth: " << m_bandwidthMbps
-                  << " Mbps, Connections: " << numConns << ", BDP: " << bdpBytes
-                  << " bytes, RWND: " << rwndBytes << " bytes");
+          "minRtt: " << m_minRtt.As(Time::US) << ", srtt: " << rtt.As(Time::US)
+                     << ", Bandwidth: " << m_bandwidthMbps
+                     << " Mbps, Connections: " << numConns << ", BDP: "
+                     << bdpBytes << " bytes, RWND: " << rwndBytes << " bytes");
       if (rwndBytes < 2000) {
         NS_LOG_WARN(
             "RWND tuning is only supported for values >= 2KB, but chosen RWND "
@@ -286,6 +311,8 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     m_burstDurationsSec.push_back(
         Simulator::Now() - m_currentBurstStartTimeSec);
     ScheduleNextBurst();
+    Simulator::Schedule(
+        MilliSeconds(10), &IncastAggregator::StopRttProbes, this);
   } else if (m_totalBytesSoFar > m_burstBytes * m_senders.size()) {
     NS_FATAL_ERROR("Aggregator: Received too many bytes");
   }

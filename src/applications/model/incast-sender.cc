@@ -117,7 +117,7 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
     if (size == sizeof(uint32_t) || size == 1 + sizeof(uint32_t)) {
       bool containsRttProbe = (size == 1 + sizeof(uint32_t));
       uint32_t requestedBytes = ParseRequestedBytes(packet, containsRttProbe);
-      NS_LOG_INFO("Received request for " << requestedBytes << " bytes");
+      NS_LOG_LOGIC("Received request for " << requestedBytes << " bytes");
 
       // Add jitter to the first packet of the response
       Time jitter;

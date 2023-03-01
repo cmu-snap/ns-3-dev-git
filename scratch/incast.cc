@@ -189,8 +189,8 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Configuring TCP parameters...");
   Config::SetDefault(
       "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
-  Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
-  Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
+  Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(pow(10, 9)));
+  Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
@@ -212,11 +212,9 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Configuring static global routing...");
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
+  NS_LOG_INFO("Creating queues...");
   // TODO: Add the same red queue disc to all of the other links as well
   // TODO: Two separate configurations, one for small and one for large
-
-  NS_LOG_INFO("Creating queues...");
-
   TrafficControlHelper smallLinkQueueHelper;
   smallLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
@@ -251,30 +249,7 @@ main(int argc, char *argv[]) {
     allSwitchSenderQueues.push_back(switchSenderQueues);
   }
 
-  NS_LOG_INFO("Configuring static global routing...");
-  Ipv4GlobalRoutingHelper::PopulateRoutingTables();
-
-  NS_LOG_INFO("Enabling tracing...");
-  // Use nanosecond timestamps for PCAP traces
-  Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
-  // Enable tracing at the aggregator
-  largeLink.EnablePcap("scratch/traces/incast-sockets", 2, 0);
-
-  NS_LOG_INFO("Configuring TCP parameters...");
-  Config::SetDefault(
-      "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
-  Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(4194304));
-  Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(6291456));
-  Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
-  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
-  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
-
-  // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
-  //                    UintegerValue(maxWin));
-  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
-
   NS_LOG_INFO("Configuring queue parameters...");
-
   // TODO: set diff parameters for diff queues
   // CLI: smallQueueSize, largeQueueSize, minTh = 20, maxTh = 20
 
@@ -308,6 +283,8 @@ main(int argc, char *argv[]) {
       "StaticRwndBytes", UintegerValue(staticRwndBytes));
   aggregatorApp->SetAttribute(
       "BandwidthMbps", UintegerValue(smallBandwidthMbps));
+  aggregatorApp->SetAttribute(
+      "PhysicalRTT", TimeValue(MicroSeconds(6 * delayUs)));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
@@ -333,6 +310,13 @@ main(int argc, char *argv[]) {
         0);
   }
 
+  double totalBytesPerBurst = burstBytes * numSenders;
+  double totalBytes = totalBytesPerBurst * numBursts;
+  NS_LOG_INFO(
+      "Data per burst: " << totalBytesPerBurst / pow(10, 6)
+                         << " MB, Total data: " << totalBytes / pow(10, 6)
+                         << " MB");
+
   NS_LOG_INFO("Running simulation...");
   Simulator::Run();
   Simulator::Stop();
@@ -354,7 +338,6 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO(
       "Ideal burst duration: " << idealBurstDurationSec * numMsInSec << "ms");
   NS_LOG_INFO("Burst durations (x ideal):");
-
   for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
     NS_LOG_INFO(
         burstDurationSec.As(Time::MS)
