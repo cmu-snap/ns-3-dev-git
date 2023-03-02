@@ -65,12 +65,16 @@ main(int argc, char *argv[]) {
   uint32_t numSenders = 3;
   uint32_t burstBytes = 4096;
   uint32_t unitSize = 3000;
-  uint16_t maxWin = 65535;
+  uint32_t maxWin = 65535;
   uint32_t numBursts = 10;
   uint32_t jitterUs = 0;
   float delayUs = 25;
   float smallBandwidthMbps = 12.5;
   float largeBandwidthMbps = 800.0;
+  uint32_t smallQueueSize = 150;
+  uint32_t largeQueueSize = 150;
+  uint32_t minThreshold = 20;
+  uint32_t maxThreshold = 20;
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
 
@@ -101,9 +105,24 @@ main(int argc, char *argv[]) {
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
   cmd.AddValue(
       "jitterUs",
-      ("Max random jitter in sending request and responses, "
-       "in microseconds"),
+      "Max random jitter in sending request and responses (in microseconds)",
       jitterUs);
+	cmd.AddValue(
+      "smallQueueSize",
+      "Max number of packets accepted by queues on the small link",
+      smallQueueSize);
+	cmd.AddValue(
+      "largeQueueSize",
+      "Max number of packets accepted by queues on the large link",
+      largeQueueSize);
+	cmd.AddValue(
+      "minThreshold",
+      "Min average length threshold in packets/bytes",
+      minThreshold);
+	cmd.AddValue(
+      "maxThreshold",
+      "Max average length threshold in packets/bytes",
+      maxThreshold);
   cmd.AddValue(
       "rwndStrategy",
       "RWND tuning strategy to use [none, static, bdp+connections]",
@@ -124,7 +143,7 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Building incast topology...");
 
-  // Convert float values to string values
+  // Convert numeric values to usable values
   std::ostringstream delayUsString;
   delayUsString << delayUs << "us";
   StringValue delayUsStringValue = StringValue(delayUsString.str());
@@ -139,16 +158,27 @@ main(int argc, char *argv[]) {
   StringValue largeBandwidthMbpsStringValue =
       StringValue(largeBandwidthMbpsString.str());
 
+  std::ostringstream smallQueueSizeString;
+  smallQueueSizeString << smallQueueSize << "p";
+  QueueSizeValue smallQueueSizeValue =
+      QueueSizeValue(QueueSize(smallQueueSizeString.str()));
+
+  std::ostringstream largeQueueSizeString;
+  largeQueueSizeString << largeQueueSize << "p";
+  QueueSizeValue largeQueueSizeValue =
+      QueueSizeValue(QueueSize(largeQueueSizeString.str()));
+
+  DoubleValue minThresholdValue = DoubleValue(minThreshold);
+  DoubleValue maxThresholdValue = DoubleValue(maxThreshold);
+
   // Create links
   PointToPointHelper smallLink;
   smallLink.SetDeviceAttribute("DataRate", smallBandwidthMbpsStringValue);
   smallLink.SetChannelAttribute("Delay", delayUsStringValue);
-  // smallLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("150p"));
 
   PointToPointHelper largeLink;
   largeLink.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
   largeLink.SetChannelAttribute("Delay", delayUsStringValue);
-  // largeLink.SetQueue("ns3::DropTailQueue", "MaxSize", StringValue("150p"));
 
   // Create dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(
@@ -204,6 +234,7 @@ main(int argc, char *argv[]) {
       Ipv4AddressHelper("10.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
+
   // Collect sender addresses
   std::list<Ipv4Address> senderAddresses;
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
@@ -213,15 +244,20 @@ main(int argc, char *argv[]) {
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
   NS_LOG_INFO("Creating queues...");
-  // TODO: Add the same red queue disc to all of the other links as well
-  // TODO: Two separate configurations, one for small and one for large
+
   TrafficControlHelper smallLinkQueueHelper;
   smallLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
       smallBandwidthMbpsStringValue,
       "LinkDelay",
-      delayUsStringValue);
+      delayUsStringValue,
+      "MaxSize",
+      smallQueueSizeValue,
+      "MinTh",
+      minThresholdValue,
+      "MaxTh",
+      maxThresholdValue);
 
   TrafficControlHelper largeLinkQueueHelper;
   largeLinkQueueHelper.SetRootQueueDisc(
@@ -229,7 +265,30 @@ main(int argc, char *argv[]) {
       "LinkBandwidth",
       largeBandwidthMbpsStringValue,
       "LinkDelay",
-      delayUsStringValue);
+      delayUsStringValue,
+      "MaxSize",
+      largeQueueSizeValue,
+      "MinTh",
+      minThresholdValue,
+      "MaxTh",
+      maxThresholdValue);
+
+  // Set default parameters for RED queue disc
+  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+  // ARED may be used but the queueing delays will increase; it is disabled
+  // here because the SIGCOMM paper did not mention it
+  // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
+  // Config::SetDefault ("ns3::RedQueueDisc::Gentle", BooleanValue (true));
+  Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
+  Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
+  // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
+  // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
+  Config::SetDefault(
+      "ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
+  // DCTCP tracks instantaneous queue length only; so set QW = 1
+  Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
+  Config::SetDefault("ns3::RedQueueDisc::MinTh", minThresholdValue);
+  Config::SetDefault("ns3::RedQueueDisc::MaxTh", maxThresholdValue);
 
   NetDeviceContainer aggregatorSwitchDevices =
       smallLink.Install(dumbbellHelper.GetLeft(0), dumbbellHelper.GetLeft());
@@ -248,27 +307,6 @@ main(int argc, char *argv[]) {
         smallLinkQueueHelper.Install(switchSenderDevices);
     allSwitchSenderQueues.push_back(switchSenderQueues);
   }
-
-  NS_LOG_INFO("Configuring queue parameters...");
-  // TODO: set diff parameters for diff queues
-  // CLI: smallQueueSize, largeQueueSize, minTh = 20, maxTh = 20
-
-  // Set default parameters for RED queue disc
-  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
-  // ARED may be used but the queueing delays will increase; it is disabled
-  // here because the SIGCOMM paper did not mention it
-  // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
-  // Config::SetDefault ("ns3::RedQueueDisc::Gentle", BooleanValue (true));
-  Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
-  Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
-  // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
-  // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
-  Config::SetDefault(
-      "ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
-  // DCTCP tracks instantaneous queue length only; so set QW = 1
-  Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
-  Config::SetDefault("ns3::RedQueueDisc::MinTh", DoubleValue(20));
-  Config::SetDefault("ns3::RedQueueDisc::MaxTh", DoubleValue(20));
 
   NS_LOG_INFO("Creating applications...");
   // Create the aggregator application
