@@ -20,7 +20,7 @@
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 //
 // Run with:
-//     $ ./ns3 run "scratch/incast --burstBytes=50000 --numBursts=5
+//     $ ./ns3 run "scratch/incast --bytesPerSender=50000 --numBursts=5
 //           --numSenders=200 --jitterUs=100 --smallBandwidthMbps=12500
 //           --largeBandwidthMbps=100000
 
@@ -46,6 +46,8 @@
  *    Left(i)            Left()             Right()          Right(i)
  * [aggregator] --1-- [ToR switch] ==2== [ToR switch] --1-- [senders]
  *
+ * 1: small link
+ * 2: large link
  */
 
 using namespace ns3;
@@ -62,19 +64,18 @@ main(int argc, char *argv[]) {
 
   // Initialize variables
   std::string tcpTypeId = "TcpCubic";
-  uint32_t numSenders = 3;
-  uint32_t burstBytes = 4096;
-  uint32_t unitSize = 3000;
-  uint32_t maxWin = 65535;
-  uint32_t numBursts = 10;
-  uint32_t jitterUs = 0;
+  uint32_t numBursts = 5;
+  uint32_t numSenders = 200;
+  uint32_t bytesPerSender = 50000;
   float delayUs = 25;
-  float smallBandwidthMbps = 12.5;
-  float largeBandwidthMbps = 800.0;
+  uint32_t jitterUs = 100;
+  float smallBandwidthMbps = 12500;
+  float largeBandwidthMbps = 100000;
   uint32_t smallQueueSize = 150;
   uint32_t largeQueueSize = 150;
   uint32_t minThreshold = 20;
   uint32_t maxThreshold = 20;
+  uint32_t maxWindow = 65535;
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
 
@@ -84,13 +85,16 @@ main(int argc, char *argv[]) {
       "cca",
       "Congestion control algorithm (e.g., TcpCubic, TcpDctcp, etc.)",
       tcpTypeId);
+  cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
   cmd.AddValue("numSenders", "Number of incast senders", numSenders);
-  // cmd.AddValue("buffersize", "Drop-tail queue buffer size in bytes",
-  // bufferSize);
   cmd.AddValue(
-      "burstBytes",
-      "Number of bytes for each worker to send for each burst",
-      burstBytes);
+      "bytesPerSender",
+      "Number of bytes for each sender to send for each burst",
+      bytesPerSender);
+  cmd.AddValue(
+      "jitterUs",
+      "Maximum random jitter when sending requests (in microseconds)",
+      jitterUs);
   cmd.AddValue(
       "smallBandwidthMbps",
       "Small link bandwidth (in Mbps)",
@@ -99,29 +103,22 @@ main(int argc, char *argv[]) {
       "largeBandwidthMbps",
       "Large link bandwidth (in Mbps)",
       largeBandwidthMbps);
+  cmd.AddValue("maxWindow", "Maximum size of the advertised window", maxWindow);
   cmd.AddValue(
-      "unitSize", "Size of virtual bytes increment upon SYN packets", unitSize);
-  cmd.AddValue("maxWin", "Maximum size of advertised window", maxWin);
-  cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
-  cmd.AddValue(
-      "jitterUs",
-      "Max random jitter in sending request and responses (in microseconds)",
-      jitterUs);
-	cmd.AddValue(
       "smallQueueSize",
-      "Max number of packets accepted by queues on the small link",
+      "Maximum number of packets accepted by queues on the small link",
       smallQueueSize);
-	cmd.AddValue(
+  cmd.AddValue(
       "largeQueueSize",
-      "Max number of packets accepted by queues on the large link",
+      "Maximum number of packets accepted by queues on the large link",
       largeQueueSize);
-	cmd.AddValue(
+  cmd.AddValue(
       "minThreshold",
-      "Min average length threshold in packets/bytes",
+      "Minimum average length threshold (in packets/bytes)",
       minThreshold);
-	cmd.AddValue(
+  cmd.AddValue(
       "maxThreshold",
-      "Max average length threshold in packets/bytes",
+      "Maximum average length threshold (in packets/bytes)",
       maxThreshold);
   cmd.AddValue(
       "rwndStrategy",
@@ -133,15 +130,15 @@ main(int argc, char *argv[]) {
       staticRwndBytes);
   cmd.Parse(argc, argv);
 
+  // Check if the large link will be overwhelmed
   uint32_t totalIncastMbps = smallBandwidthMbps * numSenders;
+
   if (totalIncastMbps > largeBandwidthMbps) {
     NS_LOG_WARN(
         "Total incast bandwidth (" << totalIncastMbps
                                    << "Mbps) exceeds large link bandwidth ("
                                    << largeBandwidthMbps << "Mbps)");
   }
-
-  NS_LOG_INFO("Building incast topology...");
 
   // Convert numeric values to usable values
   std::ostringstream delayUsString;
@@ -171,18 +168,20 @@ main(int argc, char *argv[]) {
   DoubleValue minThresholdValue = DoubleValue(minThreshold);
   DoubleValue maxThresholdValue = DoubleValue(maxThreshold);
 
-  // Create links
-  PointToPointHelper smallLink;
-  smallLink.SetDeviceAttribute("DataRate", smallBandwidthMbpsStringValue);
-  smallLink.SetChannelAttribute("Delay", delayUsStringValue);
+  NS_LOG_INFO("Building incast topology...");
 
-  PointToPointHelper largeLink;
-  largeLink.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
-  largeLink.SetChannelAttribute("Delay", delayUsStringValue);
+  // Create links
+  PointToPointHelper smallLinkHelper;
+  smallLinkHelper.SetDeviceAttribute("DataRate", smallBandwidthMbpsStringValue);
+  smallLinkHelper.SetChannelAttribute("Delay", delayUsStringValue);
+
+  PointToPointHelper largeLinkHelper;
+  largeLinkHelper.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
+  largeLinkHelper.SetChannelAttribute("Delay", delayUsStringValue);
 
   // Create dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(
-      1, smallLink, numSenders, smallLink, largeLink);
+      1, smallLinkHelper, numSenders, smallLinkHelper, largeLinkHelper);
 
   // Print node IDs
   std::ostringstream leftNodeIds;
@@ -190,11 +189,13 @@ main(int argc, char *argv[]) {
   for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
     leftNodeIds << dumbbellHelper.GetLeft(i)->GetId() << " ";
   }
+
   std::ostringstream rightNodeIds;
   rightNodeIds << "Right nodes (senders): ";
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     rightNodeIds << dumbbellHelper.GetRight(i)->GetId() << " ";
   }
+
   NS_LOG_INFO(
       "Node IDs:" << std::endl
                   << "\tLeft router (at aggregator): "
@@ -204,19 +205,24 @@ main(int argc, char *argv[]) {
                   << "\t" << leftNodeIds.str() << std::endl
                   << "\t" << rightNodeIds.str());
 
-  // Install TCP stack on all nodes
   NS_LOG_INFO("Installing TCP stack on all nodes...");
-  InternetStackHelper stack;
+
+  // Install TCP stack on all nodes
+  InternetStackHelper stackHelper;
+
   for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
-    stack.Install(dumbbellHelper.GetLeft(i));
+    stackHelper.Install(dumbbellHelper.GetLeft(i));
   }
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    stack.Install(dumbbellHelper.GetRight(i));
+    stackHelper.Install(dumbbellHelper.GetRight(i));
   }
-  stack.Install(dumbbellHelper.GetLeft());
-  stack.Install(dumbbellHelper.GetRight());
+
+  stackHelper.Install(dumbbellHelper.GetLeft());
+  stackHelper.Install(dumbbellHelper.GetRight());
 
   NS_LOG_INFO("Configuring TCP parameters...");
+
+  // Set global TCP parameters
   Config::SetDefault(
       "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(pow(10, 9)));
@@ -225,27 +231,34 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
   // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
-  //                    UintegerValue(maxWin));
+  //                    UintegerValue(maxWindow));
   // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
 
-  // Assign IP Addresses.
   NS_LOG_INFO("Assigning IP addresses...");
+
+  // Assign IP Addresses
   dumbbellHelper.AssignIpv4Addresses(
       Ipv4AddressHelper("10.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
 
   // Collect sender addresses
-  std::list<Ipv4Address> senderAddresses;
+  std::vector<Ipv4Address> allSenderAddresses;
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    senderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
+    allSenderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
   }
+
   NS_LOG_INFO("Configuring static global routing...");
+
+  // Build the global routing table
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
 
   NS_LOG_INFO("Creating queues...");
 
+  // Configure different queues for each link
   TrafficControlHelper smallLinkQueueHelper;
+  TrafficControlHelper largeLinkQueueHelper;
+
   smallLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
@@ -258,8 +271,6 @@ main(int argc, char *argv[]) {
       minThresholdValue,
       "MaxTh",
       maxThresholdValue);
-
-  TrafficControlHelper largeLinkQueueHelper;
   largeLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
@@ -290,18 +301,18 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::MinTh", minThresholdValue);
   Config::SetDefault("ns3::RedQueueDisc::MaxTh", maxThresholdValue);
 
-  NetDeviceContainer aggregatorSwitchDevices =
-      smallLink.Install(dumbbellHelper.GetLeft(0), dumbbellHelper.GetLeft());
+  NetDeviceContainer aggregatorSwitchDevices = smallLinkHelper.Install(
+      dumbbellHelper.GetLeft(0), dumbbellHelper.GetLeft());
   QueueDiscContainer aggregatorSwitchQueues =
       smallLinkQueueHelper.Install(aggregatorSwitchDevices);
 
-  NetDeviceContainer switchDevices =
-      largeLink.Install(dumbbellHelper.GetLeft(), dumbbellHelper.GetRight());
+  NetDeviceContainer switchDevices = largeLinkHelper.Install(
+      dumbbellHelper.GetLeft(), dumbbellHelper.GetRight());
   QueueDiscContainer switchQueues = largeLinkQueueHelper.Install(switchDevices);
 
-  std::list<QueueDiscContainer> allSwitchSenderQueues;
+  std::vector<QueueDiscContainer> allSwitchSenderQueues;
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    NetDeviceContainer switchSenderDevices = smallLink.Install(
+    NetDeviceContainer switchSenderDevices = smallLinkHelper.Install(
         dumbbellHelper.GetRight(), dumbbellHelper.GetRight(i));
     QueueDiscContainer switchSenderQueues =
         smallLinkQueueHelper.Install(switchSenderDevices);
@@ -309,12 +320,13 @@ main(int argc, char *argv[]) {
   }
 
   NS_LOG_INFO("Creating applications...");
+
   // Create the aggregator application
   Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
-  aggregatorApp->SetSenders(senderAddresses);
+  aggregatorApp->SetSenders(allSenderAddresses);
   aggregatorApp->SetStartTime(Seconds(1.0));
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
-  aggregatorApp->SetAttribute("BurstBytes", UintegerValue(burstBytes));
+  aggregatorApp->SetAttribute("BytesPerSender", UintegerValue(bytesPerSender));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
   aggregatorApp->SetAttribute(
@@ -324,6 +336,7 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute(
       "PhysicalRTT", TimeValue(MicroSeconds(6 * delayUs)));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
+
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
@@ -335,46 +348,53 @@ main(int argc, char *argv[]) {
   }
 
   NS_LOG_INFO("Enabling tracing...");
+
   // Use nanosecond timestamps for PCAP traces
   Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
   // Enable tracing at the aggregator
-  largeLink.EnablePcap(
+  largeLinkHelper.EnablePcap(
       "scratch/traces/incast-sockets", dumbbellHelper.GetLeft(0)->GetId(), 0);
   // Enable tracing at each sender
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    largeLink.EnablePcap(
+    largeLinkHelper.EnablePcap(
         "scratch/traces/incast-sockets",
         dumbbellHelper.GetRight(i)->GetId(),
         0);
   }
 
-  double totalBytesPerBurst = burstBytes * numSenders;
+  // Compute the data per burst
+  double totalBytesPerBurst = bytesPerSender * numSenders;
   double totalBytes = totalBytesPerBurst * numBursts;
+  int megaToBase = pow(10, 6);
+
   NS_LOG_INFO(
-      "Data per burst: " << totalBytesPerBurst / pow(10, 6)
-                         << " MB, Total data: " << totalBytes / pow(10, 6)
+      "Data per burst: " << totalBytesPerBurst / megaToBase
+                         << " MB, Total data: " << totalBytes / megaToBase
                          << " MB");
 
   NS_LOG_INFO("Running simulation...");
+
   Simulator::Run();
   Simulator::Stop();
   Simulator::Destroy();
-  NS_LOG_INFO("Done.");
 
+  NS_LOG_INFO("Finished simulation.");
+
+  // Compute the ideal and actual burst durations
   int numBitsInByte = 8;
   int numHops = 3;
   int numMsInSec = 1000;
-  int megaToBase = pow(10, 6);
 
   double idealBurstDurationSec =
       // Time to transmit the burst.
-      (double)burstBytes * numSenders * numBitsInByte /
+      (double)bytesPerSender * numSenders * numBitsInByte /
           (smallBandwidthMbps * megaToBase) +
       // 1 RTT for the request and the first response packet to propgate.
       numHops * 2 * delayUs / megaToBase;
 
   NS_LOG_INFO(
       "Ideal burst duration: " << idealBurstDurationSec * numMsInSec << "ms");
+
   NS_LOG_INFO("Burst durations (x ideal):");
   for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
     NS_LOG_INFO(

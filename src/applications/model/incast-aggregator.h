@@ -52,7 +52,7 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SetSenders(const std::list<Ipv4Address>& n);
+  void SetSenders(const std::vector<Ipv4Address>& senders);
 
   /**
    * @brief TODO
@@ -128,7 +128,7 @@ class IncastAggregator : public Application {
   uint32_t m_burstCount;
 
   // For each burst, the number of bytes to request from each sender
-  uint32_t m_burstBytes;
+  uint32_t m_bytesPerSender;
 
   // The number of total bytes received from all workers in the current burst
   uint32_t m_totalBytesSoFar;
@@ -140,10 +140,10 @@ class IncastAggregator : public Application {
   TypeId m_tid;
 
   // List of associated sockets
-  std::list<Ptr<Socket>> m_sockets;
+  std::vector<Ptr<Socket>> m_sockets;
 
   // List of addresses for associated senders
-  std::list<Ipv4Address> m_senders;
+  std::vector<Ipv4Address> m_senders;
 
   // Max random jitter in microseconds
   uint32_t m_requestJitterUs;

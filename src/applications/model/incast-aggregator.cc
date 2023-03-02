@@ -49,14 +49,14 @@ IncastAggregator::GetTypeId() {
               MakeUintegerAccessor(&IncastAggregator::m_numBursts),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
-              "BurstBytes",
-              "For each burst, the number of bytes to request from each worker",
+              "BytesPerSender",
+              "Number of bytes to request from each sender for each burst",
               UintegerValue(1448),
-              MakeUintegerAccessor(&IncastAggregator::m_burstBytes),
+              MakeUintegerAccessor(&IncastAggregator::m_bytesPerSender),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "RequestJitterUs",
-              "Max random jitter in sending requests, in microseconds",
+              "Maximum random jitter when sending requests (in microseconds)",
               UintegerValue(0),
               MakeUintegerAccessor(&IncastAggregator::m_requestJitterUs),
               MakeUintegerChecker<uint32_t>())
@@ -86,14 +86,14 @@ IncastAggregator::GetTypeId() {
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "BandwidthMbps",
-              ("If RwndStrategy=bdp+connections, then assume that "
-               "this is the bottleneck bandwidth"),
+              "If RwndStrategy=bdp+connections, then assume that this is the "
+              "bottleneck bandwidth",
               UintegerValue(0),
               MakeUintegerAccessor(&IncastAggregator::m_bandwidthMbps),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "PhysicalRTT",
-              "The physical RTT.",
+              "Physical RTT",
               TimeValue(Seconds(0)),
               MakeTimeAccessor(&IncastAggregator::m_physicalRtt),
               MakeTimeChecker());
@@ -104,7 +104,7 @@ IncastAggregator::GetTypeId() {
 IncastAggregator::IncastAggregator()
     : m_numBursts(10),
       m_burstCount(0),
-      m_burstBytes(1448),
+      m_bytesPerSender(1448),
       m_totalBytesSoFar(0),
       m_port(8888),
       m_requestJitterUs(0),
@@ -128,7 +128,7 @@ IncastAggregator::DoDispose() {
 }
 
 void
-IncastAggregator::SetSenders(const std::list<Ipv4Address> &senders) {
+IncastAggregator::SetSenders(const std::vector<Ipv4Address> &senders) {
   NS_LOG_FUNCTION(this);
   m_senders = senders;
 }
@@ -246,7 +246,7 @@ IncastAggregator::SendRequest(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
 
   Ptr<Packet> packet =
-      Create<Packet>((uint8_t *)&m_burstBytes, sizeof(uint32_t));
+      Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
   socket->Send(packet);
 }
 
@@ -307,13 +307,13 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     }
   };
 
-  if (m_totalBytesSoFar == m_burstBytes * m_senders.size()) {
+  if (m_totalBytesSoFar == m_bytesPerSender * m_senders.size()) {
     m_burstDurationsSec.push_back(
         Simulator::Now() - m_currentBurstStartTimeSec);
     ScheduleNextBurst();
     Simulator::Schedule(
         MilliSeconds(10), &IncastAggregator::StopRttProbes, this);
-  } else if (m_totalBytesSoFar > m_burstBytes * m_senders.size()) {
+  } else if (m_totalBytesSoFar > m_bytesPerSender * m_senders.size()) {
     NS_FATAL_ERROR("Aggregator: Received too many bytes");
   }
 }

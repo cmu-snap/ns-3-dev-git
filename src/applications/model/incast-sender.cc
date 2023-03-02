@@ -145,13 +145,13 @@ IncastSender::ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe) {
 }
 
 void
-IncastSender::SendBurst(Ptr<Socket> socket, uint32_t burstBytes) {
+IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(this);
 
   size_t sentBytes = 0;
 
-  while (sentBytes < burstBytes && socket->GetTxAvailable()) {
-    int toSend = burstBytes - sentBytes;
+  while (sentBytes < totalBytes && socket->GetTxAvailable()) {
+    int toSend = totalBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
     int newSentBytes = socket->Send(packet);
 
