@@ -186,6 +186,7 @@ IncastAggregator::ScheduleNextBurst() {
   if (m_burstCount == m_numBursts) {
     Simulator::Schedule(
         MilliSeconds(10), &IncastAggregator::StopApplication, this);
+    Simulator::Stop(MilliSeconds(10));
     return;
   }
 

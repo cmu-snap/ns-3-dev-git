@@ -81,6 +81,14 @@ PointToPointDumbbellHelper::GetLeft(uint32_t i) const
     return m_leftLeaf.Get(i);
 }
 
+Ptr<NetDevice> PointToPointDumbbellHelper::GetLeftDevice(uint32_t i) const {
+    return m_rightLeafDevices.Get(i);
+}
+
+NetDeviceContainer PointToPointDumbbellHelper::GetLeftDevices() const {
+    return m_leftLeafDevices;
+}
+
 Ptr<Node>
 PointToPointDumbbellHelper::GetRight() const
 { // Get the right side bottleneck router
@@ -91,6 +99,26 @@ Ptr<Node>
 PointToPointDumbbellHelper::GetRight(uint32_t i) const
 { // Get the i'th right side leaf
     return m_rightLeaf.Get(i);
+}
+
+Ptr<NetDevice> PointToPointDumbbellHelper::GetRightDevice(uint32_t i) const {
+    return m_rightLeafDevices.Get(i);
+}
+
+NetDeviceContainer PointToPointDumbbellHelper::GetRightDevices() const {
+    return m_rightLeafDevices;
+}
+
+NetDeviceContainer PointToPointDumbbellHelper::GetRouterDevices() const {
+    return m_routerDevices;
+}
+
+NetDeviceContainer PointToPointDumbbellHelper::GetLeftRouterDevices() const {
+    return m_leftRouterDevices;
+}
+
+NetDeviceContainer PointToPointDumbbellHelper::GetRightRouterDevices() const {
+    return m_rightRouterDevices;
 }
 
 Ipv4Address

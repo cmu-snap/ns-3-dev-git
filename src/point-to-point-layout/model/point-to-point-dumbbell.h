@@ -83,6 +83,14 @@ class PointToPointDumbbellHelper
     Ptr<Node> GetLeft(uint32_t i) const;
 
     /**
+     * \returns pointer to the i'th left side NetDevice
+     * \param i node number
+     */
+    Ptr<NetDevice> GetLeftDevice(uint32_t i) const;
+
+    NetDeviceContainer GetLeftDevices() const;
+
+    /**
      * \returns pointer to the node of the right side bottleneck
      *          router
      */
@@ -93,6 +101,20 @@ class PointToPointDumbbellHelper
      * \param i node number
      */
     Ptr<Node> GetRight(uint32_t i) const;
+
+    /**
+     * \returns pointer to the i'th right side NetDevice
+     * \param i node number
+     */
+    Ptr<NetDevice> GetRightDevice(uint32_t i) const;
+
+    NetDeviceContainer GetRightDevices() const;
+
+    NetDeviceContainer GetRouterDevices() const;
+
+    NetDeviceContainer GetLeftRouterDevices() const;
+
+    NetDeviceContainer GetRightRouterDevices() const;
 
     /**
      * \returns an Ipv4Address of the i'th left leaf
