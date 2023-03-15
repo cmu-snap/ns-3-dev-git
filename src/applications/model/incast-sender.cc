@@ -24,6 +24,7 @@
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
 #include "ns3/log.h"
+#include "ns3/pointer.h"
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
 
@@ -149,6 +150,12 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(this);
 
   size_t sentBytes = 0;
+
+  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+  PointerValue ccPtr;
+  tcpSocket->GetAttribute("CongestionOps", ccPtr);
+  Ptr<TcpCongestionOps> cc = ccPtr.Get<TcpCongestionOps>();
+  NS_LOG_INFO("Sender CCA: " << cc->GetName());
 
   while (sentBytes < totalBytes && socket->GetTxAvailable()) {
     int toSend = totalBytes - sentBytes;

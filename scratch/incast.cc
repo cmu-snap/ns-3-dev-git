@@ -65,17 +65,24 @@ main(int argc, char *argv[]) {
   // Initialize variables
   std::string tcpTypeId = "TcpCubic";
   uint32_t numBursts = 5;
-  uint32_t numSenders = 200;
-  uint32_t bytesPerSender = 50000;
-  float delayUs = 25;
+  uint32_t numSenders = 10;
+  uint32_t bytesPerSender = 500000;
+  float perLinkDelayUs = 25;
   uint32_t jitterUs = 100;
+
+  // Parameters for the small links (ToR to node)
   float smallBandwidthMbps = 12500;
+  uint32_t smallQueueSize = 2666;
+  uint32_t smallMinThreshold = 20;
+  uint32_t smallMaxThreshold = 60;
+
+  // Parameters for the large links (ToR to ToR)
   float largeBandwidthMbps = 100000;
-  uint32_t smallQueueSize = 150;
-  uint32_t largeQueueSize = 150;
-  uint32_t minThreshold = 20;
-  uint32_t maxThreshold = 20;
-  uint32_t maxWindow = 65535;
+  uint32_t largeQueueSize = 2666;
+  uint32_t largeMinThreshold = 50;
+  uint32_t largeMaxThreshold = 150;
+
+  // RWND tuning parameters
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
 
@@ -103,23 +110,30 @@ main(int argc, char *argv[]) {
       "largeBandwidthMbps",
       "Large link bandwidth (in Mbps)",
       largeBandwidthMbps);
-  cmd.AddValue("maxWindow", "Maximum size of the advertised window", maxWindow);
   cmd.AddValue(
       "smallQueueSize",
       "Maximum number of packets accepted by queues on the small link",
       smallQueueSize);
   cmd.AddValue(
+      "smallMinThreshold",
+      "Minimum average length threshold (in packets/bytes)",
+      smallMinThreshold);
+  cmd.AddValue(
+      "smallMaxThreshold",
+      "Maximum average length threshold (in packets/bytes)",
+      smallMaxThreshold);
+  cmd.AddValue(
       "largeQueueSize",
       "Maximum number of packets accepted by queues on the large link",
       largeQueueSize);
   cmd.AddValue(
-      "minThreshold",
+      "largeMinThreshold",
       "Minimum average length threshold (in packets/bytes)",
-      minThreshold);
+      largeMinThreshold);
   cmd.AddValue(
-      "maxThreshold",
+      "largeMaxThreshold",
       "Maximum average length threshold (in packets/bytes)",
-      maxThreshold);
+      largeMaxThreshold);
   cmd.AddValue(
       "rwndStrategy",
       "RWND tuning strategy to use [none, static, bdp+connections]",
@@ -141,9 +155,10 @@ main(int argc, char *argv[]) {
   }
 
   // Convert numeric values to usable values
-  std::ostringstream delayUsString;
-  delayUsString << delayUs << "us";
-  StringValue delayUsStringValue = StringValue(delayUsString.str());
+  std::ostringstream perLinkDelayUsString;
+  perLinkDelayUsString << perLinkDelayUs << "us";
+  StringValue perLinkDelayUsStringValue =
+      StringValue(perLinkDelayUsString.str());
 
   std::ostringstream smallBandwidthMbpsString;
   smallBandwidthMbpsString << smallBandwidthMbps << "Mbps";
@@ -165,19 +180,16 @@ main(int argc, char *argv[]) {
   QueueSizeValue largeQueueSizeValue =
       QueueSizeValue(QueueSize(largeQueueSizeString.str()));
 
-  DoubleValue minThresholdValue = DoubleValue(minThreshold);
-  DoubleValue maxThresholdValue = DoubleValue(maxThreshold);
-
   NS_LOG_INFO("Building incast topology...");
 
   // Create links
   PointToPointHelper smallLinkHelper;
   smallLinkHelper.SetDeviceAttribute("DataRate", smallBandwidthMbpsStringValue);
-  smallLinkHelper.SetChannelAttribute("Delay", delayUsStringValue);
+  smallLinkHelper.SetChannelAttribute("Delay", perLinkDelayUsStringValue);
 
   PointToPointHelper largeLinkHelper;
   largeLinkHelper.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
-  largeLinkHelper.SetChannelAttribute("Delay", delayUsStringValue);
+  largeLinkHelper.SetChannelAttribute("Delay", perLinkDelayUsStringValue);
 
   // Create dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(
@@ -230,9 +242,6 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
-  // Config::SetDefault("ns3::TcpSocketBase::MaxWindowSize",
-  //                    UintegerValue(maxWindow));
-  // Config::SetDefault ("ns3::TcpNewReno::ReTxThreshold", UintegerValue(2));
 
   NS_LOG_INFO("Assigning IP addresses...");
 
@@ -264,25 +273,25 @@ main(int argc, char *argv[]) {
       "LinkBandwidth",
       smallBandwidthMbpsStringValue,
       "LinkDelay",
-      delayUsStringValue,
+      perLinkDelayUsStringValue,
       "MaxSize",
       smallQueueSizeValue,
       "MinTh",
-      minThresholdValue,
+      DoubleValue(smallMinThreshold),
       "MaxTh",
-      maxThresholdValue);
+      DoubleValue(smallMaxThreshold));
   largeLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
       largeBandwidthMbpsStringValue,
       "LinkDelay",
-      delayUsStringValue,
+      perLinkDelayUsStringValue,
       "MaxSize",
       largeQueueSizeValue,
       "MinTh",
-      minThresholdValue,
+      DoubleValue(largeMinThreshold),
       "MaxTh",
-      maxThresholdValue);
+      DoubleValue(largeMaxThreshold));
 
   // Set default parameters for RED queue disc
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
@@ -294,12 +303,12 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
   // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
   // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
-  Config::SetDefault(
-      "ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
+//   Config::SetDefault(
+//       "ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
   // DCTCP tracks instantaneous queue length only; so set QW = 1
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
-  Config::SetDefault("ns3::RedQueueDisc::MinTh", minThresholdValue);
-  Config::SetDefault("ns3::RedQueueDisc::MaxTh", maxThresholdValue);
+//   Config::SetDefault("ns3::RedQueueDisc::MinTh", minThresholdValue);
+//   Config::SetDefault("ns3::RedQueueDisc::MaxTh", maxThresholdValue);
 
   NetDeviceContainer aggregatorSwitchDevices = smallLinkHelper.Install(
       dumbbellHelper.GetLeft(0), dumbbellHelper.GetLeft());
@@ -334,7 +343,7 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute(
       "BandwidthMbps", UintegerValue(smallBandwidthMbps));
   aggregatorApp->SetAttribute(
-      "PhysicalRTT", TimeValue(MicroSeconds(6 * delayUs)));
+      "PhysicalRTT", TimeValue(MicroSeconds(6 * perLinkDelayUs)));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
@@ -390,7 +399,7 @@ main(int argc, char *argv[]) {
       (double)bytesPerSender * numSenders * numBitsInByte /
           (smallBandwidthMbps * megaToBase) +
       // 1 RTT for the request and the first response packet to propgate.
-      numHops * 2 * delayUs / megaToBase;
+      numHops * 2 * perLinkDelayUs / megaToBase;
 
   NS_LOG_INFO(
       "Ideal burst duration: " << idealBurstDurationSec * numMsInSec << "ms");

@@ -24,6 +24,7 @@
 #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
 #include "ns3/log.h"
+#include "ns3/pointer.h"
 #include "ns3/string.h"
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
@@ -248,6 +249,12 @@ IncastAggregator::SendRequest(Ptr<Socket> socket) {
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
   socket->Send(packet);
+
+  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+  PointerValue ccPtr;
+  tcpSocket->GetAttribute("CongestionOps", ccPtr);
+  Ptr<TcpCongestionOps> cc = ccPtr.Get<TcpCongestionOps>();
+  NS_LOG_INFO("Aggregator CCA: " << cc->GetName());
 }
 
 void
