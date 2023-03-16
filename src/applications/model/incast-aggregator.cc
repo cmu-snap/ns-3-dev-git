@@ -37,6 +37,8 @@ namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
+std::ofstream burstTimesOut;
+
 TypeId
 IncastAggregator::GetTypeId() {
   static TypeId tid =
@@ -72,6 +74,12 @@ IncastAggregator::GetTypeId() {
               "TypeId of the protocol used",
               TypeIdValue(TcpSocketFactory::GetTypeId()),
               MakeTypeIdAccessor(&IncastAggregator::m_tid),
+              MakeTypeIdChecker())
+          .AddAttribute(
+              "CCA",
+              "TypeId of the CCA",
+              TypeIdValue(TcpSocketFactory::GetTypeId()),
+              MakeTypeIdAccessor(&IncastAggregator::m_cca),
               MakeTypeIdChecker())
           .AddAttribute(
               "RwndStrategy",
@@ -138,6 +146,9 @@ void
 IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
+  burstTimesOut.open("scratch/traces/burst_times.log", std::ios::out);
+  burstTimesOut << "#Start time(s) End time (s)" << std::endl;
+
   for (Ipv4Address sender : m_senders) {
     Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
 
@@ -160,6 +171,11 @@ IncastAggregator::StartApplication() {
 
     if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
       Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+      ObjectFactory ccaFactory;
+      ccaFactory.SetTypeId(m_cca);
+      Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
+      tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
+
       // Enable TCP timestamp option.
       tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
 
@@ -316,6 +332,9 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   };
 
   if (m_totalBytesSoFar == m_bytesPerSender * m_senders.size()) {
+    burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() << " "
+                  << Simulator::Now().GetSeconds() << std::endl;
+
     m_burstDurationsSec.push_back(
         Simulator::Now() - m_currentBurstStartTimeSec);
     ScheduleNextBurst();
@@ -347,6 +366,8 @@ IncastAggregator::StopApplication() {
   for (Ptr<Socket> socket : m_sockets) {
     socket->Close();
   }
+
+  burstTimesOut.close();
 }
 
 }  // Namespace ns3

@@ -59,6 +59,12 @@ IncastSender::GetTypeId() {
               MakeTypeIdAccessor(&IncastSender::m_tid),
               MakeTypeIdChecker())
           .AddAttribute(
+              "CCA",
+              "TypeId of the CCA",
+              TypeIdValue(TcpSocketFactory::GetTypeId()),
+              MakeTypeIdAccessor(&IncastSender::m_cca),
+              MakeTypeIdChecker())
+          .AddAttribute(
               "Aggregator",
               "Aggregator to send packets to",
               Ipv4AddressValue(),
@@ -91,6 +97,12 @@ IncastSender::StartApplication() {
   // Enable TCP timestamp option.
   if (m_socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
     Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(m_socket);
+
+    ObjectFactory ccaFactory;
+    ccaFactory.SetTypeId(m_cca);
+    Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
+    tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
+
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
   }
 

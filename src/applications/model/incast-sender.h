@@ -29,7 +29,8 @@
 namespace ns3 {
 
 /**
- * @brief TODO
+ * @brief
+ *
  */
 class IncastSender : public Application {
  public:
@@ -80,7 +81,8 @@ class IncastSender : public Application {
   /**
    * @brief TODO
    */
-  static uint32_t ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe);
+  static uint32_t ParseRequestedBytes(
+      Ptr<Packet> packet, bool containsRttProbe);
 
   // TCP port for all applications
   uint16_t m_port;
@@ -96,6 +98,9 @@ class IncastSender : public Application {
 
   // Max random jitter in microseconds
   uint32_t m_responseJitterUs;
+
+  // TCP congestion control algorithm
+  TypeId m_cca;
 };
 
 }  // namespace ns3

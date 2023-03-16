@@ -167,6 +167,9 @@ class IncastAggregator : public Application {
   Time m_minRtt;
 
   bool m_probingRtt;
+
+  // TCP congestion control algorithm
+  TypeId m_cca;
 };
 
 }  // namespace ns3

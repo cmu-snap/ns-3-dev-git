@@ -20,8 +20,8 @@
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 //
 // Run with:
-//     $ ./ns3 run "scratch/incast --bytesPerSender=50000 --numBursts=5
-//           --numSenders=200 --jitterUs=100 --smallBandwidthMbps=12500
+//     $ ./ns3 run "scratch/incast --bytesPerSender=100000 --numBursts=5
+//           --numSenders=100 --smallBandwidthMbps=12500
 //           --largeBandwidthMbps=100000
 
 #include "ns3/applications-module.h"
@@ -258,8 +258,8 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Configuring TCP parameters...");
 
   // Set global TCP parameters
-  Config::SetDefault(
-      "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
+  //   Config::SetDefault(
+  //       "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
@@ -361,6 +361,8 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
   aggregatorApp->SetAttribute("BytesPerSender", UintegerValue(bytesPerSender));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
+  aggregatorApp->SetAttribute(
+      "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
   aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
   aggregatorApp->SetAttribute(
       "StaticRwndBytes", UintegerValue(staticRwndBytes));
@@ -376,6 +378,8 @@ main(int argc, char *argv[]) {
     senderApp->SetAttribute(
         "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
+    senderApp->SetAttribute(
+        "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
     senderApp->SetStartTime(Seconds(1.0));
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
