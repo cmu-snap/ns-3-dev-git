@@ -167,7 +167,6 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
   PointerValue ccPtr;
   tcpSocket->GetAttribute("CongestionOps", ccPtr);
   Ptr<TcpCongestionOps> cc = ccPtr.Get<TcpCongestionOps>();
-  NS_LOG_INFO("Sender CCA: " << cc->GetName());
 
   while (sentBytes < totalBytes && socket->GetTxAvailable()) {
     int toSend = totalBytes - sentBytes;

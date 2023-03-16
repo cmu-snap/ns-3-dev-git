@@ -271,7 +271,6 @@ IncastAggregator::SendRequest(Ptr<Socket> socket) {
   PointerValue ccPtr;
   tcpSocket->GetAttribute("CongestionOps", ccPtr);
   Ptr<TcpCongestionOps> cc = ccPtr.Get<TcpCongestionOps>();
-  NS_LOG_INFO("Aggregator CCA: " << cc->GetName());
 }
 
 void
