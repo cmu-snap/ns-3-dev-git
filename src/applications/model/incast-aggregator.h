@@ -67,6 +67,22 @@ class IncastAggregator : public Application {
 
  private:
   /**
+   * Callback to log congestion window changes
+   *
+   * \param oldCwnd old congestion window
+   * \param newCwnd new congestion window
+   */
+  void LogCwnd(uint32_t oldCwnd, uint32_t newCwnd);
+
+  /**
+   * Callback to log round-trip time changes
+   *
+   * \param oldRtt old round-trip time
+   * \param newRtt new round-trip time
+   */
+  void LogRtt(Time oldRtt, Time newRtt);
+
+  /**
    * @brief TODO
    */
   void StartApplication() override;
@@ -160,16 +176,23 @@ class IncastAggregator : public Application {
   // If m_rwndStrategy=static, then use this static RWND value
   uint32_t m_staticRwndBytes;
 
+  // TODO
   uint32_t m_bandwidthMbps;
 
   // Assumes that all senders have the same RTT.
   Time m_physicalRtt;
   Time m_minRtt;
 
+  // TODO
   bool m_probingRtt;
 
   // TCP congestion control algorithm
   TypeId m_cca;
+
+  // Log streams
+  std::ofstream m_burstTimesOut;
+  std::ofstream m_cwndOut;
+  std::ofstream m_rttOut;
 };
 
 }  // namespace ns3

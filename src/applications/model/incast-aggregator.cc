@@ -37,32 +37,28 @@ namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
-std::ofstream burstTimesOut;
-std::ofstream aggregatorCwndOut;
-std::ofstream aggregatorRttOut;
-
 /**
- * Congestion window change callback
+ * Callback to log congestion window changes
  *
  * \param oldCwnd old congestion window
  * \param newCwnd new congestion window
  */
-static void
-CwndChange(uint32_t oldCwnd, uint32_t newCwnd)
+void
+IncastAggregator::LogCwnd(uint32_t oldCwnd, uint32_t newCwnd)
 {
-  aggregatorCwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
+  m_cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
 }
 
 /**
- * Round-trip time change callback
+ * Callback to log round-trip time changes
  *
  * \param oldRtt old round-trip time
  * \param newRtt new round-trip time
  */
-static void
-RttChange(Time oldRtt, Time newRtt)
+void
+IncastAggregator::LogRtt(Time oldRtt, Time newRtt)
 {
-  aggregatorRttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
+  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
 }
 
 TypeId
@@ -172,14 +168,14 @@ void
 IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
-  burstTimesOut.open("scratch/traces/burst_times.log", std::ios::out);
-  burstTimesOut << "#Start time(s) End time (s)" << std::endl;
+  m_burstTimesOut.open("scratch/traces/burst_times.log", std::ios::out);
+  m_burstTimesOut << "#Start time(s) End time (s)" << std::endl;
 
-  aggregatorCwndOut.open("scratch/traces/aggregator_cwnd.log", std::ios::out);
-  aggregatorCwndOut << "#Time(s)\tCWND" << std::endl;
+  m_cwndOut.open("scratch/traces/aggregator_cwnd.log", std::ios::out);
+  m_cwndOut << "#Time(s)\tCWND" << std::endl;
 
-  aggregatorRttOut.open("scratch/traces/aggregator_rtt.log", std::ios::out);
-  aggregatorRttOut << "#Time(s)\tRTT(s)" << std::endl;
+  m_rttOut.open("scratch/traces/aggregator_rtt.log", std::ios::out);
+  m_rttOut << "#Time(s)\tRTT(s)" << std::endl;
 
   for (Ipv4Address sender : m_senders) {
     Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
@@ -210,10 +206,10 @@ IncastAggregator::StartApplication() {
       tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
       // Enable tracing for the CWND
-      socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&CwndChange));
+      socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&IncastAggregator::LogCwnd, this));
 
       // Enable tracing for the RTT
-      socket->TraceConnectWithoutContext("RTT", MakeCallback(&RttChange));
+      socket->TraceConnectWithoutContext("RTT", MakeCallback(&IncastAggregator::LogRtt, this));
 
       // Enable TCP timestamp option
       tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
@@ -371,7 +367,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   };
 
   if (m_totalBytesSoFar == m_bytesPerSender * m_senders.size()) {
-    burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() << " "
+    m_burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() << " "
                   << Simulator::Now().GetSeconds() << std::endl;
 
     m_burstDurationsSec.push_back(
@@ -406,9 +402,9 @@ IncastAggregator::StopApplication() {
     socket->Close();
   }
 
-  burstTimesOut.close();
-  aggregatorCwndOut.close();
-  aggregatorRttOut.close();
+  m_burstTimesOut.close();
+  m_cwndOut.close();
+  m_rttOut.close();
 }
 
 }  // Namespace ns3
