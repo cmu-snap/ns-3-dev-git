@@ -50,9 +50,25 @@ class IncastSender : public Application {
   ~IncastSender() override;
 
  protected:
+  /**
+   * Congestion window change callback
+   *
+   * \param oldCwnd old congestion window
+   * \param newCwnd new congestion window
+   */
   void DoDispose() override;
 
  private:
+  void CwndChange(uint32_t oldCwnd, uint32_t newCwnd);
+
+  /**
+   * Round-trip time change callback
+   *
+   * \param oldRtt old round-trip time
+   * \param newRtt new round-trip time
+   */
+  void RttChange(Time oldRtt, Time newRtt);
+
   /**
    * @brief TODO
    */
@@ -84,6 +100,9 @@ class IncastSender : public Application {
   static uint32_t ParseRequestedBytes(
       Ptr<Packet> packet, bool containsRttProbe);
 
+  // Node ID of the sender
+  uint32_t m_nid;
+
   // TCP port for all applications
   uint16_t m_port;
 
@@ -101,6 +120,10 @@ class IncastSender : public Application {
 
   // TCP congestion control algorithm
   TypeId m_cca;
+
+  // Log streams
+  std::ofstream m_cwndOut;
+  std::ofstream m_rttOut;
 };
 
 }  // namespace ns3

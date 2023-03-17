@@ -38,8 +38,8 @@ namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
 std::ofstream burstTimesOut;
-std::ofstream cwndOut;
-std::ofstream rttOut;
+std::ofstream aggregatorCwndOut;
+std::ofstream aggregatorRttOut;
 
 /**
  * Congestion window change callback
@@ -50,7 +50,7 @@ std::ofstream rttOut;
 static void
 CwndChange(uint32_t oldCwnd, uint32_t newCwnd)
 {
-  cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
+  aggregatorCwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
 }
 
 /**
@@ -62,7 +62,7 @@ CwndChange(uint32_t oldCwnd, uint32_t newCwnd)
 static void
 RttChange(Time oldRtt, Time newRtt)
 {
-  rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
+  aggregatorRttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
 }
 
 TypeId
@@ -175,11 +175,11 @@ IncastAggregator::StartApplication() {
   burstTimesOut.open("scratch/traces/burst_times.log", std::ios::out);
   burstTimesOut << "#Start time(s) End time (s)" << std::endl;
 
-  cwndOut.open("scratch/traces/aggregator_cwnd.log", std::ios::out);
-  cwndOut << "#Time(s)\tCWND" << std::endl;
+  aggregatorCwndOut.open("scratch/traces/aggregator_cwnd.log", std::ios::out);
+  aggregatorCwndOut << "#Time(s)\tCWND" << std::endl;
 
-  rttOut.open("scratch/traces/aggregator_rtt.log", std::ios::out);
-  rttOut << "#Time(s)\tRTT(s)" << std::endl;
+  aggregatorRttOut.open("scratch/traces/aggregator_rtt.log", std::ios::out);
+  aggregatorRttOut << "#Time(s)\tRTT(s)" << std::endl;
 
   for (Ipv4Address sender : m_senders) {
     Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
@@ -407,8 +407,8 @@ IncastAggregator::StopApplication() {
   }
 
   burstTimesOut.close();
-  cwndOut.close();
-  rttOut.close();
+  aggregatorCwndOut.close();
+  aggregatorRttOut.close();
 }
 
 }  // Namespace ns3

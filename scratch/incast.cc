@@ -379,6 +379,7 @@ main(int argc, char *argv[]) {
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
+    senderApp->SetAttribute("NodeID", UintegerValue(dumbbellHelper.GetRight(i)->GetId()));
     senderApp->SetAttribute(
         "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));

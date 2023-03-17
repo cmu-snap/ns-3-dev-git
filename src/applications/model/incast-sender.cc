@@ -34,12 +34,42 @@ namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED(IncastSender);
 
+/**
+ * Congestion window change callback
+ *
+ * \param oldCwnd old congestion window
+ * \param newCwnd new congestion window
+ */
+void
+IncastSender::CwndChange(uint32_t oldCwnd, uint32_t newCwnd)
+{
+  m_cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
+}
+
+/**
+ * Round-trip time change callback
+ *
+ * \param oldRtt old round-trip time
+ * \param newRtt new round-trip time
+ */
+void
+IncastSender::RttChange(Time oldRtt, Time newRtt)
+{
+  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
+}
+
 TypeId
 IncastSender::GetTypeId() {
   static TypeId tid =
       TypeId("ns3::IncastSender")
           .SetParent<Application>()
           .AddConstructor<IncastSender>()
+          .AddAttribute(
+              "NodeID",
+              "Node ID of the sender",
+              UintegerValue(0),
+              MakeUintegerAccessor(&IncastSender::m_nid),
+              MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "ResponseJitterUs",
               "Max random jitter in sending responses, in microseconds",
@@ -93,16 +123,29 @@ void
 IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
+  m_cwndOut.open("scratch/traces/sender" + std::to_string(m_nid) + "_cwnd.log", std::ios::out);
+  m_cwndOut << "#Time(s)\tCWND" << std::endl;
+
+  m_rttOut.open("scratch/traces/sender" + std::to_string(m_nid) + "_rtt.log", std::ios::out);
+  m_rttOut << "#Time(s)\tRTT(s)" << std::endl;
+
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
   // Enable TCP timestamp option.
   if (m_socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
+    // Set the congestion control algorithm
     Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(m_socket);
-
     ObjectFactory ccaFactory;
     ccaFactory.SetTypeId(m_cca);
     Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
     tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
+    // Enable tracing for the CWND
+    m_socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&IncastSender::CwndChange, this));
+
+    // Enable tracing for the RTT
+    m_socket->TraceConnectWithoutContext("RTT", MakeCallback(&IncastSender::RttChange, this));
+
+    // Enable TCP timestamp option
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
   }
 
@@ -201,6 +244,9 @@ IncastSender::StopApplication() {
   if (m_socket) {
     m_socket->Close();
   }
+
+  m_cwndOut.close();
+  m_rttOut.close();
 }
 
 }  // Namespace ns3
