@@ -38,6 +38,32 @@ namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
 std::ofstream burstTimesOut;
+std::ofstream cwndOut;
+std::ofstream rttOut;
+
+/**
+ * Congestion window change callback
+ *
+ * \param oldCwnd old congestion window
+ * \param newCwnd new congestion window
+ */
+static void
+CwndChange(uint32_t oldCwnd, uint32_t newCwnd)
+{
+  cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
+}
+
+/**
+ * Round-trip time change callback
+ *
+ * \param oldRtt old round-trip time
+ * \param newRtt new round-trip time
+ */
+static void
+RttChange(Time oldRtt, Time newRtt)
+{
+  rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
+}
 
 TypeId
 IncastAggregator::GetTypeId() {
@@ -149,6 +175,12 @@ IncastAggregator::StartApplication() {
   burstTimesOut.open("scratch/traces/burst_times.log", std::ios::out);
   burstTimesOut << "#Start time(s) End time (s)" << std::endl;
 
+  cwndOut.open("scratch/traces/aggregator_cwnd.log", std::ios::out);
+  cwndOut << "#Time(s)\tCWND" << std::endl;
+
+  rttOut.open("scratch/traces/aggregator_rtt.log", std::ios::out);
+  rttOut << "#Time(s)\tRTT(s)" << std::endl;
+
   for (Ipv4Address sender : m_senders) {
     Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
 
@@ -170,17 +202,25 @@ IncastAggregator::StartApplication() {
     m_sockets.push_back(socket);
 
     if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
+      // Set the congestion control algorithm
       Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
       ObjectFactory ccaFactory;
       ccaFactory.SetTypeId(m_cca);
       Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
       tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
-      // Enable TCP timestamp option.
+      // Enable tracing for the CWND
+      socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&CwndChange));
+
+      // Enable tracing for the RTT
+      socket->TraceConnectWithoutContext("RTT", MakeCallback(&RttChange));
+
+      // Enable TCP timestamp option
       tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
 
+      // Basic static RWND tuning
       if (m_rwndStrategy == "static") {
-        // Basic static RWND tuning. Set the RWND to 64KB for all sockets.
+        // Set the RWND to 64KB for all sockets
         if (m_staticRwndBytes < 2000 || m_staticRwndBytes > 65535) {
           NS_FATAL_ERROR(
               "RWND tuning is only supported for values in the range [2000, "
@@ -367,6 +407,8 @@ IncastAggregator::StopApplication() {
   }
 
   burstTimesOut.close();
+  cwndOut.close();
+  rttOut.close();
 }
 
 }  // Namespace ns3

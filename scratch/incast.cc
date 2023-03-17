@@ -20,9 +20,9 @@
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 //
 // Run with:
-//     $ ./ns3 run "scratch/incast --bytesPerSender=100000 --numBursts=5
-//           --numSenders=100 --smallBandwidthMbps=12500
-//           --largeBandwidthMbps=100000
+//  $ ./ns3 run "scratch/incast --bytesPerSender=100000 --numBursts=5
+//       --numSenders=100 --smallBandwidthMbps=12500
+//       --largeBandwidthMbps=100000"
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
@@ -67,7 +67,7 @@ CheckQueueSize(
 
   Time backlog = Seconds(
       static_cast<double>(packetsPerQueue * bytesPerPacket * bitsPerByte) /
-      (bandwidthMbps * gigaToMega));  // 10 Gb/s
+      (bandwidthMbps * gigaToMega)); 
 
   std::ofstream *out;
   if (queueName == "incastQueue") {
