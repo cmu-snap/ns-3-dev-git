@@ -50,24 +50,24 @@ class IncastSender : public Application {
   ~IncastSender() override;
 
  protected:
+  void DoDispose() override;
+
+ private:
   /**
-   * Congestion window change callback
+   * Callback to log congestion window changes
    *
    * \param oldCwnd old congestion window
    * \param newCwnd new congestion window
    */
-  void DoDispose() override;
-
- private:
-  void CwndChange(uint32_t oldCwnd, uint32_t newCwnd);
+  void LogCwnd(uint32_t oldCwnd, uint32_t newCwnd);
 
   /**
-   * Round-trip time change callback
+   * Callback to log round-trip time changes
    *
    * \param oldRtt old round-trip time
    * \param newRtt new round-trip time
    */
-  void RttChange(Time oldRtt, Time newRtt);
+  void LogRtt(Time oldRtt, Time newRtt);
 
   /**
    * @brief TODO

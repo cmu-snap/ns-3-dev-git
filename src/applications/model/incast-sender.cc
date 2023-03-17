@@ -35,25 +35,25 @@ namespace ns3 {
 NS_OBJECT_ENSURE_REGISTERED(IncastSender);
 
 /**
- * Congestion window change callback
+ * Callback to log congestion window changes
  *
  * \param oldCwnd old congestion window
  * \param newCwnd new congestion window
  */
 void
-IncastSender::CwndChange(uint32_t oldCwnd, uint32_t newCwnd)
+IncastSender::LogCwnd(uint32_t oldCwnd, uint32_t newCwnd)
 {
   m_cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
 }
 
 /**
- * Round-trip time change callback
+ * Callback to log round-trip time changes
  *
  * \param oldRtt old round-trip time
  * \param newRtt new round-trip time
  */
 void
-IncastSender::RttChange(Time oldRtt, Time newRtt)
+IncastSender::LogRtt(Time oldRtt, Time newRtt)
 {
   m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
 }
@@ -140,10 +140,10 @@ IncastSender::StartApplication() {
     tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
     // Enable tracing for the CWND
-    m_socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&IncastSender::CwndChange, this));
+    m_socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&IncastSender::LogCwnd, this));
 
     // Enable tracing for the RTT
-    m_socket->TraceConnectWithoutContext("RTT", MakeCallback(&IncastSender::RttChange, this));
+    m_socket->TraceConnectWithoutContext("RTT", MakeCallback(&IncastSender::LogRtt, this));
 
     // Enable TCP timestamp option
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
