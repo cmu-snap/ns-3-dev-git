@@ -55,7 +55,7 @@ IncastSender::LogCwnd(uint32_t oldCwnd, uint32_t newCwnd)
 void
 IncastSender::LogRtt(Time oldRtt, Time newRtt)
 {
-  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
+  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetMicroSeconds() << std::endl;
 }
 
 TypeId
@@ -127,7 +127,7 @@ IncastSender::StartApplication() {
   m_cwndOut << "#Time(s)\tCWND" << std::endl;
 
   m_rttOut.open("scratch/traces/sender" + std::to_string(m_nid) + "_rtt.log", std::ios::out);
-  m_rttOut << "#Time(s)\tRTT(s)" << std::endl;
+  m_rttOut << "#Time(s)\tRTT(us)" << std::endl;
 
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
   // Enable TCP timestamp option.
@@ -139,11 +139,6 @@ IncastSender::StartApplication() {
     Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
     tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
-    // Enable tracing for the CWND
-    m_socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&IncastSender::LogCwnd, this));
-
-    // Enable tracing for the RTT
-    m_socket->TraceConnectWithoutContext("RTT", MakeCallback(&IncastSender::LogRtt, this));
 
     // Enable TCP timestamp option
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
@@ -235,6 +230,11 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
       "Accepting connection from " << addr.GetIpv4() << ":" << addr.GetPort());
 
   socket->SetRecvCallback(MakeCallback(&IncastSender::HandleRead, this));
+
+  // Enable tracing for the CWND
+  socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&IncastSender::LogCwnd, this));
+  // Enable tracing for the RTT
+  socket->TraceConnectWithoutContext("RTT", MakeCallback(&IncastSender::LogRtt, this));
 }
 
 void

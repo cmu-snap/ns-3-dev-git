@@ -67,7 +67,7 @@ CheckQueueSize(
 
   Time backlog = Seconds(
       static_cast<double>(packetsPerQueue * bytesPerPacket * bitsPerByte) /
-      (bandwidthMbps * gigaToMega)); 
+      (bandwidthMbps * gigaToMega));
 
   std::ofstream *out;
   if (queueName == "incastQueue") {
@@ -100,19 +100,19 @@ main(int argc, char *argv[]) {
   uint32_t numBursts = 5;
   uint32_t numSenders = 10;
   uint32_t bytesPerSender = 500000;
-  float perLinkDelayUs = 25;
+  float perLinkDelayUs = 5;
   uint32_t jitterUs = 100;
 
   // Parameters for the small links (ToR to node)
   float smallBandwidthMbps = 12500;
   uint32_t smallQueueSize = 2666;
-  uint32_t smallMinThreshold = 20;
+  uint32_t smallMinThreshold = 60;
   uint32_t smallMaxThreshold = 60;
 
   // Parameters for the large links (ToR to ToR)
   float largeBandwidthMbps = 100000;
   uint32_t largeQueueSize = 2666;
-  uint32_t largeMinThreshold = 50;
+  uint32_t largeMinThreshold = 150;
   uint32_t largeMaxThreshold = 150;
 
   // RWND tuning parameters
@@ -270,6 +270,8 @@ main(int argc, char *argv[]) {
 
   // Set default parameters for RED queue disc
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+  Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
+
 
   // ARED may be used but the queueing delays will increase; it is disabled
   // here because the SIGCOMM paper did not mention it
@@ -301,7 +303,8 @@ main(int argc, char *argv[]) {
       "MinTh",
       DoubleValue(smallMinThreshold),
       "MaxTh",
-      DoubleValue(smallMaxThreshold));
+      DoubleValue(smallMaxThreshold),
+      "LInterm", DoubleValue(100));
 
   TrafficControlHelper largeLinkQueueHelper;
   largeLinkQueueHelper.SetRootQueueDisc(
@@ -315,7 +318,8 @@ main(int argc, char *argv[]) {
       "MinTh",
       DoubleValue(largeMinThreshold),
       "MaxTh",
-      DoubleValue(largeMaxThreshold));
+      DoubleValue(largeMaxThreshold),
+      "LInterm", DoubleValue(100));
 
   // Install small queues on all the NetDevices connected to small links.
   QueueDiscContainer leftQueues =
