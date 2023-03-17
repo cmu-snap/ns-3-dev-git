@@ -57,16 +57,17 @@ NS_LOG_COMPONENT_DEFINE("IncastSim");
 std::ofstream incastQueueOut;
 std::ofstream uplinkQueueOut;
 
-// bool stopped = false;
-
 void
 CheckQueueSize(
     std::string queueName, Ptr<QueueDisc> queue, float bandwidthMbps) {
-  // 1500 byte packets
-  uint32_t qSize = queue->GetNPackets();
+  uint32_t packetsPerQueue = queue->GetNPackets();
+  uint32_t bytesPerPacket = 1500;
+  uint32_t bitsPerByte = 8;
+  uint32_t gigaToMega = pow(10, 3);
+
   Time backlog = Seconds(
-      static_cast<double>(qSize * 1500 * 8) /
-      (bandwidthMbps * 1000000));  // 10 Gb/s
+      static_cast<double>(packetsPerQueue * bytesPerPacket * bitsPerByte) /
+      (bandwidthMbps * gigaToMega));  // 10 Gb/s
 
   std::ofstream *out;
   if (queueName == "incastQueue") {
@@ -77,11 +78,11 @@ CheckQueueSize(
     NS_ABORT_MSG("Unknown queue name: " << queueName);
   }
 
-  // report size in units of packets and ms
+  // Report the queue size in units of packets and ms
   (*out) << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds()
-         << " " << qSize << " " << backlog.GetMicroSeconds() << std::endl;
+         << " " << packetsPerQueue << " " << backlog.GetMicroSeconds() << std::endl;
 
-  // check queue size every 1/1000 of a second
+  // Check queue size every 1/1000 of a second
   Simulator::Schedule(
       MicroSeconds(100), &CheckQueueSize, queueName, queue, bandwidthMbps);
 }
@@ -186,7 +187,7 @@ main(int argc, char *argv[]) {
                                    << largeBandwidthMbps << "Mbps)");
   }
 
-  // Convert numeric values to usable values
+  // Convert numeric values to NS3 values
   std::ostringstream perLinkDelayUsString;
   perLinkDelayUsString << perLinkDelayUs << "us";
   StringValue perLinkDelayUsStringValue =
@@ -223,11 +224,11 @@ main(int argc, char *argv[]) {
   largeLinkHelper.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
   largeLinkHelper.SetChannelAttribute("Delay", perLinkDelayUsStringValue);
 
-  // Create dumbbell topology
+  // Create a dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(
       1, smallLinkHelper, numSenders, smallLinkHelper, largeLinkHelper);
 
-  // Print node IDs
+  // Print global node IDs
   std::ostringstream leftNodeIds;
   leftNodeIds << "Left nodes (aggregator): ";
   for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
@@ -242,24 +243,22 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO(
       "Node IDs:" << std::endl
-                  << "\tLeft router (at aggregator): "
+                  << "\tLeft router (at the aggregator): "
                   << dumbbellHelper.GetLeft()->GetId() << std::endl
-                  << "\tRight router (at senders): "
+                  << "\tRight router (at the senders): "
                   << dumbbellHelper.GetRight()->GetId() << std::endl
                   << "\t" << leftNodeIds.str() << std::endl
                   << "\t" << rightNodeIds.str());
 
-  NS_LOG_INFO("Installing TCP stack on all nodes...");
+  NS_LOG_INFO("Installing the TCP stack on all nodes...");
 
-  // Install TCP stack on all nodes
+  // Install the TCP stack on all nodes
   InternetStackHelper stackHelper;
   dumbbellHelper.InstallStack(stackHelper);
 
   NS_LOG_INFO("Configuring TCP parameters...");
 
   // Set global TCP parameters
-  //   Config::SetDefault(
-  //       "ns3::TcpL4Protocol::SocketType", StringValue("ns3::" + tcpTypeId));
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
@@ -271,12 +270,14 @@ main(int argc, char *argv[]) {
 
   // Set default parameters for RED queue disc
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+
   // ARED may be used but the queueing delays will increase; it is disabled
   // here because the SIGCOMM paper did not mention it
   // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
   // Config::SetDefault ("ns3::RedQueueDisc::Gentle", BooleanValue (true));
   Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
   Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
+
   // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
   // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
   // Config::SetDefault(
@@ -287,9 +288,8 @@ main(int argc, char *argv[]) {
   // Config::SetDefault("ns3::RedQueueDisc::MaxTh", maxThresholdValue);
 
   // Configure a different queues for the large and small links.
-  TrafficControlHelper smallLinkQueueHelper;
-  TrafficControlHelper largeLinkQueueHelper;
 
+  TrafficControlHelper smallLinkQueueHelper;
   smallLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
@@ -302,6 +302,8 @@ main(int argc, char *argv[]) {
       DoubleValue(smallMinThreshold),
       "MaxTh",
       DoubleValue(smallMaxThreshold));
+
+  TrafficControlHelper largeLinkQueueHelper;
   largeLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
@@ -324,13 +326,15 @@ main(int argc, char *argv[]) {
       smallLinkQueueHelper.Install(dumbbellHelper.GetRightDevices());
   QueueDiscContainer rightRouterQueues =
       smallLinkQueueHelper.Install(dumbbellHelper.GetRightRouterDevices());
-  // The queue from the left switch to the aggregator.
+
+  // Get the queue from the left switch to the aggregator.
   Ptr<QueueDisc> incastQueue = leftRouterQueues.Get(0);
 
   // Install large queues on all the NetDevices connected to large links.
   QueueDiscContainer switchQueues =
       largeLinkQueueHelper.Install(dumbbellHelper.GetRouterDevices());
-  // The queue from the right switch to the left switch.
+
+  // Get the queue from the right switch to the left switch.
   Ptr<QueueDisc> uplinkQueue = switchQueues.Get(1);
 
   NS_LOG_INFO("Assigning IP addresses...");
@@ -341,7 +345,7 @@ main(int argc, char *argv[]) {
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
 
-  // Collect sender addresses
+  // Collect all sender addresses
   std::vector<Ipv4Address> allSenderAddresses;
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     allSenderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
@@ -388,9 +392,11 @@ main(int argc, char *argv[]) {
 
   // Use nanosecond timestamps for PCAP traces
   Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
+
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
       "scratch/traces/incast-sockets", dumbbellHelper.GetLeft(0)->GetId(), 0);
+
   // Enable tracing at each sender
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     largeLinkHelper.EnablePcap(
@@ -402,7 +408,7 @@ main(int argc, char *argv[]) {
   // Compute the data per burst
   double totalBytesPerBurst = bytesPerSender * numSenders;
   double totalBytes = totalBytesPerBurst * numBursts;
-  int megaToBase = pow(10, 6);
+  uint32_t megaToBase = pow(10, 6);
 
   NS_LOG_INFO(
       "Data per burst: " << totalBytesPerBurst / megaToBase
@@ -411,7 +417,7 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Running simulation...");
 
-  // Trace the queues.
+  // Trace the queues
   incastQueueOut.open("scratch/traces/incast_queue.log", std::ios::out);
   incastQueueOut << "#Time(s) qlen(pkts) qlen(us)" << std::endl;
   Simulator::Schedule(
