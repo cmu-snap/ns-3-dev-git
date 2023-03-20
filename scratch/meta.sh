@@ -21,7 +21,7 @@ mkdir -p "$scratch_dir/traces"
 "$ns3_dir/ns3" run "scratch/incast \
     --numSenders=$numSenders \
     --bytesPerSender=$bytesPerSender \
-    --numBursts=3 \
+    --numBursts=5 \
     --perLinkDelayUs=5 \
     --jitterUs=20 \
     --smallBandwidthMbps=12500 \

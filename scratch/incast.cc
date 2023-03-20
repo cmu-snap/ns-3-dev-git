@@ -63,11 +63,11 @@ CheckQueueSize(
   uint32_t packetsPerQueue = queue->GetNPackets();
   uint32_t bytesPerPacket = 1500;
   uint32_t bitsPerByte = 8;
-  uint32_t gigaToMega = pow(10, 3);
+  uint32_t mega = pow(10, 6);
 
   Time backlog = Seconds(
       static_cast<double>(packetsPerQueue * bytesPerPacket * bitsPerByte) /
-      (bandwidthMbps * gigaToMega));
+      (bandwidthMbps * mega) / mega);
 
   std::ofstream *out;
   if (queueName == "incastQueue") {
@@ -86,6 +86,51 @@ CheckQueueSize(
   // Check queue size every 1/1000 of a second
   Simulator::Schedule(
       MicroSeconds(100), &CheckQueueSize, queueName, queue, bandwidthMbps);
+}
+
+void
+LogQueueDepth(
+    // std::string queueName,
+    // float bandwidthMbps,
+    std::ofstream *out,
+    uint32_t oldDepth,
+    uint32_t newDepth) {
+  //   NS_LOG_INFO("foo");
+  //   uint32_t bytesPerPacket = 1500;
+  //   uint32_t bitsPerByte = 8;
+  //   uint32_t mega = pow(10, 6);
+
+  //   Time backlog = Seconds(
+  //       static_cast<double>(packetsPerQueue * bytesPerPacket * bitsPerByte) /
+  //       (bandwidthMbps * mega) / mega);
+
+  //   std::ofstream *out;
+  //   if (queueName == "incastQueue") {
+  //   out = &incastQueueOut;
+  //   } else if (queueName == "uplinkQueue") {
+  //     out = &uplinkQueueOut;
+  //   } else {
+  //     NS_ABORT_MSG("Unknown queue name: " << queueName);
+  //   }
+
+  // Report the queue size in units of packets and ms
+  //   (*out) << std::fixed << std::setprecision(6) <<
+  //   Simulator::Now().GetSeconds()
+  //          << " " << packetsPerQueue << " " << backlog.GetMicroSeconds()
+  //          << std::endl;
+
+  (*out) << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds()
+         << " " << newDepth << std::endl;
+}
+
+void
+LogIncastQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
+  LogQueueDepth(&incastQueueOut, oldDepth, newDepth);
+}
+
+void
+LogUplinkQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
+  LogQueueDepth(&uplinkQueueOut, oldDepth, newDepth);
 }
 
 int
@@ -432,20 +477,12 @@ main(int argc, char *argv[]) {
   // Trace the queues
   incastQueueOut.open("scratch/traces/incast_queue.log", std::ios::out);
   incastQueueOut << "#Time(s) qlen(pkts) qlen(us)" << std::endl;
-  Simulator::Schedule(
-      Seconds(0),
-      &CheckQueueSize,
-      "incastQueue",
-      incastQueue,
-      smallBandwidthMbps);
+  incastQueue->TraceConnectWithoutContext(
+      "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
   uplinkQueueOut.open("scratch/traces/uplink_queue.log", std::ios::out);
   uplinkQueueOut << "#Time(s) qlen(pkts) qlen(us)" << std::endl;
-  Simulator::Schedule(
-      Seconds(0),
-      &CheckQueueSize,
-      "uplinkQueue",
-      uplinkQueue,
-      largeBandwidthMbps);
+  uplinkQueue->TraceConnectWithoutContext(
+      "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
 
   Simulator::Run();
   Simulator::Destroy();
