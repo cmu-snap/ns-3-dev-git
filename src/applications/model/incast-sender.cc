@@ -184,7 +184,7 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
       // This is an RTT probe. Do nothing.
       NS_LOG_LOGIC("Received RTT probe");
     } else {
-      NS_FATAL_ERROR("Strange size received: " << size);
+      NS_LOG_WARN("Strange size received: " << size);
     }
   }
 }
