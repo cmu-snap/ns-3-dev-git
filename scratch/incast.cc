@@ -58,67 +58,7 @@ std::ofstream incastQueueOut;
 std::ofstream uplinkQueueOut;
 
 void
-CheckQueueSize(
-    std::string queueName, Ptr<QueueDisc> queue, float bandwidthMbps) {
-  uint32_t packetsPerQueue = queue->GetNPackets();
-  uint32_t bytesPerPacket = 1500;
-  uint32_t bitsPerByte = 8;
-  uint32_t mega = pow(10, 6);
-
-  Time backlog = Seconds(
-      static_cast<double>(packetsPerQueue * bytesPerPacket * bitsPerByte) /
-      (bandwidthMbps * mega) / mega);
-
-  std::ofstream *out;
-  if (queueName == "incastQueue") {
-    out = &incastQueueOut;
-  } else if (queueName == "uplinkQueue") {
-    out = &uplinkQueueOut;
-  } else {
-    NS_ABORT_MSG("Unknown queue name: " << queueName);
-  }
-
-  // Report the queue size in units of packets and ms
-  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
-         << " " << packetsPerQueue << " " << backlog.GetMicroSeconds()
-         << std::endl;
-
-  // Check queue size every 1/1000 of a second
-  Simulator::Schedule(
-      MicroSeconds(100), &CheckQueueSize, queueName, queue, bandwidthMbps);
-}
-
-void
-LogQueueDepth(
-    // std::string queueName,
-    // float bandwidthMbps,
-    std::ofstream *out,
-    uint32_t oldDepth,
-    uint32_t newDepth) {
-  //   NS_LOG_INFO("foo");
-  //   uint32_t bytesPerPacket = 1500;
-  //   uint32_t bitsPerByte = 8;
-  //   uint32_t mega = pow(10, 6);
-
-  //   Time backlog = Seconds(
-  //       static_cast<double>(packetsPerQueue * bytesPerPacket * bitsPerByte) /
-  //       (bandwidthMbps * mega) / mega);
-
-  //   std::ofstream *out;
-  //   if (queueName == "incastQueue") {
-  //   out = &incastQueueOut;
-  //   } else if (queueName == "uplinkQueue") {
-  //     out = &uplinkQueueOut;
-  //   } else {
-  //     NS_ABORT_MSG("Unknown queue name: " << queueName);
-  //   }
-
-  // Report the queue size in units of packets and ms
-  //   (*out) << std::fixed << std::setprecision(9) <<
-  //   Simulator::Now().GetSeconds()
-  //          << " " << packetsPerQueue << " " << backlog.GetMicroSeconds()
-  //          << std::endl;
-
+LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
   (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
          << " " << newDepth << std::endl;
 }

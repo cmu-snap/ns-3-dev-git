@@ -40,13 +40,13 @@ NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 /**
  * Callback to log congestion window changes
  *
- * \param oldCwnd old congestion window
- * \param newCwnd new congestion window
+ * \param oldCwndBytes old congestion window
+ * \param newCwndBytes new congestion window
  */
 void
-IncastAggregator::LogCwnd(uint32_t oldCwnd, uint32_t newCwnd)
-{
-  m_cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwnd << std::endl;
+IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
+  m_cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwndBytes
+            << std::endl;
 }
 
 /**
@@ -56,9 +56,9 @@ IncastAggregator::LogCwnd(uint32_t oldCwnd, uint32_t newCwnd)
  * \param newRtt new round-trip time
  */
 void
-IncastAggregator::LogRtt(Time oldRtt, Time newRtt)
-{
-  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds() << std::endl;
+IncastAggregator::LogRtt(Time oldRtt, Time newRtt) {
+  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds()
+           << std::endl;
 }
 
 TypeId
@@ -172,7 +172,7 @@ IncastAggregator::StartApplication() {
   m_burstTimesOut << "#Start time(s) End time (s)" << std::endl;
 
   m_cwndOut.open("scratch/traces/aggregator_cwnd.log", std::ios::out);
-  m_cwndOut << "#Time(s)\tCWND" << std::endl;
+  m_cwndOut << "#Time(s)\tCWND (bytes)" << std::endl;
 
   m_rttOut.open("scratch/traces/aggregator_rtt.log", std::ios::out);
   m_rttOut << "#Time(s)\tRTT(s)" << std::endl;
@@ -206,10 +206,12 @@ IncastAggregator::StartApplication() {
       tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
       // Enable tracing for the CWND
-      socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(&IncastAggregator::LogCwnd, this));
+      socket->TraceConnectWithoutContext(
+          "CongestionWindow", MakeCallback(&IncastAggregator::LogCwnd, this));
 
       // Enable tracing for the RTT
-      socket->TraceConnectWithoutContext("RTT", MakeCallback(&IncastAggregator::LogRtt, this));
+      socket->TraceConnectWithoutContext(
+          "RTT", MakeCallback(&IncastAggregator::LogRtt, this));
 
       // Enable TCP timestamp option
       tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
@@ -368,7 +370,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   if (m_totalBytesSoFar == m_bytesPerSender * m_senders.size()) {
     m_burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() << " "
-                  << Simulator::Now().GetSeconds() << std::endl;
+                    << Simulator::Now().GetSeconds() << std::endl;
 
     m_burstDurationsSec.push_back(
         Simulator::Now() - m_currentBurstStartTimeSec);
