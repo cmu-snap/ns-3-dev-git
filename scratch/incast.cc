@@ -79,7 +79,7 @@ CheckQueueSize(
   }
 
   // Report the queue size in units of packets and ms
-  (*out) << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds()
+  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
          << " " << packetsPerQueue << " " << backlog.GetMicroSeconds()
          << std::endl;
 
@@ -114,12 +114,12 @@ LogQueueDepth(
   //   }
 
   // Report the queue size in units of packets and ms
-  //   (*out) << std::fixed << std::setprecision(6) <<
+  //   (*out) << std::fixed << std::setprecision(9) <<
   //   Simulator::Now().GetSeconds()
   //          << " " << packetsPerQueue << " " << backlog.GetMicroSeconds()
   //          << std::endl;
 
-  (*out) << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds()
+  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
          << " " << newDepth << std::endl;
 }
 
