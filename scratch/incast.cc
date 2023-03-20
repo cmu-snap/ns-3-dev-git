@@ -80,7 +80,8 @@ CheckQueueSize(
 
   // Report the queue size in units of packets and ms
   (*out) << std::fixed << std::setprecision(6) << Simulator::Now().GetSeconds()
-         << " " << packetsPerQueue << " " << backlog.GetMicroSeconds() << std::endl;
+         << " " << packetsPerQueue << " " << backlog.GetMicroSeconds()
+         << std::endl;
 
   // Check queue size every 1/1000 of a second
   Simulator::Schedule(
@@ -105,15 +106,15 @@ main(int argc, char *argv[]) {
 
   // Parameters for the small links (ToR to node)
   float smallBandwidthMbps = 12500;
-  uint32_t smallQueueSize = 2666;
-  uint32_t smallMinThreshold = 60;
-  uint32_t smallMaxThreshold = 60;
+  uint32_t smallQueueSizePackets = 2666;
+  uint32_t smallMinThresholdPackets = 60;
+  uint32_t smallMaxThresholdPackets = 60;
 
   // Parameters for the large links (ToR to ToR)
   float largeBandwidthMbps = 100000;
-  uint32_t largeQueueSize = 2666;
-  uint32_t largeMinThreshold = 150;
-  uint32_t largeMaxThreshold = 150;
+  uint32_t largeQueueSizePackets = 2666;
+  uint32_t largeMinThresholdPackets = 150;
+  uint32_t largeMaxThresholdPackets = 150;
 
   // RWND tuning parameters
   std::string rwndStrategy = "none";
@@ -144,29 +145,33 @@ main(int argc, char *argv[]) {
       "Large link bandwidth (in Mbps)",
       largeBandwidthMbps);
   cmd.AddValue(
+      "perLinkDelayUs",
+      "Delay on each link (in microseconds). The RTT is 6 times this value.",
+      perLinkDelayUs);
+  cmd.AddValue(
       "smallQueueSize",
       "Maximum number of packets accepted by queues on the small link",
-      smallQueueSize);
+      smallQueueSizePackets);
   cmd.AddValue(
       "smallMinThreshold",
       "Minimum average length threshold (in packets/bytes)",
-      smallMinThreshold);
+      smallMinThresholdPackets);
   cmd.AddValue(
       "smallMaxThreshold",
       "Maximum average length threshold (in packets/bytes)",
-      smallMaxThreshold);
+      smallMaxThresholdPackets);
   cmd.AddValue(
       "largeQueueSize",
       "Maximum number of packets accepted by queues on the large link",
-      largeQueueSize);
+      largeQueueSizePackets);
   cmd.AddValue(
       "largeMinThreshold",
       "Minimum average length threshold (in packets/bytes)",
-      largeMinThreshold);
+      largeMinThresholdPackets);
   cmd.AddValue(
       "largeMaxThreshold",
       "Maximum average length threshold (in packets/bytes)",
-      largeMaxThreshold);
+      largeMaxThresholdPackets);
   cmd.AddValue(
       "rwndStrategy",
       "RWND tuning strategy to use [none, static, bdp+connections]",
@@ -203,15 +208,15 @@ main(int argc, char *argv[]) {
   StringValue largeBandwidthMbpsStringValue =
       StringValue(largeBandwidthMbpsString.str());
 
-  std::ostringstream smallQueueSizeString;
-  smallQueueSizeString << smallQueueSize << "p";
-  QueueSizeValue smallQueueSizeValue =
-      QueueSizeValue(QueueSize(smallQueueSizeString.str()));
+  std::ostringstream smallQueueSizePacketsString;
+  smallQueueSizePacketsString << smallQueueSizePackets << "p";
+  QueueSizeValue smallQueueSizePacketsValue =
+      QueueSizeValue(QueueSize(smallQueueSizePacketsString.str()));
 
-  std::ostringstream largeQueueSizeString;
-  largeQueueSizeString << largeQueueSize << "p";
-  QueueSizeValue largeQueueSizeValue =
-      QueueSizeValue(QueueSize(largeQueueSizeString.str()));
+  std::ostringstream largeQueueSizePacketsString;
+  largeQueueSizePacketsString << largeQueueSizePackets << "p";
+  QueueSizeValue largeQueueSizePacketsValue =
+      QueueSizeValue(QueueSize(largeQueueSizePacketsString.str()));
 
   NS_LOG_INFO("Building incast topology...");
 
@@ -272,7 +277,6 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
   Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
 
-
   // ARED may be used but the queueing delays will increase; it is disabled
   // here because the SIGCOMM paper did not mention it
   // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
@@ -299,12 +303,13 @@ main(int argc, char *argv[]) {
       "LinkDelay",
       perLinkDelayUsStringValue,
       "MaxSize",
-      smallQueueSizeValue,
+      smallQueueSizePacketsValue,
       "MinTh",
-      DoubleValue(smallMinThreshold),
+      DoubleValue(smallMinThresholdPackets),
       "MaxTh",
-      DoubleValue(smallMaxThreshold),
-      "LInterm", DoubleValue(100));
+      DoubleValue(smallMaxThresholdPackets),
+      "LInterm",
+      DoubleValue(100));
 
   TrafficControlHelper largeLinkQueueHelper;
   largeLinkQueueHelper.SetRootQueueDisc(
@@ -314,12 +319,13 @@ main(int argc, char *argv[]) {
       "LinkDelay",
       perLinkDelayUsStringValue,
       "MaxSize",
-      largeQueueSizeValue,
+      largeQueueSizePacketsValue,
       "MinTh",
-      DoubleValue(largeMinThreshold),
+      DoubleValue(largeMinThresholdPackets),
       "MaxTh",
-      DoubleValue(largeMaxThreshold),
-      "LInterm", DoubleValue(100));
+      DoubleValue(largeMaxThresholdPackets),
+      "LInterm",
+      DoubleValue(100));
 
   // Install small queues on all the NetDevices connected to small links.
   QueueDiscContainer leftQueues =
@@ -383,7 +389,8 @@ main(int argc, char *argv[]) {
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
-    senderApp->SetAttribute("NodeID", UintegerValue(dumbbellHelper.GetRight(i)->GetId()));
+    senderApp->SetAttribute(
+        "NodeID", UintegerValue(dumbbellHelper.GetRight(i)->GetId()));
     senderApp->SetAttribute(
         "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
