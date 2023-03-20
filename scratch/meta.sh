@@ -13,7 +13,12 @@ numSenders=100
 # Convert burst duration to bytes per sender.
 bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($lineRateGbps * 1e9 / 8) / $numSenders))")"
 
-"$(realpath "$(dirname "$0")/..")/ns3" run "scratch/incast \
+scratch_dir="$(realpath "$(dirname "$0")")"
+ns3_dir="$(realpath "$scratch_dir/..")"
+rm -rfv "$scratch_dir/traces"
+mkdir -p "$scratch_dir/traces"
+
+"$ns3_dir/ns3" run "scratch/incast \
     --numSenders=$numSenders \
     --bytesPerSender=$bytesPerSender \
     --numBursts=3 \
