@@ -45,7 +45,9 @@ NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
  */
 void
 IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
-  m_cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwndBytes
+  m_cwndOut << Simulator::Now().GetSeconds() 
+            << " " 
+            << newCwndBytes
             << std::endl;
 }
 
@@ -57,7 +59,9 @@ IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
  */
 void
 IncastAggregator::LogRtt(Time oldRtt, Time newRtt) {
-  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetSeconds()
+  m_rttOut << Simulator::Now().GetSeconds() 
+           << " " 
+           << newRtt.GetMicroSeconds()
            << std::endl;
 }
 
@@ -169,13 +173,13 @@ IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   m_burstTimesOut.open("scratch/traces/log/burst_times.log", std::ios::out);
-  m_burstTimesOut << "#Start time(s) End time (s)" << std::endl;
+  m_burstTimesOut << "Start time (s) End time (s)" << std::endl;
 
   m_cwndOut.open("scratch/traces/log/aggregator_cwnd.log", std::ios::out);
-  m_cwndOut << "#Time(s)\tCWND (bytes)" << std::endl;
+  m_cwndOut << "Time (s) CWND (bytes)" << std::endl;
 
   m_rttOut.open("scratch/traces/log/aggregator_rtt.log", std::ios::out);
-  m_rttOut << "#Time(s)\tRTT(s)" << std::endl;
+  m_rttOut << "Time (s) RTT (us)" << std::endl;
 
   for (Ipv4Address sender : m_senders) {
     Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
@@ -369,8 +373,10 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   };
 
   if (m_totalBytesSoFar == m_bytesPerSender * m_senders.size()) {
-    m_burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() << " "
-                    << Simulator::Now().GetSeconds() << std::endl;
+    m_burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() 
+                    << " "
+                    << Simulator::Now().GetSeconds() 
+                    << std::endl;
 
     m_burstDurationsSec.push_back(
         Simulator::Now() - m_currentBurstStartTimeSec);

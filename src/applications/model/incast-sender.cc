@@ -42,7 +42,9 @@ NS_OBJECT_ENSURE_REGISTERED(IncastSender);
  */
 void
 IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
-  m_cwndOut << Simulator::Now().GetSeconds() << "\t" << newCwndBytes
+  m_cwndOut << Simulator::Now().GetSeconds()
+            << " "
+            << newCwndBytes
             << std::endl;
 }
 
@@ -54,7 +56,9 @@ IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
  */
 void
 IncastSender::LogRtt(Time oldRtt, Time newRtt) {
-  m_rttOut << Simulator::Now().GetSeconds() << "\t" << newRtt.GetMicroSeconds()
+  m_rttOut << Simulator::Now().GetSeconds() 
+           << " "
+           << newRtt.GetMicroSeconds()
            << std::endl;
 }
 
@@ -126,12 +130,12 @@ IncastSender::StartApplication() {
   m_cwndOut.open(
       "scratch/traces/log/sender" + std::to_string(m_nid) + "_cwnd.log",
       std::ios::out);
-  m_cwndOut << "#Time(s)\tCWND (bytes)" << std::endl;
+  m_cwndOut << "Time (s) CWND (bytes)" << std::endl;
 
   m_rttOut.open(
       "scratch/traces/log/sender" + std::to_string(m_nid) + "_rtt.log",
       std::ios::out);
-  m_rttOut << "#Time(s)\tRTT(us)" << std::endl;
+  m_rttOut << "Time (s) RTT (us)" << std::endl;
 
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
   // Enable TCP timestamp option.
