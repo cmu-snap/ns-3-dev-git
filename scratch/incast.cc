@@ -21,8 +21,8 @@
 //
 // Run with:
 //  $ ./ns3 run "scratch/incast --bytesPerSender=100000 --numBursts=5
-//       --numSenders=100 --smallBandwidthMbps=12500
-//       --largeBandwidthMbps=100000"
+//       --numSenders=100 --smallLinkBandwidthMbps=12500
+//       --largeLinkBandwidthMbps=100000"
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
@@ -109,16 +109,16 @@ main(int argc, char *argv[]) {
   uint32_t jitterUs = 100;
 
   // Parameters for the small links (ToR to node)
-  float smallBandwidthMbps = 12500;
+  float smallLinkBandwidthMbps = 12500;
   uint32_t smallQueueSizePackets = 2666;
-  uint32_t smallMinThresholdPackets = 60;
-  uint32_t smallMaxThresholdPackets = 60;
+  uint32_t smallQueueMinThresholdPackets = 60;
+  uint32_t smallQueueMaxThresholdPackets = 60;
 
   // Parameters for the large links (ToR to ToR)
-  float largeBandwidthMbps = 100000;
+  float largeLinkBandwidthMbps = 100000;
   uint32_t largeQueueSizePackets = 2666;
-  uint32_t largeMinThresholdPackets = 150;
-  uint32_t largeMaxThresholdPackets = 150;
+  uint32_t largeQueueMinThresholdPackets = 150;
+  uint32_t largeQueueMaxThresholdPackets = 150;
 
   // RWND tuning parameters
   std::string rwndStrategy = "none";
@@ -141,13 +141,13 @@ main(int argc, char *argv[]) {
       "Maximum random jitter when sending requests (in microseconds)",
       jitterUs);
   cmd.AddValue(
-      "smallBandwidthMbps",
+      "smallLinkBandwidthMbps",
       "Small link bandwidth (in Mbps)",
-      smallBandwidthMbps);
+      smallLinkBandwidthMbps);
   cmd.AddValue(
-      "largeBandwidthMbps",
+      "largeLinkBandwidthMbps",
       "Large link bandwidth (in Mbps)",
-      largeBandwidthMbps);
+      largeLinkBandwidthMbps);
   cmd.AddValue(
       "delayPerLinkUs",
       "Delay on each link (in microseconds). The RTT is 6 times this value.",
@@ -157,25 +157,25 @@ main(int argc, char *argv[]) {
       "Maximum number of packets accepted by queues on the small link",
       smallQueueSizePackets);
   cmd.AddValue(
-      "smallMinThreshold",
-      "Minimum average length threshold (in packets/bytes)",
-      smallMinThresholdPackets);
+      "smallQueueMinThreshold",
+      "Minimum average length threshold for the small queue (in packets/bytes)",
+      smallQueueMinThresholdPackets);
   cmd.AddValue(
-      "smallMaxThreshold",
-      "Maximum average length threshold (in packets/bytes)",
-      smallMaxThresholdPackets);
+      "smallQueueMaxThreshold",
+      "Maximum average length threshold for the small queue (in packets/bytes)",
+      smallQueueMaxThresholdPackets);
   cmd.AddValue(
       "largeQueueSize",
       "Maximum number of packets accepted by queues on the large link",
       largeQueueSizePackets);
   cmd.AddValue(
-      "largeMinThreshold",
-      "Minimum average length threshold (in packets/bytes)",
-      largeMinThresholdPackets);
+      "largeQueueMinThreshold",
+      "Minimum average length threshold for the large queue (in packets/bytes)",
+      largeQueueMinThresholdPackets);
   cmd.AddValue(
-      "largeMaxThreshold",
-      "Maximum average length threshold (in packets/bytes)",
-      largeMaxThresholdPackets);
+      "largeQueueMaxThreshold",
+      "Maximum average length threshold for the large queue (in packets/bytes)",
+      largeQueueMaxThresholdPackets);
   cmd.AddValue(
       "rwndStrategy",
       "RWND tuning strategy to use [none, static, bdp+connections]",
@@ -187,13 +187,13 @@ main(int argc, char *argv[]) {
   cmd.Parse(argc, argv);
 
   // Check if the large link will be overwhelmed
-  uint32_t totalIncastMbps = smallBandwidthMbps * numSenders;
+  uint32_t totalIncastMbps = smallLinkBandwidthMbps * numSenders;
 
-  if (totalIncastMbps > largeBandwidthMbps) {
+  if (totalIncastMbps > largeLinkBandwidthMbps) {
     NS_LOG_WARN(
         "Total incast bandwidth (" << totalIncastMbps
                                    << "Mbps) exceeds large link bandwidth ("
-                                   << largeBandwidthMbps << "Mbps)");
+                                   << largeLinkBandwidthMbps << "Mbps)");
   }
 
   // Convert numeric values to NS3 values
@@ -202,15 +202,15 @@ main(int argc, char *argv[]) {
   StringValue delayPerLinkUsStringValue =
       StringValue(delayPerLinkUsString.str());
 
-  std::ostringstream smallBandwidthMbpsString;
-  smallBandwidthMbpsString << smallBandwidthMbps << "Mbps";
-  StringValue smallBandwidthMbpsStringValue =
-      StringValue(smallBandwidthMbpsString.str());
+  std::ostringstream smallLinkBandwidthMbpsString;
+  smallLinkBandwidthMbpsString << smallLinkBandwidthMbps << "Mbps";
+  StringValue smallLinkBandwidthMbpsStringValue =
+      StringValue(smallLinkBandwidthMbpsString.str());
 
-  std::ostringstream largeBandwidthMbpsString;
-  largeBandwidthMbpsString << largeBandwidthMbps << "Mbps";
-  StringValue largeBandwidthMbpsStringValue =
-      StringValue(largeBandwidthMbpsString.str());
+  std::ostringstream largeLinkBandwidthMbpsString;
+  largeLinkBandwidthMbpsString << largeLinkBandwidthMbps << "Mbps";
+  StringValue largeLinkBandwidthMbpsStringValue =
+      StringValue(largeLinkBandwidthMbpsString.str());
 
   std::ostringstream smallQueueSizePacketsString;
   smallQueueSizePacketsString << smallQueueSizePackets << "p";
@@ -226,11 +226,11 @@ main(int argc, char *argv[]) {
 
   // Create links
   PointToPointHelper smallLinkHelper;
-  smallLinkHelper.SetDeviceAttribute("DataRate", smallBandwidthMbpsStringValue);
+  smallLinkHelper.SetDeviceAttribute("DataRate", smallLinkBandwidthMbpsStringValue);
   smallLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   PointToPointHelper largeLinkHelper;
-  largeLinkHelper.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
+  largeLinkHelper.SetDeviceAttribute("DataRate", largeLinkBandwidthMbpsStringValue);
   largeLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   // Create a dumbbell topology
@@ -303,15 +303,15 @@ main(int argc, char *argv[]) {
   smallLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
-      smallBandwidthMbpsStringValue,
+      smallLinkBandwidthMbpsStringValue,
       "LinkDelay",
       delayPerLinkUsStringValue,
       "MaxSize",
       smallQueueSizePacketsValue,
       "MinTh",
-      DoubleValue(smallMinThresholdPackets),
+      DoubleValue(smallQueueMinThresholdPackets),
       "MaxTh",
-      DoubleValue(smallMaxThresholdPackets),
+      DoubleValue(smallQueueMaxThresholdPackets),
       "LInterm",
       DoubleValue(100));
 
@@ -319,15 +319,15 @@ main(int argc, char *argv[]) {
   largeLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
-      largeBandwidthMbpsStringValue,
+      largeLinkBandwidthMbpsStringValue,
       "LinkDelay",
       delayPerLinkUsStringValue,
       "MaxSize",
       largeQueueSizePacketsValue,
       "MinTh",
-      DoubleValue(largeMinThresholdPackets),
+      DoubleValue(largeQueueMinThresholdPackets),
       "MaxTh",
-      DoubleValue(largeMaxThresholdPackets),
+      DoubleValue(largeQueueMaxThresholdPackets),
       "LInterm",
       DoubleValue(100));
 
@@ -385,7 +385,7 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute(
       "StaticRwndBytes", UintegerValue(staticRwndBytes));
   aggregatorApp->SetAttribute(
-      "BandwidthMbps", UintegerValue(smallBandwidthMbps));
+      "BandwidthMbps", UintegerValue(smallLinkBandwidthMbps));
   aggregatorApp->SetAttribute(
       "PhysicalRTT", TimeValue(MicroSeconds(6 * delayPerLinkUs)));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
@@ -493,7 +493,7 @@ main(int argc, char *argv[]) {
   double idealBurstDurationSec =
       // Time to transmit the burst.
       (double)bytesPerSender * numSenders * numBitsInByte /
-          (smallBandwidthMbps * megaToBase) +
+          (smallLinkBandwidthMbps * megaToBase) +
       // 1 RTT for the request and the first response packet to propgate.
       numHops * 2 * delayPerLinkUs / megaToBase;
 
