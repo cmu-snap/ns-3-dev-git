@@ -392,12 +392,12 @@ main(int argc, char *argv[]) {
 
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
-      "scratch/traces/incast-sockets", dumbbellHelper.GetLeft(0)->GetId(), 0);
+      "scratch/traces/pcap/incast-sockets", dumbbellHelper.GetLeft(0)->GetId(), 0);
 
   // Enable tracing at each sender
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     largeLinkHelper.EnablePcap(
-        "scratch/traces/incast-sockets",
+        "scratch/traces/pcap/incast-sockets",
         dumbbellHelper.GetRight(i)->GetId(),
         0);
   }
@@ -415,11 +415,11 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Running simulation...");
 
   // Trace the queues
-  incastQueueOut.open("scratch/traces/incast_queue.log", std::ios::out);
+  incastQueueOut.open("scratch/traces/log/incast_queue.log", std::ios::out);
   incastQueueOut << "#Time(s) qlen(pkts) qlen(us)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
-  uplinkQueueOut.open("scratch/traces/uplink_queue.log", std::ios::out);
+  uplinkQueueOut.open("scratch/traces/log/uplink_queue.log", std::ios::out);
   uplinkQueueOut << "#Time(s) qlen(pkts) qlen(us)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));

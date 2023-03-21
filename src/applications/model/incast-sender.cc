@@ -124,12 +124,12 @@ IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   m_cwndOut.open(
-      "scratch/traces/sender" + std::to_string(m_nid) + "_cwnd.log",
+      "scratch/traces/log/sender" + std::to_string(m_nid) + "_cwnd.log",
       std::ios::out);
   m_cwndOut << "#Time(s)\tCWND (bytes)" << std::endl;
 
   m_rttOut.open(
-      "scratch/traces/sender" + std::to_string(m_nid) + "_rtt.log",
+      "scratch/traces/log/sender" + std::to_string(m_nid) + "_rtt.log",
       std::ios::out);
   m_rttOut << "#Time(s)\tRTT(us)" << std::endl;
 

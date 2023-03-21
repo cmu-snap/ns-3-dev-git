@@ -168,13 +168,13 @@ void
 IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
-  m_burstTimesOut.open("scratch/traces/burst_times.log", std::ios::out);
+  m_burstTimesOut.open("scratch/traces/log/burst_times.log", std::ios::out);
   m_burstTimesOut << "#Start time(s) End time (s)" << std::endl;
 
-  m_cwndOut.open("scratch/traces/aggregator_cwnd.log", std::ios::out);
+  m_cwndOut.open("scratch/traces/log/aggregator_cwnd.log", std::ios::out);
   m_cwndOut << "#Time(s)\tCWND (bytes)" << std::endl;
 
-  m_rttOut.open("scratch/traces/aggregator_rtt.log", std::ios::out);
+  m_rttOut.open("scratch/traces/log/aggregator_rtt.log", std::ios::out);
   m_rttOut << "#Time(s)\tRTT(s)" << std::endl;
 
   for (Ipv4Address sender : m_senders) {
