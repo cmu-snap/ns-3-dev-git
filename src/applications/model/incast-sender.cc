@@ -42,9 +42,7 @@ NS_OBJECT_ENSURE_REGISTERED(IncastSender);
  */
 void
 IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
-  m_cwndOut << Simulator::Now().GetSeconds()
-            << " "
-            << newCwndBytes
+  m_cwndOut << Simulator::Now().GetSeconds() << " " << newCwndBytes
             << std::endl;
 }
 
@@ -56,9 +54,7 @@ IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
  */
 void
 IncastSender::LogRtt(Time oldRtt, Time newRtt) {
-  m_rttOut << Simulator::Now().GetSeconds() 
-           << " "
-           << newRtt.GetMicroSeconds()
+  m_rttOut << Simulator::Now().GetSeconds() << " " << newRtt.GetMicroSeconds()
            << std::endl;
 }
 

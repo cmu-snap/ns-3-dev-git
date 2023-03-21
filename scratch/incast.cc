@@ -61,12 +61,8 @@ std::ofstream rxDropsOut;
 
 void
 LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
-  (*out) << std::fixed 
-         << std::setprecision(9) 
-         << Simulator::Now().GetSeconds()
-         << " " 
-         << newDepth 
-         << std::endl;
+  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
+         << " " << newDepth << std::endl;
 }
 
 void
@@ -79,19 +75,21 @@ LogUplinkQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
   LogQueueDepth(&uplinkQueueOut, oldDepth, newDepth);
 }
 
-void 
-LogDctcpAlpha(std::ofstream *out, uint32_t bytesMarked, uint32_t bytesAcked, double alpha) {
-    std::cout << "Called LogDctcpAlpha()" << std::endl;
-    (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
+void
+LogDctcpAlpha(
+    std::ofstream *out,
+    uint32_t bytesMarked,
+    uint32_t bytesAcked,
+    double alpha) {
+  std::cout << "Called LogDctcpAlpha()" << std::endl;
+  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
          << " " << alpha << std::endl;
 }
 
 void
 LogRxDrops(Ptr<const Packet> p) {
-    rxDropsOut << std::fixed 
-              << std::setprecision(9) 
-              << Simulator::Now().GetSeconds()
-              << std::endl;
+  rxDropsOut << std::fixed << std::setprecision(9)
+             << Simulator::Now().GetSeconds() << std::endl;
 }
 
 int
@@ -413,7 +411,9 @@ main(int argc, char *argv[]) {
 
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
-      "scratch/traces/pcap/incast-sockets", dumbbellHelper.GetLeft(0)->GetId(), 0);
+      "scratch/traces/pcap/incast-sockets",
+      dumbbellHelper.GetLeft(0)->GetId(),
+      0);
 
   // Enable tracing at each sender
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
@@ -451,28 +451,29 @@ main(int argc, char *argv[]) {
     dctcpAlphaOut << "Time (s) Alpha" << std::endl;
 
     std::ostringstream pathStream;
-    pathStream << "/NodeList/" << dumbbellHelper.GetLeft()->GetId() << "/" 
-        << "$ns3::TcpL4Protocol/SocketList/0/"
-        << "CongestionOps/$ns3::TcpDctcp/CongestionEstimate";
+    pathStream << "/NodeList/" << dumbbellHelper.GetLeft()->GetId() << "/"
+               << "$ns3::TcpL4Protocol/SocketList/0/"
+               << "CongestionOps/$ns3::TcpDctcp/CongestionEstimate";
 
     std::cout << pathStream.str() << std::endl;
 
     bool b = Config::ConnectWithoutContextFailSafe(
-        pathStream.str(),
-        MakeBoundCallback(&LogDctcpAlpha, &dctcpAlphaOut)
-    );
+        pathStream.str(), MakeBoundCallback(&LogDctcpAlpha, &dctcpAlphaOut));
 
     if (b) {
-        std::cout << "Config::ConnectWithoutContextFailSafe() SUCCEEDED" << std::endl;
+      std::cout << "Config::ConnectWithoutContextFailSafe() SUCCEEDED"
+                << std::endl;
     } else {
-        std::cout << "Config::ConnectWithoutContextFailSafe() FAILED" << std::endl;
+      std::cout << "Config::ConnectWithoutContextFailSafe() FAILED"
+                << std::endl;
     }
   }
 
   // Trace packet drops during reception
   rxDropsOut.open("scratch/traces/log/incast_rxdrops.log", std::ios::out);
   rxDropsOut << "Drop Times (s)" << std::endl;
-  dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&LogRxDrops));
+  dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext(
+      "PhyRxDrop", MakeCallback(&LogRxDrops));
 
   Simulator::Run();
   Simulator::Destroy();

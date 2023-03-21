@@ -45,9 +45,7 @@ NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
  */
 void
 IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
-  m_cwndOut << Simulator::Now().GetSeconds() 
-            << " " 
-            << newCwndBytes
+  m_cwndOut << Simulator::Now().GetSeconds() << " " << newCwndBytes
             << std::endl;
 }
 
@@ -59,9 +57,7 @@ IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
  */
 void
 IncastAggregator::LogRtt(Time oldRtt, Time newRtt) {
-  m_rttOut << Simulator::Now().GetSeconds() 
-           << " " 
-           << newRtt.GetMicroSeconds()
+  m_rttOut << Simulator::Now().GetSeconds() << " " << newRtt.GetMicroSeconds()
            << std::endl;
 }
 
@@ -373,10 +369,8 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   };
 
   if (m_totalBytesSoFar == m_bytesPerSender * m_senders.size()) {
-    m_burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() 
-                    << " "
-                    << Simulator::Now().GetSeconds() 
-                    << std::endl;
+    m_burstTimesOut << m_currentBurstStartTimeSec.GetSeconds() << " "
+                    << Simulator::Now().GetSeconds() << std::endl;
 
     m_burstDurationsSec.push_back(
         Simulator::Now() - m_currentBurstStartTimeSec);
