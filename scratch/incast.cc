@@ -105,7 +105,7 @@ main(int argc, char *argv[]) {
   uint32_t numBursts = 5;
   uint32_t numSenders = 10;
   uint32_t bytesPerSender = 500000;
-  float perLinkDelayUs = 5;
+  float delayPerLinkUs = 5;
   uint32_t jitterUs = 100;
 
   // Parameters for the small links (ToR to node)
@@ -149,9 +149,9 @@ main(int argc, char *argv[]) {
       "Large link bandwidth (in Mbps)",
       largeBandwidthMbps);
   cmd.AddValue(
-      "perLinkDelayUs",
+      "delayPerLinkUs",
       "Delay on each link (in microseconds). The RTT is 6 times this value.",
-      perLinkDelayUs);
+      delayPerLinkUs);
   cmd.AddValue(
       "smallQueueSize",
       "Maximum number of packets accepted by queues on the small link",
@@ -197,10 +197,10 @@ main(int argc, char *argv[]) {
   }
 
   // Convert numeric values to NS3 values
-  std::ostringstream perLinkDelayUsString;
-  perLinkDelayUsString << perLinkDelayUs << "us";
-  StringValue perLinkDelayUsStringValue =
-      StringValue(perLinkDelayUsString.str());
+  std::ostringstream delayPerLinkUsString;
+  delayPerLinkUsString << delayPerLinkUs << "us";
+  StringValue delayPerLinkUsStringValue =
+      StringValue(delayPerLinkUsString.str());
 
   std::ostringstream smallBandwidthMbpsString;
   smallBandwidthMbpsString << smallBandwidthMbps << "Mbps";
@@ -227,11 +227,11 @@ main(int argc, char *argv[]) {
   // Create links
   PointToPointHelper smallLinkHelper;
   smallLinkHelper.SetDeviceAttribute("DataRate", smallBandwidthMbpsStringValue);
-  smallLinkHelper.SetChannelAttribute("Delay", perLinkDelayUsStringValue);
+  smallLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   PointToPointHelper largeLinkHelper;
   largeLinkHelper.SetDeviceAttribute("DataRate", largeBandwidthMbpsStringValue);
-  largeLinkHelper.SetChannelAttribute("Delay", perLinkDelayUsStringValue);
+  largeLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   // Create a dumbbell topology
   PointToPointDumbbellHelper dumbbellHelper(
@@ -305,7 +305,7 @@ main(int argc, char *argv[]) {
       "LinkBandwidth",
       smallBandwidthMbpsStringValue,
       "LinkDelay",
-      perLinkDelayUsStringValue,
+      delayPerLinkUsStringValue,
       "MaxSize",
       smallQueueSizePacketsValue,
       "MinTh",
@@ -321,7 +321,7 @@ main(int argc, char *argv[]) {
       "LinkBandwidth",
       largeBandwidthMbpsStringValue,
       "LinkDelay",
-      perLinkDelayUsStringValue,
+      delayPerLinkUsStringValue,
       "MaxSize",
       largeQueueSizePacketsValue,
       "MinTh",
@@ -387,7 +387,7 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute(
       "BandwidthMbps", UintegerValue(smallBandwidthMbps));
   aggregatorApp->SetAttribute(
-      "PhysicalRTT", TimeValue(MicroSeconds(6 * perLinkDelayUs)));
+      "PhysicalRTT", TimeValue(MicroSeconds(6 * delayPerLinkUs)));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
@@ -495,7 +495,7 @@ main(int argc, char *argv[]) {
       (double)bytesPerSender * numSenders * numBitsInByte /
           (smallBandwidthMbps * megaToBase) +
       // 1 RTT for the request and the first response packet to propgate.
-      numHops * 2 * perLinkDelayUs / megaToBase;
+      numHops * 2 * delayPerLinkUs / megaToBase;
 
   NS_LOG_INFO(
       "Ideal burst duration: " << idealBurstDurationSec * numMsInSec << "ms");
