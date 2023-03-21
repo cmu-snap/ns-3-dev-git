@@ -57,11 +57,16 @@ NS_LOG_COMPONENT_DEFINE("IncastSim");
 std::ofstream incastQueueOut;
 std::ofstream uplinkQueueOut;
 std::ofstream dctcpAlphaOut;
+std::ofstream rxDropsOut;
 
 void
 LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
-  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
-         << " " << newDepth << std::endl;
+  (*out) << std::fixed 
+         << std::setprecision(9) 
+         << Simulator::Now().GetSeconds()
+         << " " 
+         << newDepth 
+         << std::endl;
 }
 
 void
@@ -79,6 +84,14 @@ LogDctcpAlpha(std::ofstream *out, uint32_t bytesMarked, uint32_t bytesAcked, dou
     std::cout << "Called LogDctcpAlpha()" << std::endl;
     (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
          << " " << alpha << std::endl;
+}
+
+void
+LogRxDrops(Ptr<const Packet> p) {
+    rxDropsOut << std::fixed 
+              << std::setprecision(9) 
+              << Simulator::Now().GetSeconds()
+              << std::endl;
 }
 
 int
@@ -456,11 +469,18 @@ main(int argc, char *argv[]) {
     }
   }
 
+  // Trace packet drops during reception
+  rxDropsOut.open("scratch/traces/log/incast_rxdrops.log", std::ios::out);
+  rxDropsOut << "Drop Times (s)" << std::endl;
+  dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&LogRxDrops));
+
   Simulator::Run();
   Simulator::Destroy();
 
   incastQueueOut.close();
   uplinkQueueOut.close();
+  dctcpAlphaOut.close();
+  rxDropsOut.close();
 
   NS_LOG_INFO("Finished simulation.");
 
