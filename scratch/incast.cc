@@ -56,6 +56,7 @@ NS_LOG_COMPONENT_DEFINE("IncastSim");
 
 std::ofstream incastQueueOut;
 std::ofstream uplinkQueueOut;
+std::ofstream dctcpAlphaOut;
 
 void
 LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
@@ -71,6 +72,13 @@ LogIncastQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
 void
 LogUplinkQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
   LogQueueDepth(&uplinkQueueOut, oldDepth, newDepth);
+}
+
+void 
+LogDctcpAlpha(std::ofstream *out, uint32_t bytesMarked, uint32_t bytesAcked, double alpha) {
+    std::cout << "Called LogDctcpAlpha()" << std::endl;
+    (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
+         << " " << alpha << std::endl;
 }
 
 int
@@ -416,13 +424,37 @@ main(int argc, char *argv[]) {
 
   // Trace the queues
   incastQueueOut.open("scratch/traces/log/incast_queue.log", std::ios::out);
-  incastQueueOut << "#Time(s) qlen(pkts) qlen(us)" << std::endl;
+  incastQueueOut << "Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
   uplinkQueueOut.open("scratch/traces/log/uplink_queue.log", std::ios::out);
-  uplinkQueueOut << "#Time(s) qlen(pkts) qlen(us)" << std::endl;
+  uplinkQueueOut << "Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
+
+  // Trace alpha from DCTCP
+  if (tcpTypeId == "TcpDctcp") {
+    dctcpAlphaOut.open("scratch/traces/log/dctcp_alpha.log", std::ios::out);
+    dctcpAlphaOut << "Time (s) Alpha" << std::endl;
+
+    std::ostringstream pathStream;
+    pathStream << "/NodeList/" << dumbbellHelper.GetLeft()->GetId() << "/" 
+        << "$ns3::TcpL4Protocol/SocketList/0/"
+        << "CongestionOps/$ns3::TcpDctcp/CongestionEstimate";
+
+    std::cout << pathStream.str() << std::endl;
+
+    bool b = Config::ConnectWithoutContextFailSafe(
+        pathStream.str(),
+        MakeBoundCallback(&LogDctcpAlpha, &dctcpAlphaOut)
+    );
+
+    if (b) {
+        std::cout << "Config::ConnectWithoutContextFailSafe() SUCCEEDED" << std::endl;
+    } else {
+        std::cout << "Config::ConnectWithoutContextFailSafe() FAILED" << std::endl;
+    }
+  }
 
   Simulator::Run();
   Simulator::Destroy();
