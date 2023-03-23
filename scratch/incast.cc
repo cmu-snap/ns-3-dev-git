@@ -52,8 +52,10 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("IncastSim");
 
-std::ofstream incastQueueOut;
-std::ofstream uplinkQueueOut;
+std::ofstream incastQueueDepthOut;
+std::ofstream uplinkQueueDepthOut;
+std::ofstream incastQueueMarkOut;
+std::ofstream uplinkQueueMarkOut;
 std::ofstream dctcpAlphaOut;
 std::ofstream rxDropsOut;
 
@@ -65,12 +67,28 @@ LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
 
 void
 LogIncastQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
-  LogQueueDepth(&incastQueueOut, oldDepth, newDepth);
+  LogQueueDepth(&incastQueueDepthOut, oldDepth, newDepth);
 }
 
 void
 LogUplinkQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
-  LogQueueDepth(&uplinkQueueOut, oldDepth, newDepth);
+  LogQueueDepth(&uplinkQueueDepthOut, oldDepth, newDepth);
+}
+
+void
+LogQueueMark(std::ofstream *out) {
+  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
+         << std::endl;
+}
+
+void
+LogIncastQueueMark(Ptr<const QueueDiscItem>, const char *) {
+  LogQueueMark(&incastQueueMarkOut);
+}
+
+void
+LogUplinkQueueMark(Ptr<const QueueDiscItem>, const char *) {
+  LogQueueMark(&uplinkQueueMarkOut);
 }
 
 void
@@ -235,11 +253,13 @@ main(int argc, char *argv[]) {
   // Create links
   PointToPointHelper smallLinkHelper;
   smallLinkHelper.SetDeviceAttribute(
+
       "DataRate", smallLinkBandwidthMbpsStringValue);
   smallLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   PointToPointHelper largeLinkHelper;
   largeLinkHelper.SetDeviceAttribute(
+
       "DataRate", largeLinkBandwidthMbpsStringValue);
   largeLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
@@ -282,6 +302,8 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
+  Config::SetDefault(
+      "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(0)));
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
 
   // Important: Must do this before configuring IP addresses.
@@ -402,12 +424,12 @@ main(int argc, char *argv[]) {
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
+  std::vector<Ptr<IncastSender>> senderApps;
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
+    senderApps.push_back(senderApp);
     senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
-    senderApp->SetAttribute(
-        "NodeID", UintegerValue(dumbbellHelper.GetRight(i)->GetId()));
     senderApp->SetAttribute(
         "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
@@ -449,18 +471,31 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Running simulation...");
 
   // Trace the queues
-  incastQueueOut.open(
-      outputDirectory + traceDirectory + "log/incast_queue.log",
+  //
+  // Depth
+  incastQueueDepthOut.open(
+      outputDirectory + traceDirectory + "log/incast_queue_depth.log",
       std::ios::out);
-  incastQueueOut << "Time (s) qlen (pkts)" << std::endl;
+  incastQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
-  uplinkQueueOut.open(
-      outputDirectory + traceDirectory + "log/uplink_queue.log",
+  uplinkQueueDepthOut.open(
+      outputDirectory + traceDirectory + "log/uplink_queue_depth.log",
       std::ios::out);
-  uplinkQueueOut << "Time (s) qlen (pkts)" << std::endl;
+  uplinkQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
+  // Marks
+  incastQueueMarkOut.open(
+      "scratch/traces/log/incast_queue_mark.log", std::ios::out);
+  incastQueueMarkOut << "# Time (s)" << std::endl;
+  incastQueue->TraceConnectWithoutContext(
+      "Mark", MakeCallback(&LogIncastQueueMark));
+  uplinkQueueMarkOut.open(
+      "scratch/traces/log/uplink_queue_mark.log", std::ios::out);
+  uplinkQueueMarkOut << "# Time (s)" << std::endl;
+  uplinkQueue->TraceConnectWithoutContext(
+      "Mark", MakeCallback(&LogUplinkQueueMark));
 
   // TODO: Trace alpha from DCTCP
   if (tcpTypeId == "TcpDctcp") {
@@ -488,13 +523,20 @@ main(int argc, char *argv[]) {
   dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext(
       "PhyRxDrop", MakeCallback(&LogRxDrops));
 
-  // Run the simulator
-    Simulator::Run();
-    Simulator::Destroy();
+  Simulator::Run();
 
-  // Close streams
-  incastQueueOut.close();
-  uplinkQueueOut.close();
+  // Write application output files
+  aggregatorApp->WriteLogs();
+  for (const auto &senderApp : senderApps) {
+    senderApp->WriteLogs();
+  }
+
+  Simulator::Destroy();
+
+  incastQueueDepthOut.close();
+  uplinkQueueDepthOut.close();
+  incastQueueMarkOut.close();
+  uplinkQueueMarkOut.close();
   dctcpAlphaOut.close();
   rxDropsOut.close();
 
@@ -516,11 +558,11 @@ main(int argc, char *argv[]) {
       "Ideal burst duration: " << idealBurstDurationSec * baseToMilli << "ms");
 
   NS_LOG_INFO("Burst durations (x ideal):");
-  for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
+  for (const auto &p : aggregatorApp->GetBurstTimes()) {
+    Time burstDuration = p.second - p.first;
     NS_LOG_INFO(
-        burstDurationSec.As(Time::MS)
-        << " (" << burstDurationSec.GetSeconds() / idealBurstDurationSec
-        << "x)");
+        burstDuration.As(Time::MS)
+        << " (" << burstDuration.GetSeconds() / idealBurstDurationSec << "x)");
   }
 
   return 0;

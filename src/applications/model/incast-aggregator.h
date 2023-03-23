@@ -57,7 +57,9 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  std::vector<Time> GetBurstDurations();
+  std::vector<std::pair<Time, Time>> GetBurstTimes();
+
+  void WriteLogs();
 
  protected:
   /**
@@ -137,6 +139,20 @@ class IncastAggregator : public Application {
    */
   void SendRttProbe();
 
+  /**
+   * @brief Perform static RWND tuning. To be used on connection setup.
+   */
+  void StaticRwndTuning(Ptr<TcpSocketBase> tcpSocket);
+
+  /**
+   * @brief Perform dynamic RWND tuning. To be used after every read.
+   */
+  void DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket);
+
+  void CloseConnections();
+
+  void SetupConnection(Ipv4Address sender, bool isLast);
+
   // Directory for all log and pcap traces
   std::string m_outputDirectory;
 
@@ -161,8 +177,8 @@ class IncastAggregator : public Application {
   // TypeId of the protocol used
   TypeId m_tid;
 
-  // List of associated sockets
-  std::vector<Ptr<Socket>> m_sockets;
+  // Map from socket to remote IP address
+  std::unordered_map<Ptr<Socket>, Ipv4Address> m_sockets;
 
   // List of addresses for associated senders
   std::vector<Ipv4Address> m_senders;
@@ -171,10 +187,7 @@ class IncastAggregator : public Application {
   uint32_t m_requestJitterUs;
 
   // Start time of the current burst
-  Time m_currentBurstStartTimeSec;
-
-  // List of all burst durations
-  std::vector<Time> m_burstDurationsSec;
+  Time m_currentBurstStartTime;
 
   // RWND tuning strategy to use [none, static, bdp+connections]
   std::string m_rwndStrategy;
@@ -196,9 +209,15 @@ class IncastAggregator : public Application {
   TypeId m_cca;
 
   // Log streams
-  std::ofstream m_burstTimesOut;
-  std::ofstream m_cwndOut;
-  std::ofstream m_rttOut;
+  std::vector<std::pair<Time, Time>> m_burstTimesLog;
+  std::vector<std::pair<Time, uint32_t>> m_cwndLog;
+  std::vector<std::pair<Time, Time>> m_rttLog;
+
+  // Maps sockets to the number of bytes received during the current burst
+  std::unordered_map<Ptr<Socket>, uint32_t> m_bytesReceived;
+
+  // Number of senders that have finished the current burst
+  uint32_t m_sendersFinished;
 };
 
 }  // namespace ns3

@@ -49,6 +49,8 @@ class IncastSender : public Application {
    */
   ~IncastSender() override;
 
+  void WriteLogs();
+
  protected:
   void DoDispose() override;
 
@@ -105,7 +107,7 @@ class IncastSender : public Application {
 
   // Sub-directory for this experiment's log and pcap traces
   std::string m_traceDirectory;
-  
+
   // Node ID of the sender
   uint32_t m_nid;
 
@@ -128,8 +130,11 @@ class IncastSender : public Application {
   TypeId m_cca;
 
   // Log streams
-  std::ofstream m_cwndOut;
-  std::ofstream m_rttOut;
+  std::vector<std::pair<Time, uint32_t>> m_cwndLog;
+  std::vector<std::pair<Time, Time>> m_rttLog;
+
+  // Prefix to prepend to all NS_LOG_* messages
+  std::string m_logPrefix;
 };
 
 }  // namespace ns3

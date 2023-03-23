@@ -7,7 +7,7 @@ set -eou pipefail
 queueSizePackets="$(python -c "import math; print(math.ceil(1800000 / 1500))")"
 thresholdPackets="$(python -c "import math; print(math.ceil(120000 / 1500))")"
 
-burstDurationMs=8
+burstDurationMs=15
 lineRateGbps=12.5
 numSenders=100
 # Convert burst duration to bytes per sender.

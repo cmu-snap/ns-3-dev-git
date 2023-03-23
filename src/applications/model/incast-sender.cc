@@ -43,8 +43,7 @@ NS_OBJECT_ENSURE_REGISTERED(IncastSender);
  */
 void
 IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
-  m_cwndOut << Simulator::Now().GetSeconds() << " " << newCwndBytes
-            << std::endl;
+  m_cwndLog.push_back({Simulator::Now(), newCwndBytes});
 }
 
 /**
@@ -55,8 +54,7 @@ IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
  */
 void
 IncastSender::LogRtt(Time oldRtt, Time newRtt) {
-  m_rttOut << Simulator::Now().GetSeconds() << " " << newRtt.GetMicroSeconds()
-           << std::endl;
+  m_rttLog.push_back({Simulator::Now(), newRtt});
 }
 
 TypeId
@@ -77,12 +75,6 @@ IncastSender::GetTypeId() {
               StringValue("trace_directory/"),
               MakeStringAccessor(&IncastSender::m_traceDirectory),
               MakeStringChecker())
-          .AddAttribute(
-              "NodeID",
-              "Node ID of the sender",
-              UintegerValue(0),
-              MakeUintegerAccessor(&IncastSender::m_nid),
-              MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "ResponseJitterUs",
               "Max random jitter in sending responses, in microseconds",
@@ -136,17 +128,13 @@ void
 IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
-  m_cwndOut.open(
-      m_outputDirectory + m_traceDirectory + "log/sender" +
-          std::to_string(m_nid) + "_cwnd.log",
-      std::ios::out);
-  m_cwndOut << "Time (s) CWND (bytes)" << std::endl;
-
-  m_rttOut.open(
-      m_outputDirectory + m_traceDirectory + "log/sender" +
-          std::to_string(m_nid) + "_rtt.log",
-      std::ios::out);
-  m_rttOut << "Time (s) RTT (us)" << std::endl;
+  // Set the log prefix based on Node ID and IP address
+  std::ostringstream logPrefix;
+  Ptr<Ipv4> ipv4 = GetNode()->GetObject<Ipv4>();
+  Ipv4InterfaceAddress iaddr = ipv4->GetAddress(1, 0);
+  Ipv4Address ipAddr = iaddr.GetLocal();
+  logPrefix << "Sender ID " << GetNode()->GetId() << " (" << ipAddr << "): ";
+  m_logPrefix = logPrefix.str();
 
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
   // Enable TCP timestamp option.
@@ -186,7 +174,8 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
     if (size == sizeof(uint32_t) || size == 1 + sizeof(uint32_t)) {
       bool containsRttProbe = (size == 1 + sizeof(uint32_t));
       uint32_t requestedBytes = ParseRequestedBytes(packet, containsRttProbe);
-      NS_LOG_LOGIC("Received request for " << requestedBytes << " bytes");
+      NS_LOG_INFO(
+          m_logPrefix << "Received request for " << requestedBytes << " bytes");
 
       // Add jitter to the first packet of the response
       Time jitter;
@@ -197,9 +186,11 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
           jitter, &IncastSender::SendBurst, this, socket, requestedBytes);
     } else if (size == 1) {
       // This is an RTT probe. Do nothing.
-      NS_LOG_LOGIC("Received RTT probe");
+      NS_LOG_LOGIC(m_logPrefix << "Received RTT probe");
     } else {
-      NS_LOG_WARN("Strange size received: " << size);
+      // Could be coalesced RTT probes: If multiple RTT probes are lost, they
+      // may accumulate before being retransmited.
+      NS_LOG_WARN(m_logPrefix << "Strange size received: " << size);
     }
   }
 }
@@ -227,14 +218,17 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
   while (sentBytes < totalBytes && socket->GetTxAvailable()) {
     int toSend = totalBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
+
+    NS_LOG_INFO(m_logPrefix << "Sending " << toSend << " bytes");
     int newSentBytes = socket->Send(packet);
+    NS_LOG_INFO(m_logPrefix << "Sent " << newSentBytes << " bytes");
 
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;
     } else {
       NS_FATAL_ERROR(
-          "Error: could not send " << toSend
-                                   << " bytes. Check your SndBufSize.");
+          m_logPrefix << "Error: could not send " << toSend
+                      << " bytes. Check your SndBufSize.");
     }
   }
 }
@@ -245,7 +239,8 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
   NS_LOG_LOGIC(
-      "Accepting connection from " << addr.GetIpv4() << ":" << addr.GetPort());
+      m_logPrefix << "Accepting connection from " << addr.GetIpv4() << ":"
+                  << addr.GetPort());
 
   socket->SetRecvCallback(MakeCallback(&IncastSender::HandleRead, this));
 
@@ -264,9 +259,32 @@ IncastSender::StopApplication() {
   if (m_socket) {
     m_socket->Close();
   }
+}
 
-  m_cwndOut.close();
-  m_rttOut.close();
+void
+IncastSender::WriteLogs() {
+  std::ofstream cwndOut;
+  cwndOut.open(
+      m_outputDirectory + m_traceDirectory + "log/sender" +
+          std::to_string(GetNode()->GetId()) + "_cwnd.log",
+      std::ios::out);
+  cwndOut << "# Time (s) CWND (bytes)" << std::endl;
+  for (const auto &p : m_cwndLog) {
+    cwndOut << p.first.GetSeconds() << " " << p.second << std::endl;
+  }
+  cwndOut.close();
+
+  std::ofstream rttOut;
+  rttOut.open(
+      m_outputDirectory + m_traceDirectory + "log/sender" +
+          std::to_string(GetNode()->GetId()) + "_rtt.log",
+      std::ios::out);
+  rttOut << "# Time (s) RTT (us)" << std::endl;
+  for (const auto &p : m_rttLog) {
+    rttOut << p.first.GetSeconds() << " " << p.second.GetMicroSeconds()
+           << std::endl;
+  }
+  rttOut.close();
 }
 
 }  // Namespace ns3
