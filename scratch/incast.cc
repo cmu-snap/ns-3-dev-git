@@ -99,6 +99,7 @@ main(int argc, char *argv[]) {
   LogComponentEnable("IncastSender", logConfig);
 
   // Initialize variables
+  std::string traceDirectory = "trace_directory/";
   std::string tcpTypeId = "TcpCubic";
   uint32_t numBursts = 5;
   uint32_t numSenders = 10;
@@ -124,6 +125,10 @@ main(int argc, char *argv[]) {
 
   // Define command line arguments
   CommandLine cmd;
+  cmd.AddValue(
+      "traceDirectory",
+      "Directory for this experiment's log and pcap traces",
+      traceDirectory);
   cmd.AddValue(
       "cca",
       "Congestion control algorithm (e.g., TcpCubic, TcpDctcp, etc.)",
@@ -410,14 +415,14 @@ main(int argc, char *argv[]) {
 
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
-      "scratch/traces/pcap/incast-sockets",
+      "scratch/traces/" + traceDirectory + "pcap/incast-sockets",
       dumbbellHelper.GetLeft(0)->GetId(),
       0);
 
   // Enable tracing at each sender
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     largeLinkHelper.EnablePcap(
-        "scratch/traces/pcap/incast-sockets",
+        "scratch/traces/" + traceDirectory + "pcap/incast-sockets",
         dumbbellHelper.GetRight(i)->GetId(),
         0);
   }
@@ -435,18 +440,24 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Running simulation...");
 
   // Trace the queues
-  incastQueueOut.open("scratch/traces/log/incast_queue.log", std::ios::out);
+  incastQueueOut.open(
+      "scratch/traces/" + traceDirectory + "log/incast_queue.log",
+      std::ios::out);
   incastQueueOut << "Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
-  uplinkQueueOut.open("scratch/traces/log/uplink_queue.log", std::ios::out);
+  uplinkQueueOut.open(
+      "scratch/traces/" + traceDirectory + "log/uplink_queue.log",
+      std::ios::out);
   uplinkQueueOut << "Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
 
   // TODO: Trace alpha from DCTCP
   if (tcpTypeId == "TcpDctcp") {
-    dctcpAlphaOut.open("scratch/traces/log/dctcp_alpha.log", std::ios::out);
+    dctcpAlphaOut.open(
+        "scratch/traces/" + traceDirectory + "log/dctcp_alpha.log",
+        std::ios::out);
     dctcpAlphaOut << "Time (s) Alpha" << std::endl;
 
     std::ostringstream pathStream;
@@ -461,7 +472,9 @@ main(int argc, char *argv[]) {
   }
 
   // TODO: Trace packet drops during reception
-  rxDropsOut.open("scratch/traces/log/incast_rxdrops.log", std::ios::out);
+  rxDropsOut.open(
+      "scratch/traces/" + traceDirectory + "log/incast_rxdrops.log",
+      std::ios::out);
   rxDropsOut << "Drop Times (s)" << std::endl;
   dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext(
       "PhyRxDrop", MakeCallback(&LogRxDrops));

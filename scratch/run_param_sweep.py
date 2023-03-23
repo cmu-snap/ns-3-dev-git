@@ -1,0 +1,286 @@
+import io
+import itertools
+import math
+import multiprocessing
+import os
+import time
+
+NUM_PROCESSES: int = 30
+
+# Parameter sweeping boundaries
+MIN_BURST_DURATION_MS: int = 5
+MAX_BURST_DURATION_MS: int = 5
+# MAX_BURST_DURATION_MS: int = 50
+STEP_BURST_DURATION_MS: int = math.ceil(
+    (MAX_BURST_DURATION_MS + 1 - MIN_BURST_DURATION_MS) / 10
+)
+
+MIN_DELAY_PER_LINK_US: int = 2
+MAX_DELAY_PER_LINK_US: int = 25
+STEP_DELAY_PER_LINK_US: int = math.ceil(
+    (MAX_DELAY_PER_LINK_US + 1 - MIN_DELAY_PER_LINK_US) / 10
+)
+
+# MIN_LARGE_LINK_BANDWIDTH_MBPS: int = 5000
+# MAX_LARGE_LINK_BANDWIDTH_MBPS: int = 100000
+
+MIN_LARGE_QUEUE_THRESHOLD_PACKETS: int = 80
+MAX_LARGE_QUEUE_THRESHOLD_PACKETS: int = 80
+
+MIN_LARGE_QUEUE_SIZE_PACKETS: int = 1200
+MAX_LARGE_QUEUE_SIZE_PACKETS: int = 1200
+
+MIN_NUM_SENDERS: int = 100
+MAX_NUM_SENDERS: int = 100
+# MAX_NUM_SENDERS: int = 1000
+STEP_NUM_SENDERS: int = math.ceil((MAX_NUM_SENDERS + 1 - MIN_NUM_SENDERS) / 10)
+
+MIN_SMALL_LINK_BANDWIDTH_MBPS: int = 50000
+MAX_SMALL_LINK_BANDWIDTH_MBPS = 50000
+# MAX_SMALL_LINK_BANDWIDTH_MBPS: int = 800000
+NUM_SMALL_LINK_BANDWIDTH_MBPS: int = 10
+
+MIN_SMALL_QUEUE_THRESHOLD_PACKETS: int = 80
+MAX_SMALL_QUEUE_THRESHOLD_PACKETS: int = 80
+
+MIN_SMALL_QUEUE_SIZE_PACKETS: int = 1200
+MAX_SMALL_QUEUE_SIZE_PACKETS: int = 1200
+
+# Constants for calculations
+BASE_TO_MILLI: int = pow(10, 3)
+MEGA_TO_BASE: int = pow(10, 6)
+NUM_BITS_PER_BYTE: int = 8
+
+
+def getExponentialSet(start: int, end: int, num: int) -> set[int]:
+    curr: float = 1.0 * start
+    factor: float = math.log(end / curr) / math.log(num)
+    output: set[int] = {int(curr)}
+
+    while curr < end:
+        curr *= factor
+        output.add(int(curr))
+
+    return output
+
+
+def getBytesPerSender(
+    burstDurationMs: int,
+    numSenders: int,
+    smallLinkBandwidthMbps: int,
+) -> int:
+    burstDurationS: float = burstDurationMs / BASE_TO_MILLI
+    smallLinkBandwidthBps: float = (
+        smallLinkBandwidthMbps * MEGA_TO_BASE / NUM_BITS_PER_BYTE
+    )
+    totalBytes: float = burstDurationS * smallLinkBandwidthBps
+
+    return int(totalBytes / numSenders)
+
+
+# def getMinJitterUs(delayPerLinkUs: int) -> int:
+#     return 0 * delayPerLinkUs
+
+
+# def getMaxJitterUs(delayPerLinkUs: int) -> int:
+#     return 2 * delayPerLinkUs
+
+
+def getJitterUs(delayPerLinkUs: int) -> int:
+    return int(delayPerLinkUs / 2)
+
+
+class Params:
+    def __init__(
+        self,
+        bytesPerSender: int,
+        jitterUs: int,
+        largeLinkBandwidthMbps: int,
+        largeQueueThresholdPackets: int,
+        largeQueueSizePackets: int,
+        numSenders: int,
+        smallLinkBandwidthMbps: int,
+        smallQueueThresholdPackets: int,
+        smallQueueSizePackets: int,
+    ):
+        self.time = time.time()
+        self.bytesPerSender = bytesPerSender
+        self.jitterUs = jitterUs
+        self.largeLinkBandwidthMbps = largeLinkBandwidthMbps
+        self.largeQueueThresholdPackets = largeQueueThresholdPackets
+        self.largeQueueSizePackets = largeQueueSizePackets
+        self.numSenders = numSenders
+        self.smallLinkBandwidthMbps = smallLinkBandwidthMbps
+        self.smallQueueThresholdPackets = smallQueueThresholdPackets
+        self.smallQueueSizePackets = smallQueueSizePackets
+
+    def createDirectory(self):
+        current_path: str = os.getcwd()
+        self.trace_path: str = os.path.join(
+            current_path, "scratch/traces", self.getTraceDirectory()
+        )
+
+        if not os.path.exists(self.trace_path):
+            os.makedirs(self.trace_path)
+
+    def writeConfig(self):
+        f: io.TextIOWrapper = open(self.trace_path + "config.txt", "a")
+        lines: list[str] = [
+            "Time (s): " + str(self.time),
+            "\nBytes per sender: " + str(self.bytesPerSender),
+            "\nJitter (us): " + str(self.jitterUs),
+            "\nLarge link bandwidth (Mbps): " + str(self.largeLinkBandwidthMbps),
+            "\nLarge minimum queue threshold (packets): "
+            + str(self.largeQueueThresholdPackets),
+            "\nLarge maximum queue threshold (packets): "
+            + str(self.largeQueueThresholdPackets),
+            "\nLarge queue size (packets): " + str(self.largeQueueSizePackets),
+            "\nNumber of senders: " + str(self.numSenders),
+            "\nSmall link bandwidth (Mbps): " + str(self.smallLinkBandwidthMbps),
+            "\nSmall minimum queue threshold (packets): "
+            + str(self.smallQueueThresholdPackets),
+            "\nSmall maximum queue threshold (packets): "
+            + str(self.smallQueueThresholdPackets),
+            "\nSmall queue size (packets): " + str(self.smallQueueSizePackets),
+        ]
+        f.writelines(lines)
+
+    def getTraceDirectory(self) -> str:
+        elems: list[str] = [
+            "traces",
+            str(self.time),
+            str(self.bytesPerSender),
+            str(self.jitterUs),
+            str(self.largeLinkBandwidthMbps),
+            str(self.largeQueueThresholdPackets),
+            str(self.largeQueueThresholdPackets),
+            str(self.largeQueueSizePackets),
+            str(self.numSenders),
+            str(self.smallLinkBandwidthMbps),
+            str(self.smallQueueThresholdPackets),
+            str(self.smallQueueThresholdPackets),
+            str(self.smallQueueSizePackets),
+        ]
+
+        return "_".join(elems) + "/"
+
+    def getRunCommand(self) -> str:
+        return (
+            './ns3 run "scratch/incast '
+            + f"--bytesPerSender={self.bytesPerSender} "
+            + f"--jitterUs={self.jitterUs} "
+            + f"--largeLinkBandwidthMbps={self.largeLinkBandwidthMbps} "
+            + f"--largeQueueMaxThresholdPackets={self.largeQueueThresholdPackets} "
+            + f"--largeQueueMinThresholdPackets={self.largeQueueThresholdPackets} "
+            + f"--largeQueueSizePackets={self.largeQueueSizePackets} "
+            + f"--numSenders={self.numSenders} "
+            + f"--smallLinkBandwidthMbps={self.smallLinkBandwidthMbps} "
+            + f"--smallQueueMaxThresholdPackets={self.smallQueueThresholdPackets} "
+            + f"--smallQueueMinThresholdPackets={self.smallQueueThresholdPackets} "
+            + f"--smallQueueSizePackets={self.smallQueueSizePackets}"
+            + f"--traceDirectory={self.getTraceDirectory()}"
+            + '"'
+        )
+
+
+def run(params: Params):
+    params.createDirectory()
+    params.writeConfig()
+    os.system(params.getRunCommand())
+
+
+if __name__ == "__main__":
+    burstDurationMs_set: set[int] = set(
+        range(MIN_BURST_DURATION_MS, MAX_BURST_DURATION_MS + 1, STEP_BURST_DURATION_MS)
+    )
+    delayPerLinkUs_set: set[int] = set(
+        range(
+            MIN_DELAY_PER_LINK_US,
+            MAX_DELAY_PER_LINK_US + 1,
+            STEP_DELAY_PER_LINK_US,
+        )
+    )
+    numSenders_set: set[int] = set(
+        range(
+            MIN_NUM_SENDERS,
+            MAX_NUM_SENDERS + 1,
+            STEP_NUM_SENDERS,
+        )
+    )
+
+    largeQueueThresholdPackets_set: set[int] = set(
+        range(
+            MIN_LARGE_QUEUE_THRESHOLD_PACKETS,
+            MAX_LARGE_QUEUE_THRESHOLD_PACKETS + 1,
+        )
+    )
+    largeQueueSizePackets_set: set[int] = set(
+        range(
+            MIN_LARGE_QUEUE_SIZE_PACKETS,
+            MAX_LARGE_QUEUE_SIZE_PACKETS + 1,
+        )
+    )
+
+    smallLinkBandwidthMbps_set: set[int] = getExponentialSet(
+        MIN_SMALL_LINK_BANDWIDTH_MBPS,
+        MAX_SMALL_LINK_BANDWIDTH_MBPS,
+        NUM_SMALL_LINK_BANDWIDTH_MBPS,
+    )
+    smallQueueThresholdPackets_set: set[int] = set(
+        range(MIN_SMALL_QUEUE_THRESHOLD_PACKETS, MAX_SMALL_QUEUE_THRESHOLD_PACKETS + 1)
+    )
+    smallQueueSizePackets_set: set[int] = set(
+        range(
+            MIN_SMALL_QUEUE_SIZE_PACKETS,
+            MAX_SMALL_QUEUE_SIZE_PACKETS + 1,
+        )
+    )
+
+    params_tuples = list(
+        itertools.product(
+            burstDurationMs_set,
+            delayPerLinkUs_set,
+            largeQueueThresholdPackets_set,
+            largeQueueSizePackets_set,
+            numSenders_set,
+            smallLinkBandwidthMbps_set,
+            smallQueueThresholdPackets_set,
+            smallQueueSizePackets_set,
+        )
+    )
+
+    params_set = set()
+
+    for (
+        burstDurationMs,
+        delayPerLinkUs,
+        largeQueueThresholdPackets,
+        largeQueueSizePackets,
+        numSenders,
+        smallLinkBandwidthMbps,
+        smallQueueThresholdPackets,
+        smallQueueSizePackets,
+    ) in params_tuples:
+        jitterUs: int = getJitterUs(delayPerLinkUs)
+        largeLinkBandwidthMbps: int = 10 * smallLinkBandwidthMbps
+        bytesPerSender: int = getBytesPerSender(
+            burstDurationMs,
+            numSenders,
+            smallLinkBandwidthMbps,
+        )
+        params_set.add(
+            Params(
+                bytesPerSender,
+                jitterUs,
+                largeLinkBandwidthMbps,
+                largeQueueThresholdPackets,
+                largeQueueSizePackets,
+                numSenders,
+                smallLinkBandwidthMbps,
+                smallQueueThresholdPackets,
+                smallQueueSizePackets,
+            )
+        )
+
+    with multiprocessing.Pool(NUM_PROCESSES) as p:
+        p.map(run, params_set)
