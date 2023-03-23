@@ -103,7 +103,7 @@ class Params:
         smallQueueThresholdPackets: int,
         smallQueueSizePackets: int,
     ):
-        self.time = time.time()
+        self.time = round(time.time(), 2)
         self.bytesPerSender = bytesPerSender
         self.jitterUs = jitterUs
         self.largeLinkBandwidthMbps = largeLinkBandwidthMbps
@@ -114,14 +114,22 @@ class Params:
         self.smallQueueThresholdPackets = smallQueueThresholdPackets
         self.smallQueueSizePackets = smallQueueSizePackets
 
-    def createDirectory(self):
+    def createDirectories(self):
         current_path: str = os.getcwd()
+
         self.trace_path: str = os.path.join(
             current_path, "scratch/traces", self.getTraceDirectory()
         )
-
         if not os.path.exists(self.trace_path):
             os.makedirs(self.trace_path)
+
+        self.log_path: str = os.path.join(self.trace_path, "log")
+        if not os.path.exists(self.log_path):
+            os.makedirs(self.log_path)
+
+        self.pcap_path: str = os.path.join(self.trace_path, "pcap")
+        if not os.path.exists(self.pcap_path):
+            os.makedirs(self.pcap_path)
 
     def writeConfig(self):
         f: io.TextIOWrapper = open(self.trace_path + "config.txt", "a")
@@ -177,15 +185,16 @@ class Params:
             + f"--smallLinkBandwidthMbps={self.smallLinkBandwidthMbps} "
             + f"--smallQueueMaxThresholdPackets={self.smallQueueThresholdPackets} "
             + f"--smallQueueMinThresholdPackets={self.smallQueueThresholdPackets} "
-            + f"--smallQueueSizePackets={self.smallQueueSizePackets}"
+            + f"--smallQueueSizePackets={self.smallQueueSizePackets} "
             + f"--traceDirectory={self.getTraceDirectory()}"
             + '"'
         )
 
 
 def run(params: Params):
-    params.createDirectory()
+    params.createDirectories()
     params.writeConfig()
+    time.sleep(params.jitterUs)
     os.system(params.getRunCommand())
 
 
