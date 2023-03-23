@@ -174,7 +174,7 @@ class Params:
 
     def getRunCommand(self) -> str:
         return (
-            './ns3 run "scratch/incast '
+            "build/scratch/ns3-dev-incast-default "
             + f"--bytesPerSender={self.bytesPerSender} "
             + f"--jitterUs={self.jitterUs} "
             + f"--largeLinkBandwidthMbps={self.largeLinkBandwidthMbps} "
@@ -187,14 +187,12 @@ class Params:
             + f"--smallQueueMinThresholdPackets={self.smallQueueThresholdPackets} "
             + f"--smallQueueSizePackets={self.smallQueueSizePackets} "
             + f"--traceDirectory={self.getTraceDirectory()}"
-            + '"'
         )
 
 
 def run(params: Params):
     params.createDirectories()
     params.writeConfig()
-    time.sleep(params.jitterUs)
     os.system(params.getRunCommand())
 
 
