@@ -100,6 +100,9 @@ class IncastSender : public Application {
   static uint32_t ParseRequestedBytes(
       Ptr<Packet> packet, bool containsRttProbe);
 
+  // Directory for this experiment's log and pcap traces
+  std::string m_traceDirectory;
+  
   // Node ID of the sender
   uint32_t m_nid;
 

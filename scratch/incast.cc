@@ -156,27 +156,27 @@ main(int argc, char *argv[]) {
       "Delay on each link (in microseconds). The RTT is 6 times this value.",
       delayPerLinkUs);
   cmd.AddValue(
-      "smallQueueSize",
+      "smallQueueSizePackets",
       "Maximum number of packets accepted by queues on the small link",
       smallQueueSizePackets);
   cmd.AddValue(
-      "smallQueueMinThreshold",
+      "smallQueueMinThresholdPackets",
       "Minimum average length threshold for the small queue (in packets/bytes)",
       smallQueueMinThresholdPackets);
   cmd.AddValue(
-      "smallQueueMaxThreshold",
+      "smallQueueMaxThresholdPackets",
       "Maximum average length threshold for the small queue (in packets/bytes)",
       smallQueueMaxThresholdPackets);
   cmd.AddValue(
-      "largeQueueSize",
+      "largeQueueSizePackets",
       "Maximum number of packets accepted by queues on the large link",
       largeQueueSizePackets);
   cmd.AddValue(
-      "largeQueueMinThreshold",
+      "largeQueueMinThresholdPackets",
       "Minimum average length threshold for the large queue (in packets/bytes)",
       largeQueueMinThresholdPackets);
   cmd.AddValue(
-      "largeQueueMaxThreshold",
+      "largeQueueMaxThresholdPackets",
       "Maximum average length threshold for the large queue (in packets/bytes)",
       largeQueueMaxThresholdPackets);
   cmd.AddValue(
@@ -380,6 +380,7 @@ main(int argc, char *argv[]) {
   Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
   aggregatorApp->SetSenders(allSenderAddresses);
   aggregatorApp->SetStartTime(Seconds(1.0));
+  aggregatorApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
   aggregatorApp->SetAttribute("BytesPerSender", UintegerValue(bytesPerSender));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
@@ -397,6 +398,7 @@ main(int argc, char *argv[]) {
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
+    senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
     senderApp->SetAttribute(
         "NodeID", UintegerValue(dumbbellHelper.GetRight(i)->GetId()));
     senderApp->SetAttribute(

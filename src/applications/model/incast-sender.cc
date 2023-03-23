@@ -25,6 +25,7 @@
 #include "ns3/internet-module.h"
 #include "ns3/log.h"
 #include "ns3/pointer.h"
+#include "ns3/string.h"
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
 
@@ -64,6 +65,12 @@ IncastSender::GetTypeId() {
       TypeId("ns3::IncastSender")
           .SetParent<Application>()
           .AddConstructor<IncastSender>()
+          .AddAttribute(
+              "TraceDirectory",
+              "Directory for this experiment's log and pcap traces",
+              StringValue("trace_directory/"),
+              MakeStringAccessor(&IncastSender::m_traceDirectory),
+              MakeStringChecker())
           .AddAttribute(
               "NodeID",
               "Node ID of the sender",
@@ -124,12 +131,14 @@ IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   m_cwndOut.open(
-      "scratch/traces/log/sender" + std::to_string(m_nid) + "_cwnd.log",
+      "scratch/traces/" + m_traceDirectory + "log/sender" +
+          std::to_string(m_nid) + "_cwnd.log",
       std::ios::out);
   m_cwndOut << "Time (s) CWND (bytes)" << std::endl;
 
   m_rttOut.open(
-      "scratch/traces/log/sender" + std::to_string(m_nid) + "_rtt.log",
+      "scratch/traces/" + m_traceDirectory + "log/sender" +
+          std::to_string(m_nid) + "_rtt.log",
       std::ios::out);
   m_rttOut << "Time (s) RTT (us)" << std::endl;
 

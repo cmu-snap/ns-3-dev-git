@@ -68,6 +68,12 @@ IncastAggregator::GetTypeId() {
           .SetParent<Application>()
           .AddConstructor<IncastAggregator>()
           .AddAttribute(
+              "TraceDirectory",
+              "Directory for this experiment's log and pcap traces",
+              StringValue("trace_directory/"),
+              MakeStringAccessor(&IncastAggregator::m_traceDirectory),
+              MakeStringChecker())
+          .AddAttribute(
               "NumBursts",
               "Number of bursts to simulate",
               UintegerValue(10),
@@ -168,13 +174,19 @@ void
 IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
-  m_burstTimesOut.open("scratch/traces/log/burst_times.log", std::ios::out);
+  m_burstTimesOut.open(
+      "scratch/traces/" + m_traceDirectory + "log/burst_times.log",
+      std::ios::out);
   m_burstTimesOut << "Start time (s) End time (s)" << std::endl;
 
-  m_cwndOut.open("scratch/traces/log/aggregator_cwnd.log", std::ios::out);
+  m_cwndOut.open(
+      "scratch/traces/" + m_traceDirectory + "log/aggregator_cwnd.log",
+      std::ios::out);
   m_cwndOut << "Time (s) CWND (bytes)" << std::endl;
 
-  m_rttOut.open("scratch/traces/log/aggregator_rtt.log", std::ios::out);
+  m_rttOut.open(
+      "scratch/traces/" + m_traceDirectory + "log/aggregator_rtt.log",
+      std::ios::out);
   m_rttOut << "Time (s) RTT (us)" << std::endl;
 
   for (Ipv4Address sender : m_senders) {
