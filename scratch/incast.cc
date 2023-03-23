@@ -26,19 +26,17 @@
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
-
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-// #include "ns3/drop-tail-queue.h"
 #include "ns3/incast-aggregator.h"
 #include "ns3/incast-sender.h"
 #include "ns3/internet-module.h"
-// #include "ns3/netanim-module.h"
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-layout-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/traffic-control-module.h"
+
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 
 /*
  * Incast Topology
@@ -81,7 +79,6 @@ LogDctcpAlpha(
     uint32_t bytesMarked,
     uint32_t bytesAcked,
     double alpha) {
-  std::cout << "Called LogDctcpAlpha()" << std::endl;
   (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
          << " " << alpha << std::endl;
 }
@@ -94,6 +91,7 @@ LogRxDrops(Ptr<const Packet> p) {
 
 int
 main(int argc, char *argv[]) {
+  // Define log configurations
   LogLevel logConfig =
       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE | LOG_LEVEL_INFO);
   LogComponentEnable("IncastSim", logConfig);
@@ -120,7 +118,7 @@ main(int argc, char *argv[]) {
   uint32_t largeQueueMinThresholdPackets = 150;
   uint32_t largeQueueMaxThresholdPackets = 150;
 
-  // RWND tuning parameters
+  // Parameters for RWND tuning
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
 
@@ -226,11 +224,13 @@ main(int argc, char *argv[]) {
 
   // Create links
   PointToPointHelper smallLinkHelper;
-  smallLinkHelper.SetDeviceAttribute("DataRate", smallLinkBandwidthMbpsStringValue);
+  smallLinkHelper.SetDeviceAttribute(
+      "DataRate", smallLinkBandwidthMbpsStringValue);
   smallLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   PointToPointHelper largeLinkHelper;
-  largeLinkHelper.SetDeviceAttribute("DataRate", largeLinkBandwidthMbpsStringValue);
+  largeLinkHelper.SetDeviceAttribute(
+      "DataRate", largeLinkBandwidthMbpsStringValue);
   largeLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   // Create a dumbbell topology
@@ -297,8 +297,7 @@ main(int argc, char *argv[]) {
   // Config::SetDefault("ns3::RedQueueDisc::MinTh", minThresholdValue);
   // Config::SetDefault("ns3::RedQueueDisc::MaxTh", maxThresholdValue);
 
-  // Configure a different queues for the large and small links.
-
+  // Configure different queues for the small and large links
   TrafficControlHelper smallLinkQueueHelper;
   smallLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
@@ -445,39 +444,33 @@ main(int argc, char *argv[]) {
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
 
-  // Trace alpha from DCTCP
+  // TODO: Trace alpha from DCTCP
   if (tcpTypeId == "TcpDctcp") {
     dctcpAlphaOut.open("scratch/traces/log/dctcp_alpha.log", std::ios::out);
     dctcpAlphaOut << "Time (s) Alpha" << std::endl;
 
     std::ostringstream pathStream;
-    pathStream << "/NodeList/" << dumbbellHelper.GetLeft()->GetId() << "/"
+    pathStream << "/NodeList/" << dumbbellHelper.GetLeft(0)->GetId() << "/"
                << "$ns3::TcpL4Protocol/SocketList/0/"
                << "CongestionOps/$ns3::TcpDctcp/CongestionEstimate";
 
     std::cout << pathStream.str() << std::endl;
 
-    bool b = Config::ConnectWithoutContextFailSafe(
+    Config::ConnectWithoutContext(
         pathStream.str(), MakeBoundCallback(&LogDctcpAlpha, &dctcpAlphaOut));
-
-    if (b) {
-      std::cout << "Config::ConnectWithoutContextFailSafe() SUCCEEDED"
-                << std::endl;
-    } else {
-      std::cout << "Config::ConnectWithoutContextFailSafe() FAILED"
-                << std::endl;
-    }
   }
 
-  // Trace packet drops during reception
+  // TODO: Trace packet drops during reception
   rxDropsOut.open("scratch/traces/log/incast_rxdrops.log", std::ios::out);
   rxDropsOut << "Drop Times (s)" << std::endl;
   dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext(
       "PhyRxDrop", MakeCallback(&LogRxDrops));
 
+  // Run the simulator
   Simulator::Run();
   Simulator::Destroy();
 
+  // Close streams
   incastQueueOut.close();
   uplinkQueueOut.close();
   dctcpAlphaOut.close();
@@ -486,19 +479,19 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Finished simulation.");
 
   // Compute the ideal and actual burst durations
-  int numBitsInByte = 8;
-  int numHops = 3;
-  int numMsInSec = 1000;
+  uint32_t numBitsPerByte = 8;
+  uint32_t numHops = 3;
+  uint32_t baseToMilli = pow(10, 3);
+  uint32_t baseToMicro = pow(10, 6);
 
-  double idealBurstDurationSec =
-      // Time to transmit the burst.
-      (double)bytesPerSender * numSenders * numBitsInByte /
-          (smallLinkBandwidthMbps * megaToBase) +
-      // 1 RTT for the request and the first response packet to propgate.
-      numHops * 2 * delayPerLinkUs / megaToBase;
+  double burstTransmissionSec = (double)bytesPerSender * numSenders *
+                                numBitsPerByte /
+                                (smallLinkBandwidthMbps * megaToBase);
+  double firstRttSec = numHops * 2 * delayPerLinkUs / baseToMicro;
+  double idealBurstDurationSec = burstTransmissionSec + firstRttSec;
 
   NS_LOG_INFO(
-      "Ideal burst duration: " << idealBurstDurationSec * numMsInSec << "ms");
+      "Ideal burst duration: " << idealBurstDurationSec * baseToMilli << "ms");
 
   NS_LOG_INFO("Burst durations (x ideal):");
   for (const auto &burstDurationSec : aggregatorApp->GetBurstDurations()) {
