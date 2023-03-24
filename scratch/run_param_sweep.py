@@ -1,5 +1,6 @@
 import io
 import itertools
+import json
 import math
 import multiprocessing
 import os
@@ -25,12 +26,15 @@ STEP_DELAY_PER_LINK_US: int = math.ceil(
 
 # MIN_LARGE_LINK_BANDWIDTH_MBPS: int = 5000
 # MAX_LARGE_LINK_BANDWIDTH_MBPS: int = 100000
+# STEP_LARGE_LINK_BANDWIDTH_MBPS: int = 1
 
 MIN_LARGE_QUEUE_THRESHOLD_PACKETS: int = 80
 MAX_LARGE_QUEUE_THRESHOLD_PACKETS: int = 80
+STEP_LARGE_QUEUE_THRESHOLD_PACKETS: int = 1
 
 MIN_LARGE_QUEUE_SIZE_PACKETS: int = 1200
 MAX_LARGE_QUEUE_SIZE_PACKETS: int = 1200
+STEP_LARGE_QUEUE_SIZE_PACKETS: int = 1
 
 MIN_NUM_SENDERS: int = 100
 MAX_NUM_SENDERS: int = 1000
@@ -42,9 +46,11 @@ NUM_SMALL_LINK_BANDWIDTH_MBPS: int = 10
 
 MIN_SMALL_QUEUE_THRESHOLD_PACKETS: int = 80
 MAX_SMALL_QUEUE_THRESHOLD_PACKETS: int = 80
+STEP_SMALL_QUEUE_THRESHOLD_PACKETS: int = 1
 
 MIN_SMALL_QUEUE_SIZE_PACKETS: int = 1200
 MAX_SMALL_QUEUE_SIZE_PACKETS: int = 1200
+STEP_SMALL_QUEUE_SIZE_PACKETS: int = 1
 
 # Constants for calculations
 BASE_TO_MILLI: int = pow(10, 3)
@@ -105,6 +111,40 @@ class Params:
         self.smallLinkBandwidthMbps = smallLinkBandwidthMbps
         self.smallQueueThresholdPackets = smallQueueThresholdPackets
         self.smallQueueSizePackets = smallQueueSizePackets
+        self.commandLineOptions = {
+            "bytesPerSender": self.bytesPerSender,
+            "jitterUs": self.jitterUs,
+            "largeLinkBandwidthMbps": self.largeLinkBandwidthMbps,
+            "largeQueueMaxThresholdPackets": self.largeQueueThresholdPackets,
+            "largeQueueMinThresholdPackets": self.largeQueueThresholdPackets,
+            "largeQueueSizePackets": self.largeQueueSizePackets,
+            "numSenders": self.numSenders,
+            "smallLinkBandwidthMbps": self.smallLinkBandwidthMbps,
+            "smallQueueMaxThresholdPackets": self.smallQueueThresholdPackets,
+            "smallQueueMinThresholdPackets": self.smallQueueThresholdPackets,
+            "smallQueueSizePackets": self.smallQueueSizePackets,
+            "traceDirectory": self.getTraceDirectory(),
+            "outputDirectory": OUTPUT_DIRECTORY,
+        }
+
+    def getTraceDirectory(self) -> str:
+        elems: list[str] = [
+            "traces",
+            str(self.time),
+            str(self.bytesPerSender),
+            str(self.jitterUs),
+            str(self.largeLinkBandwidthMbps),
+            str(self.largeQueueThresholdPackets),
+            str(self.largeQueueThresholdPackets),
+            str(self.largeQueueSizePackets),
+            str(self.numSenders),
+            str(self.smallLinkBandwidthMbps),
+            str(self.smallQueueThresholdPackets),
+            str(self.smallQueueThresholdPackets),
+            str(self.smallQueueSizePackets),
+        ]
+
+        return "_".join(elems) + "/"
 
     def createDirectories(self):
         cwd_path: str = os.getcwd()
@@ -128,46 +168,19 @@ class Params:
             shutil.rmtree(self.trace_path)
 
     def writeConfig(self):
-        f: io.TextIOWrapper = open(self.trace_path + "config.txt", "a")
-        config: str = self.getRunCommand().replace(" ", "\n")
-        f.write(config)
+        with open(self.trace_path + "config.txt", "w") as f:
+            f.write(json.dumps(self.commandLineOptions, indent=4))
 
-    def getTraceDirectory(self) -> str:
-        elems: list[str] = [
-            "traces",
-            str(self.time),
-            str(self.bytesPerSender),
-            str(self.jitterUs),
-            str(self.largeLinkBandwidthMbps),
-            str(self.largeQueueThresholdPackets),
-            str(self.largeQueueThresholdPackets),
-            str(self.largeQueueSizePackets),
-            str(self.numSenders),
-            str(self.smallLinkBandwidthMbps),
-            str(self.smallQueueThresholdPackets),
-            str(self.smallQueueThresholdPackets),
-            str(self.smallQueueSizePackets),
-        ]
-
-        return "_".join(elems) + "/"
+    def getCommandLineOption(self, option: str) -> str:
+        return f"--{option}={self.commandLineOptions[option]}"
 
     def getRunCommand(self) -> str:
-        return (
-            "build/scratch/ns3-dev-incast-default "
-            + f"--bytesPerSender={self.bytesPerSender} "
-            + f"--jitterUs={self.jitterUs} "
-            + f"--largeLinkBandwidthMbps={self.largeLinkBandwidthMbps} "
-            + f"--largeQueueMaxThresholdPackets={self.largeQueueThresholdPackets} "
-            + f"--largeQueueMinThresholdPackets={self.largeQueueThresholdPackets} "
-            + f"--largeQueueSizePackets={self.largeQueueSizePackets} "
-            + f"--numSenders={self.numSenders} "
-            + f"--smallLinkBandwidthMbps={self.smallLinkBandwidthMbps} "
-            + f"--smallQueueMaxThresholdPackets={self.smallQueueThresholdPackets} "
-            + f"--smallQueueMinThresholdPackets={self.smallQueueThresholdPackets} "
-            + f"--smallQueueSizePackets={self.smallQueueSizePackets} "
-            + f"--traceDirectory={self.getTraceDirectory()} "
-            + f"--outputDirectory={OUTPUT_DIRECTORY} "
-        )
+        run_command_args: list[str] = ["build/scratch/ns3-dev-incast-default"]
+
+        for option in self.commandLineOptions:
+            run_command_args.append(self.getCommandLineOption(option))
+
+        return " ".join(run_command_args)
 
     def run(self):
         with open(self.trace_path + "stderr.txt", "w") as stderr_file:
@@ -211,12 +224,14 @@ if __name__ == "__main__":
         range(
             MIN_LARGE_QUEUE_THRESHOLD_PACKETS,
             MAX_LARGE_QUEUE_THRESHOLD_PACKETS + 1,
+            STEP_LARGE_QUEUE_THRESHOLD_PACKETS,
         )
     )
     largeQueueSizePackets_set: set[int] = set(
         range(
             MIN_LARGE_QUEUE_SIZE_PACKETS,
             MAX_LARGE_QUEUE_SIZE_PACKETS + 1,
+            STEP_LARGE_QUEUE_SIZE_PACKETS,
         )
     )
     smallLinkBandwidthMbps_set: set[int] = getExponentialSet(
@@ -228,12 +243,14 @@ if __name__ == "__main__":
         range(
             MIN_SMALL_QUEUE_THRESHOLD_PACKETS,
             MAX_SMALL_QUEUE_THRESHOLD_PACKETS + 1,
+            STEP_LARGE_QUEUE_SIZE_PACKETS,
         )
     )
     smallQueueSizePackets_set: set[int] = set(
         range(
             MIN_SMALL_QUEUE_SIZE_PACKETS,
             MAX_SMALL_QUEUE_SIZE_PACKETS + 1,
+            STEP_SMALL_QUEUE_SIZE_PACKETS,
         )
     )
 
