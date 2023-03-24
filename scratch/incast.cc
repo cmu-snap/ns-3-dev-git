@@ -99,6 +99,7 @@ main(int argc, char *argv[]) {
   LogComponentEnable("IncastSender", logConfig);
 
   // Initialize variables
+  std::string outputDirectory = "scratch/traces/";
   std::string traceDirectory = "trace_directory/";
   std::string tcpTypeId = "TcpCubic";
   uint32_t numBursts = 5;
@@ -108,13 +109,13 @@ main(int argc, char *argv[]) {
   uint32_t jitterUs = 100;
 
   // Parameters for the small links (ToR to node)
-  float smallLinkBandwidthMbps = 12500;
+  uint32_t smallLinkBandwidthMbps = 12500;
   uint32_t smallQueueSizePackets = 2666;
   uint32_t smallQueueMinThresholdPackets = 60;
   uint32_t smallQueueMaxThresholdPackets = 60;
 
   // Parameters for the large links (ToR to ToR)
-  float largeLinkBandwidthMbps = 100000;
+  uint32_t largeLinkBandwidthMbps = 100000;
   uint32_t largeQueueSizePackets = 2666;
   uint32_t largeQueueMinThresholdPackets = 150;
   uint32_t largeQueueMaxThresholdPackets = 150;
@@ -126,8 +127,12 @@ main(int argc, char *argv[]) {
   // Define command line arguments
   CommandLine cmd;
   cmd.AddValue(
+      "outputDirectory",
+      "Directory for all log and pcap traces",
+      outputDirectory);
+  cmd.AddValue(
       "traceDirectory",
-      "Directory for this experiment's log and pcap traces",
+      "Sub-directory for this experiment's log and pcap traces",
       traceDirectory);
   cmd.AddValue(
       "cca",
@@ -380,6 +385,7 @@ main(int argc, char *argv[]) {
   Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
   aggregatorApp->SetSenders(allSenderAddresses);
   aggregatorApp->SetStartTime(Seconds(1.0));
+  aggregatorApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
   aggregatorApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
   aggregatorApp->SetAttribute("BytesPerSender", UintegerValue(bytesPerSender));
@@ -398,6 +404,7 @@ main(int argc, char *argv[]) {
   // Create the sender applications
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
+    senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
     senderApp->SetAttribute(
         "NodeID", UintegerValue(dumbbellHelper.GetRight(i)->GetId()));
@@ -417,14 +424,14 @@ main(int argc, char *argv[]) {
 
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
-      "scratch/traces/" + traceDirectory + "pcap/incast-sockets",
+      outputDirectory + traceDirectory + "pcap/incast-sockets",
       dumbbellHelper.GetLeft(0)->GetId(),
       0);
 
   // Enable tracing at each sender
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     largeLinkHelper.EnablePcap(
-        "scratch/traces/" + traceDirectory + "pcap/incast-sockets",
+        outputDirectory + traceDirectory + "pcap/incast-sockets",
         dumbbellHelper.GetRight(i)->GetId(),
         0);
   }
@@ -443,13 +450,13 @@ main(int argc, char *argv[]) {
 
   // Trace the queues
   incastQueueOut.open(
-      "scratch/traces/" + traceDirectory + "log/incast_queue.log",
+      outputDirectory + traceDirectory + "log/incast_queue.log",
       std::ios::out);
   incastQueueOut << "Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
   uplinkQueueOut.open(
-      "scratch/traces/" + traceDirectory + "log/uplink_queue.log",
+      outputDirectory + traceDirectory + "log/uplink_queue.log",
       std::ios::out);
   uplinkQueueOut << "Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
@@ -458,7 +465,7 @@ main(int argc, char *argv[]) {
   // TODO: Trace alpha from DCTCP
   if (tcpTypeId == "TcpDctcp") {
     dctcpAlphaOut.open(
-        "scratch/traces/" + traceDirectory + "log/dctcp_alpha.log",
+        outputDirectory + traceDirectory + "log/dctcp_alpha.log",
         std::ios::out);
     dctcpAlphaOut << "Time (s) Alpha" << std::endl;
 
@@ -475,15 +482,15 @@ main(int argc, char *argv[]) {
 
   // TODO: Trace packet drops during reception
   rxDropsOut.open(
-      "scratch/traces/" + traceDirectory + "log/incast_rxdrops.log",
+      outputDirectory + traceDirectory + "log/incast_rxdrops.log",
       std::ios::out);
   rxDropsOut << "Drop Times (s)" << std::endl;
   dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext(
       "PhyRxDrop", MakeCallback(&LogRxDrops));
 
   // Run the simulator
-  Simulator::Run();
-  Simulator::Destroy();
+    Simulator::Run();
+    Simulator::Destroy();
 
   // Close streams
   incastQueueOut.close();

@@ -137,7 +137,10 @@ class IncastAggregator : public Application {
    */
   void SendRttProbe();
 
-  // Directory for this experiment's log and pcap traces
+  // Directory for all log and pcap traces
+  std::string m_outputDirectory;
+
+  // Sub-directory for this experiment's log and pcap traces
   std::string m_traceDirectory;
 
   // Number of bursts to simulate

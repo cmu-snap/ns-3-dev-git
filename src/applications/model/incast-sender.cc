@@ -66,8 +66,14 @@ IncastSender::GetTypeId() {
           .SetParent<Application>()
           .AddConstructor<IncastSender>()
           .AddAttribute(
+              "OutputDirectory",
+              "Directory for all log and pcap traces",
+              StringValue("output_directory/"),
+              MakeStringAccessor(&IncastSender::m_outputDirectory),
+              MakeStringChecker())
+          .AddAttribute(
               "TraceDirectory",
-              "Directory for this experiment's log and pcap traces",
+              "Sub-directory for this experiment's log and pcap traces",
               StringValue("trace_directory/"),
               MakeStringAccessor(&IncastSender::m_traceDirectory),
               MakeStringChecker())
@@ -131,13 +137,13 @@ IncastSender::StartApplication() {
   NS_LOG_FUNCTION(this);
 
   m_cwndOut.open(
-      "scratch/traces/" + m_traceDirectory + "log/sender" +
+      m_outputDirectory + m_traceDirectory + "log/sender" +
           std::to_string(m_nid) + "_cwnd.log",
       std::ios::out);
   m_cwndOut << "Time (s) CWND (bytes)" << std::endl;
 
   m_rttOut.open(
-      "scratch/traces/" + m_traceDirectory + "log/sender" +
+      m_outputDirectory + m_traceDirectory + "log/sender" +
           std::to_string(m_nid) + "_rtt.log",
       std::ios::out);
   m_rttOut << "Time (s) RTT (us)" << std::endl;
