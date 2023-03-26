@@ -189,7 +189,7 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
     if (size == sizeof(uint32_t) || size == 1 + sizeof(uint32_t)) {
       bool containsRttProbe = (size == 1 + sizeof(uint32_t));
       uint32_t requestedBytes = ParseRequestedBytes(packet, containsRttProbe);
-      NS_LOG_INFO(
+      NS_LOG_LOGIC(
           m_logPrefix << "Received request for " << requestedBytes << " bytes");
 
       // Add jitter to the first packet of the response
@@ -234,9 +234,9 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
     int toSend = totalBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
 
-    NS_LOG_INFO(m_logPrefix << "Sending " << toSend << " bytes");
+    NS_LOG_LOGIC(m_logPrefix << "Sending " << toSend << " bytes");
     int newSentBytes = socket->Send(packet);
-    NS_LOG_INFO(m_logPrefix << "Sent " << newSentBytes << " bytes");
+    NS_LOG_LOGIC(m_logPrefix << "Sent " << newSentBytes << " bytes");
 
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;

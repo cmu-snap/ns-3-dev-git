@@ -393,7 +393,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     }
   }
 
-  NS_LOG_INFO(
+  NS_LOG_LOGIC(
       "Aggregator: Received " << m_totalBytesSoFar << "/"
                               << m_bytesPerSender * m_senders.size()
                               << " bytes");
