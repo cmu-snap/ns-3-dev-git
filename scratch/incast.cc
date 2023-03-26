@@ -333,13 +333,12 @@ main(int argc, char *argv[]) {
   // Important: Must do this before configuring IP addresses.
   NS_LOG_INFO("Creating queues...");
 
-  if (tcpTypeId == "TcpDctp") {
-    // Set default parameters for RED queue disc
-    Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+  // Set default parameters for RED queue disc
+  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+  if (tcpTypeId == "TcpDctcp") {
     // TODO: For non-DCTCP, try with and without
     Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
   }
-
   // ARED may be used but the queueing delays will increase; it is disabled
   // here because the SIGCOMM paper did not mention it
   // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
@@ -537,7 +536,7 @@ main(int argc, char *argv[]) {
   incastQueue->TraceConnectWithoutContext(
       "DropAfterDequeue", MakeCallback(&LogIncastQueueDropAfterDequeue));
   uplinkQueueDropOut.open(
-      outputDirectory + "/" + traceDirectory + "/.log/uplink_queue_drop.log",
+      outputDirectory + "/" + traceDirectory + "/log/uplink_queue_drop.log",
       std::ios::out);
   uplinkQueueDropOut << "# Time (s) Drop type" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
@@ -574,7 +573,7 @@ main(int argc, char *argv[]) {
 
   double burstTransmissionSec = (double)bytesPerSender * numSenders *
                                 numBitsPerByte /
-                                (smallLinkBandwidthMbps * megaToBase);
+                                ((double)smallLinkBandwidthMbps * megaToBase);
   double firstRttSec = numHops * 2 * delayPerLinkUs / baseToMicro;
   double idealBurstDurationSec = burstTransmissionSec + firstRttSec;
 
