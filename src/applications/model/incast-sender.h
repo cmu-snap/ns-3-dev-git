@@ -71,6 +71,8 @@ class IncastSender : public Application {
    */
   void LogRtt(Time oldRtt, Time newRtt);
 
+  void LogCongEst(uint32_t bytesMarked, uint32_t bytesAcked, double alpha);
+
   /**
    * @brief TODO
    */
@@ -129,9 +131,18 @@ class IncastSender : public Application {
   // TCP congestion control algorithm
   TypeId m_cca;
 
+  struct congEstEntry {
+    Time time;
+    uint32_t bytesMarked;
+    uint32_t bytesAcked;
+    double alpha;
+  };
+
   // Log streams
   std::vector<std::pair<Time, uint32_t>> m_cwndLog;
+
   std::vector<std::pair<Time, Time>> m_rttLog;
+  std::vector<struct congEstEntry> m_congEstLog;
 
   // Prefix to prepend to all NS_LOG_* messages
   std::string m_logPrefix;

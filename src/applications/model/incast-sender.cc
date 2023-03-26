@@ -29,6 +29,10 @@
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
 
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+
 NS_LOG_COMPONENT_DEFINE("IncastSender");
 
 namespace ns3 {
@@ -55,6 +59,17 @@ IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
 void
 IncastSender::LogRtt(Time oldRtt, Time newRtt) {
   m_rttLog.push_back({Simulator::Now(), newRtt});
+}
+
+void
+IncastSender::LogCongEst(
+    uint32_t bytesMarked, uint32_t bytesAcked, double alpha) {
+  struct congEstEntry entry;
+  entry.time = Simulator::Now();
+  entry.bytesMarked = bytesMarked;
+  entry.bytesAcked = bytesAcked;
+  entry.alpha = alpha;
+  m_congEstLog.push_back(entry);
 }
 
 TypeId
@@ -250,6 +265,14 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   // Enable tracing for the RTT
   socket->TraceConnectWithoutContext(
       "RTT", MakeCallback(&IncastSender::LogRtt, this));
+
+  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+  PointerValue congOpsValue;
+  tcpSocket->GetAttribute("CongestionOps", congOpsValue);
+  Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
+  Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
+  dctcp->TraceConnectWithoutContext(
+      "CongestionEstimate", MakeCallback(&IncastSender::LogCongEst, this));
 }
 
 void
@@ -285,6 +308,19 @@ IncastSender::WriteLogs() {
            << std::endl;
   }
   rttOut.close();
+
+  std::ofstream congEstOut;
+  congEstOut.open(
+      "scratch/traces/log/sender" + std::to_string(GetNode()->GetId()) +
+          "_congest.log",
+      std::ios::out);
+  congEstOut << "Time (s) BytesMarked BytesAcked Alpha" << std::endl;
+  for (const auto &entry : m_congEstLog) {
+    congEstOut << std::fixed << std::setprecision(9) << entry.time.GetSeconds()
+               << " " << entry.bytesMarked << " " << entry.bytesAcked << " "
+               << entry.alpha << std::endl;
+  }
+  congEstOut.close();
 }
 
 }  // Namespace ns3

@@ -56,8 +56,8 @@ std::ofstream incastQueueDepthOut;
 std::ofstream uplinkQueueDepthOut;
 std::ofstream incastQueueMarkOut;
 std::ofstream uplinkQueueMarkOut;
-std::ofstream dctcpAlphaOut;
-std::ofstream rxDropsOut;
+std::ofstream incastQueueDropOut;
+std::ofstream uplinkQueueDropOut;
 
 void
 LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
@@ -92,19 +92,39 @@ LogUplinkQueueMark(Ptr<const QueueDiscItem>, const char *) {
 }
 
 void
-LogDctcpAlpha(
-    std::ofstream *out,
-    uint32_t bytesMarked,
-    uint32_t bytesAcked,
-    double alpha) {
+LogQueueDrop(std::ofstream *out, int type) {
   (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
-         << " " << alpha << std::endl;
+         << " " << type << std::endl;
 }
 
 void
-LogRxDrops(Ptr<const Packet> p) {
-  rxDropsOut << std::fixed << std::setprecision(9)
-             << Simulator::Now().GetSeconds() << std::endl;
+LogIncastQueueDrop(Ptr<const QueueDiscItem>) {
+  LogQueueDrop(&incastQueueDropOut, 0);
+}
+
+void
+LogIncastQueueDropBeforeEnqueue(Ptr<const QueueDiscItem>, const char *) {
+  LogQueueDrop(&incastQueueDropOut, 1);
+}
+
+void
+LogIncastQueueDropAfterDequeue(Ptr<const QueueDiscItem>, const char *) {
+  LogQueueDrop(&incastQueueDropOut, 2);
+}
+
+void
+LogUplinkQueueDrop(Ptr<const QueueDiscItem>) {
+  LogQueueDrop(&uplinkQueueDropOut, 0);
+}
+
+void
+LogUplinkQueueDropBeforeEnqueue(Ptr<const QueueDiscItem>, const char *) {
+  LogQueueDrop(&uplinkQueueDropOut, 1);
+}
+
+void
+LogUplinkQueueDropAfterDequeue(Ptr<const QueueDiscItem>, const char *) {
+  LogQueueDrop(&uplinkQueueDropOut, 2);
 }
 
 int
@@ -302,16 +322,23 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
+  //   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
   Config::SetDefault(
       "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(0)));
+  //   Config::SetDefault(
+  //       "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(5)));
+  // TODO: Try 9k
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
 
   // Important: Must do this before configuring IP addresses.
   NS_LOG_INFO("Creating queues...");
 
-  // Set default parameters for RED queue disc
-  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
-  Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
+  if (tcpTypeId == "TcpDctp") {
+    // Set default parameters for RED queue disc
+    Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+    // TODO: For non-DCTCP, try with and without
+    Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
+  }
 
   // ARED may be used but the queueing delays will increase; it is disabled
   // here because the SIGCOMM paper did not mention it
@@ -496,32 +523,27 @@ main(int argc, char *argv[]) {
   uplinkQueueMarkOut << "# Time (s)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogUplinkQueueMark));
-
-  // TODO: Trace alpha from DCTCP
-  if (tcpTypeId == "TcpDctcp") {
-    dctcpAlphaOut.open(
-        outputDirectory + traceDirectory + "log/dctcp_alpha.log",
-        std::ios::out);
-    dctcpAlphaOut << "Time (s) Alpha" << std::endl;
-
-    std::ostringstream pathStream;
-    pathStream << "/NodeList/" << dumbbellHelper.GetLeft(0)->GetId() << "/"
-               << "$ns3::TcpL4Protocol/SocketList/0/"
-               << "CongestionOps/$ns3::TcpDctcp/CongestionEstimate";
-
-    std::cout << pathStream.str() << std::endl;
-
-    Config::ConnectWithoutContext(
-        pathStream.str(), MakeBoundCallback(&LogDctcpAlpha, &dctcpAlphaOut));
-  }
-
-  // TODO: Trace packet drops during reception
-  rxDropsOut.open(
-      outputDirectory + traceDirectory + "log/incast_rxdrops.log",
+  // Drops
+  incastQueueDropOut.open(
+      outputDirectory + traceDirectory + "log/incast_queue_drop.log",
       std::ios::out);
-  rxDropsOut << "Drop Times (s)" << std::endl;
-  dumbbellHelper.GetLeftRouterDevices().Get(0)->TraceConnectWithoutContext(
-      "PhyRxDrop", MakeCallback(&LogRxDrops));
+  incastQueueDropOut << "# Time (s) Drop type" << std::endl;
+  incastQueue->TraceConnectWithoutContext(
+      "Drop", MakeCallback(&LogIncastQueueDrop));
+  incastQueue->TraceConnectWithoutContext(
+      "DropBeforeEnqueue", MakeCallback(&LogIncastQueueDropBeforeEnqueue));
+  incastQueue->TraceConnectWithoutContext(
+      "DropAfterDequeue", MakeCallback(&LogIncastQueueDropAfterDequeue));
+  uplinkQueueDropOut.open(
+      outputDirectory + traceDirectory + "log/uplink_queue_drop.log",
+      std::ios::out);
+  uplinkQueueDropOut << "# Time (s) Drop type" << std::endl;
+  uplinkQueue->TraceConnectWithoutContext(
+      "Drop", MakeCallback(&LogUplinkQueueDrop));
+  uplinkQueue->TraceConnectWithoutContext(
+      "DropBeforeEnqueue", MakeCallback(&LogUplinkQueueDropBeforeEnqueue));
+  uplinkQueue->TraceConnectWithoutContext(
+      "DropAfterDequeue", MakeCallback(&LogUplinkQueueDropAfterDequeue));
 
   Simulator::Run();
 
@@ -537,8 +559,8 @@ main(int argc, char *argv[]) {
   uplinkQueueDepthOut.close();
   incastQueueMarkOut.close();
   uplinkQueueMarkOut.close();
-  dctcpAlphaOut.close();
-  rxDropsOut.close();
+  incastQueueDropOut.close();
+  uplinkQueueDropOut.close();
 
   NS_LOG_INFO("Finished simulation.");
 
