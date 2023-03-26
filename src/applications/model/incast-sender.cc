@@ -288,7 +288,7 @@ void
 IncastSender::WriteLogs() {
   std::ofstream cwndOut;
   cwndOut.open(
-      m_outputDirectory + m_traceDirectory + "log/sender" +
+      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
           std::to_string(GetNode()->GetId()) + "_cwnd.log",
       std::ios::out);
   cwndOut << "# Time (s) CWND (bytes)" << std::endl;
@@ -299,7 +299,7 @@ IncastSender::WriteLogs() {
 
   std::ofstream rttOut;
   rttOut.open(
-      m_outputDirectory + m_traceDirectory + "log/sender" +
+      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
           std::to_string(GetNode()->GetId()) + "_rtt.log",
       std::ios::out);
   rttOut << "# Time (s) RTT (us)" << std::endl;
@@ -311,8 +311,8 @@ IncastSender::WriteLogs() {
 
   std::ofstream congEstOut;
   congEstOut.open(
-      "scratch/traces/log/sender" + std::to_string(GetNode()->GetId()) +
-          "_congest.log",
+      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
+          std::to_string(GetNode()->GetId()) + "_congest.log",
       std::ios::out);
   congEstOut << "Time (s) BytesMarked BytesAcked Alpha" << std::endl;
   for (const auto &entry : m_congEstLog) {

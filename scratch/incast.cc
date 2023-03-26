@@ -473,14 +473,14 @@ main(int argc, char *argv[]) {
 
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
-      outputDirectory + traceDirectory + "pcap/incast-sockets",
+      outputDirectory + "/" + traceDirectory + "/pcap/incast-sockets",
       dumbbellHelper.GetLeft(0)->GetId(),
       0);
 
   // Enable tracing at each sender
   for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     largeLinkHelper.EnablePcap(
-        outputDirectory + traceDirectory + "pcap/incast-sockets",
+        outputDirectory + "/" + traceDirectory + "/pcap/incast-sockets",
         dumbbellHelper.GetRight(i)->GetId(),
         0);
   }
@@ -501,31 +501,33 @@ main(int argc, char *argv[]) {
   //
   // Depth
   incastQueueDepthOut.open(
-      outputDirectory + traceDirectory + "log/incast_queue_depth.log",
+      outputDirectory + "/" + traceDirectory + "/log/incast_queue_depth.log",
       std::ios::out);
   incastQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
   uplinkQueueDepthOut.open(
-      outputDirectory + traceDirectory + "log/uplink_queue_depth.log",
+      outputDirectory + "/" + traceDirectory + "/log/uplink_queue_depth.log",
       std::ios::out);
   uplinkQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
   // Marks
   incastQueueMarkOut.open(
-      "scratch/traces/log/incast_queue_mark.log", std::ios::out);
+      outputDirectory + "/" + traceDirectory + "/log/incast_queue_mark.log",
+      std::ios::out);
   incastQueueMarkOut << "# Time (s)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogIncastQueueMark));
   uplinkQueueMarkOut.open(
-      "scratch/traces/log/uplink_queue_mark.log", std::ios::out);
+      outputDirectory + "/" + traceDirectory + "/log/uplink_queue_mark.log",
+      std::ios::out);
   uplinkQueueMarkOut << "# Time (s)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogUplinkQueueMark));
   // Drops
   incastQueueDropOut.open(
-      outputDirectory + traceDirectory + "log/incast_queue_drop.log",
+      outputDirectory + "/" + traceDirectory + "/log/incast_queue_drop.log",
       std::ios::out);
   incastQueueDropOut << "# Time (s) Drop type" << std::endl;
   incastQueue->TraceConnectWithoutContext(
@@ -535,7 +537,7 @@ main(int argc, char *argv[]) {
   incastQueue->TraceConnectWithoutContext(
       "DropAfterDequeue", MakeCallback(&LogIncastQueueDropAfterDequeue));
   uplinkQueueDropOut.open(
-      outputDirectory + traceDirectory + "log/uplink_queue_drop.log",
+      outputDirectory + "/" + traceDirectory + "/.log/uplink_queue_drop.log",
       std::ios::out);
   uplinkQueueDropOut << "# Time (s) Drop type" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(

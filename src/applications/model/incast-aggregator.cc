@@ -358,7 +358,9 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   // we care about
 
   while ((packet = socket->Recv())) {
-    m_totalBytesSoFar += packet->GetSize();
+    auto size = packet->GetSize();
+    m_totalBytesSoFar += size;
+    m_bytesReceived[socket] += size;
 
     DynamicRwndTuning(DynamicCast<TcpSocketBase>(socket));
   }
@@ -370,20 +372,20 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
         "Aggregator: " << m_sendersFinished << "/" << m_senders.size()
                        << " senders finished");
 
-    if (m_sendersFinished == m_senders.size() - 1) {
-      Ptr<Socket> remainingSocket = nullptr;
-      for (const auto &p : m_bytesReceived) {
-        if (p.second < m_bytesPerSender) {
-          remainingSocket = p.first;
-          break;
-        }
-      }
-      NS_ASSERT(remainingSocket != nullptr);
-      NS_LOG_INFO(
-          "Remaining socket: " << m_sockets[remainingSocket] << " only sent "
-                               << m_bytesReceived[remainingSocket] << "/"
-                               << m_bytesPerSender << " bytes");
-    }
+    // if (m_sendersFinished == m_senders.size() - 1) {
+    //   Ptr<Socket> remainingSocket = nullptr;
+    //   for (const auto &p : m_bytesReceived) {
+    //     if (p.second < m_bytesPerSender) {
+    //       remainingSocket = p.first;
+    //       break;
+    //     }
+    //   }
+    //   NS_ASSERT(remainingSocket != nullptr);
+    //   NS_LOG_INFO(
+    //       "Remaining socket: " << m_sockets[remainingSocket] << " only sent "
+    //                            << m_bytesReceived[remainingSocket] << "/"
+    //                            << m_bytesPerSender << " bytes");
+    // }
 
     if (m_bytesReceived[socket] > m_bytesPerSender) {
       NS_LOG_ERROR(
@@ -441,7 +443,9 @@ IncastAggregator::WriteLogs() {
   }
 
   std::ofstream burstTimesOut;
-  burstTimesOut.open("scratch/traces/log/burst_times.log", std::ios::out);
+  burstTimesOut.open(
+      m_outputDirectory + "/" + m_traceDirectory + "/log/burst_times.log",
+      std::ios::out);
   burstTimesOut << "# Start time (s) End time (s)" << std::endl;
   for (const auto &p : m_burstTimesLog) {
     burstTimesOut << p.first.GetSeconds() << " " << p.second.GetSeconds()
@@ -450,7 +454,9 @@ IncastAggregator::WriteLogs() {
   burstTimesOut.close();
 
   std::ofstream cwndOut;
-  cwndOut.open("scratch/traces/log/aggregator_cwnd.log", std::ios::out);
+  cwndOut.open(
+      m_outputDirectory + "/" + m_traceDirectory + "/log/aggregator_cwnd.log",
+      std::ios::out);
   cwndOut << "# Time (s) CWND (bytes)" << std::endl;
   for (const auto &p : m_cwndLog) {
     cwndOut << p.first.GetSeconds() << " " << p.second << std::endl;
@@ -458,7 +464,9 @@ IncastAggregator::WriteLogs() {
   cwndOut.close();
 
   std::ofstream rttOut;
-  rttOut.open("scratch/traces/log/aggregator_rtt.log", std::ios::out);
+  rttOut.open(
+      m_outputDirectory + "/" + m_traceDirectory + "/log/aggregator_rtt.log",
+      std::ios::out);
   rttOut << "# Time (s) RTT (us)" << std::endl;
   for (const auto &p : m_rttLog) {
     rttOut << p.first.GetSeconds() << " " << p.second.GetMicroSeconds()
