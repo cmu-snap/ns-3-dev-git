@@ -1,15 +1,15 @@
-import io
+from concurrent.futures import ThreadPoolExecutor
 import itertools
 import json
 import math
-import multiprocessing
+import threading
 import os
 import subprocess
 import shutil
 import time
 
 NUM_PROCESSES: int = 30
-OUTPUT_DIRECTORY: str = "traces/"
+OUTPUT_DIRECTORY: str = "/data_ssd/incast/out/"
 
 # Parameter sweeping boundaries
 MIN_BURST_DURATION_MS: int = 5
@@ -182,19 +182,15 @@ class Params:
 
         return " ".join(run_command_args)
 
-    def run(self):
+    def run(self) -> int:
         with open(self.trace_path + "stderr.txt", "w") as stderr_file:
             with open(self.trace_path + "stdout.txt", "w") as stdout_file:
-                if (
-                    subprocess.run(
+                return subprocess.run(
                         self.getRunCommand(),
                         stdout=stdout_file,
                         stderr=stderr_file,
                         shell=True,
                     ).returncode
-                    != 0
-                ):
-                    self.deleteDirectories()
 
 
 if __name__ == "__main__":
@@ -302,16 +298,44 @@ if __name__ == "__main__":
         )
 
     # Build NS3
-    subprocess.call("./ns3 clean", shell=True)
-    subprocess.call("./ns3 configure", shell=True)
-    subprocess.call("./ns3 build scratch/incast.cc", shell=True)
+    # subprocess.call("./ns3 clean", shell=True)
+    # subprocess.call("./ns3 configure", shell=True)
+    # subprocess.call("./ns3 build scratch/incast.cc", shell=True)
+
+    run_lock = threading.RLock()
+    num_experiments = len(params_set)
+    num_successes = 0
+    num_failures = 0
+
+    cwd_path: str = os.getcwd()
+    failures_path : str = os.path.join(
+        cwd_path, OUTPUT_DIRECTORY, "failures.txt"
+    )
+    progress_path : str = os.path.join(
+        cwd_path, OUTPUT_DIRECTORY, "progress.txt"
+    )
 
     # Run an experiment
     def run(params: Params):
         params.createDirectories()
         params.writeConfig()
-        params.run()
+        returncode: int = params.run()
+
+        with run_lock:
+            if returncode != 0:
+                num_failures += 1
+                with open(failures_path, "a") as f:
+                    f.write(params.getRunCommand())
+                    f.write("\n")
+            else:
+                num_successes += 1
+
+            with open(progress_path, "a") as f:
+                f.write(f"num_successes: {num_successes}\n")
+                f.write(f"num_failures: {num_failures}\n")
+                f.write(f"num_experiments: {num_experiments}\n")
+                f.write("\n")
 
     # Run all experiments in parallel
-    with multiprocessing.Pool(NUM_PROCESSES) as p:
-        p.map(run, params_set)
+    with ThreadPoolExecutor(NUM_PROCESSES) as executor:
+        executor.map(run, params_set)
