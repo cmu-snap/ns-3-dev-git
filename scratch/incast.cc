@@ -334,6 +334,7 @@ main(int argc, char *argv[]) {
   Config::SetDefault(
       "ns3::TcpSocketBase::MinRto", TimeValue(MilliSeconds(200)));
   Config::SetDefault("ns3::TcpSocketBase::Timestamp", BooleanValue(true));
+  Config::SetDefault("ns3::TcpSocketBase::WindowScaling", BooleanValue(false));
   if (tcpTypeId == "TcpDctcp") {
     // TODO: For non-DCTCP, try with and without
     Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));

@@ -47,6 +47,8 @@ NS_OBJECT_ENSURE_REGISTERED(IncastSender);
  */
 void
 IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
+  NS_LOG_FUNCTION(this << " old: " << oldCwndBytes << " new: " << newCwndBytes);
+
   m_cwndLog.push_back({Simulator::Now(), newCwndBytes});
 }
 
@@ -58,12 +60,18 @@ IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
  */
 void
 IncastSender::LogRtt(Time oldRtt, Time newRtt) {
+  NS_LOG_FUNCTION(this << " old: " << oldRtt << " new: " << newRtt);
+
   m_rttLog.push_back({Simulator::Now(), newRtt});
 }
 
 void
 IncastSender::LogCongEst(
     uint32_t bytesMarked, uint32_t bytesAcked, double alpha) {
+  NS_LOG_FUNCTION(
+      this << " bytesMarked: " << bytesMarked << " bytesAcked: " << bytesAcked
+           << " alpha: " << alpha);
+
   struct congEstEntry entry;
   entry.time = Simulator::Now();
   entry.bytesMarked = bytesMarked;
@@ -212,6 +220,9 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
 
 uint32_t
 IncastSender::ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe) {
+  NS_LOG_FUNCTION(
+      " packet: " << packet << " containsRttProbe: " << containsRttProbe);
+
   uint8_t *buffer = new uint8_t[packet->GetSize()];
   packet->CopyData(buffer, packet->GetSize());
   uint32_t requestedBytes = *(uint32_t *)(buffer + containsRttProbe);
@@ -221,11 +232,12 @@ IncastSender::ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe) {
 
 void
 IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
-  NS_LOG_FUNCTION(this);
+  NS_LOG_FUNCTION(
+      this << " socket: " << socket << " totalBytes: " << totalBytes);
 
   // Record the start time for this flow in the current burst
-  (*m_flowTimes)[*m_currentBurstCount - 1][GetNode()->GetId()].first =
-      Simulator::Now();
+  (*m_flowTimes)[*m_currentBurstCount - 1][GetNode()->GetId()] = {
+      Simulator::Now(), Seconds(0)};
 
   size_t sentBytes = 0;
 
@@ -233,9 +245,18 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
     int toSend = totalBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
 
-    NS_LOG_LOGIC(m_logPrefix << "Sending " << toSend << " bytes");
+    // if (GetNode()->GetId() == 128) {
+    //   NS_LOG_INFO(
+    //       m_logPrefix << "Available to send: " << socket->GetTxAvailable());
+    //   NS_LOG_INFO(m_logPrefix << "Sending " << toSend << " bytes");
+    // }
+
     int newSentBytes = socket->Send(packet);
-    NS_LOG_LOGIC(m_logPrefix << "Sent " << newSentBytes << " bytes");
+
+    // if (GetNode()->GetId() == 128) {
+    //   NS_LOG_INFO("Available to send: " << socket->GetTxAvailable());
+    //   NS_LOG_INFO(m_logPrefix << "Sent " << newSentBytes << " bytes");
+    // }
 
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;
@@ -249,7 +270,7 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
 
 void
 IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
-  NS_LOG_FUNCTION(this << socket << from);
+  NS_LOG_FUNCTION(this << " socket: " << socket << " from: " << from);
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
   NS_LOG_LOGIC(
@@ -285,6 +306,8 @@ IncastSender::StopApplication() {
 
 void
 IncastSender::WriteLogs() {
+  NS_LOG_FUNCTION(this);
+
   std::ofstream cwndOut;
   cwndOut.open(
       m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
@@ -324,6 +347,8 @@ IncastSender::WriteLogs() {
 
 void
 IncastSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
+  NS_LOG_FUNCTION(this << currentBurstCount);
+
   m_currentBurstCount = currentBurstCount;
 }
 
@@ -331,6 +356,8 @@ void
 IncastSender::SetFlowTimesRecord(
     std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
         *flowTimes) {
+  NS_LOG_FUNCTION(this << flowTimes);
+
   m_flowTimes = flowTimes;
 }
 

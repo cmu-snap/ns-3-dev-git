@@ -11,7 +11,7 @@ mkdir -p "$out_dir/$dir_name/"{log,pcap}
 
 burstDurationMs=15
 lineRateGbps=12.5
-numSenders=100
+numSenders=200
 metaQueueSizeBytes=1800000
 metaQueueThresholdBytes=120000
 bytesPerPacket=1500
@@ -39,4 +39,7 @@ ns3_dir="$(realpath "$(dirname "$0")/..")"
     --smallQueueMinThresholdPackets=$thresholdPackets \
     --smallQueueMaxThresholdPackets=$thresholdPackets \
     --largeQueueMinThresholdPackets=$thresholdPackets \
-    --largeQueueMaxThresholdPackets=$thresholdPackets"
+    --largeQueueMaxThresholdPackets=$thresholdPackets \
+    --rwndStrategy=static \
+    --staticRwndBytes=5000 \
+    "

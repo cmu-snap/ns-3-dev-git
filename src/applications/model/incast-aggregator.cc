@@ -45,6 +45,8 @@ NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
  */
 void
 IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
+  NS_LOG_FUNCTION(this << " old: " << oldCwndBytes << " new: " << newCwndBytes);
+
   m_cwndLog.push_back({Simulator::Now(), newCwndBytes});
 }
 
@@ -56,6 +58,8 @@ IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
  */
 void
 IncastAggregator::LogRtt(Time oldRtt, Time newRtt) {
+  NS_LOG_FUNCTION(this << " old: " << oldRtt << " new: " << newRtt);
+
   m_rttLog.push_back({Simulator::Now(), newRtt});
 }
 
@@ -177,7 +181,7 @@ IncastAggregator::SetSenders(
 
 void
 IncastAggregator::SetupConnection(Ipv4Address sender, bool isLast) {
-  NS_LOG_FUNCTION(this);
+  NS_LOG_FUNCTION(this << " sender: " << sender << " isLast: " << isLast);
   NS_LOG_LOGIC("Aggregator: Setup connection to " << sender);
 
   Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
@@ -232,8 +236,6 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool isLast) {
 
     // Enable TCP timestamp option
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
-
-    StaticRwndTuning(tcpSocket);
   } else {
     NS_FATAL_ERROR("Only NS3_SOCK_STREAM sockets are supported");
   }
@@ -269,6 +271,8 @@ IncastAggregator::StartApplication() {
 
 void
 IncastAggregator::CloseConnections() {
+  NS_LOG_FUNCTION(this);
+
   for (const auto &p : m_sockets) {
     p.first->Close();
   }
@@ -306,12 +310,16 @@ IncastAggregator::ScheduleNextBurst() {
 
 void
 IncastAggregator::StartRttProbes() {
+  NS_LOG_FUNCTION(this);
+
   m_probingRtt = true;
   Simulator::Schedule(Seconds(0), &IncastAggregator::SendRttProbe, this);
 }
 
 void
 IncastAggregator::StopRttProbes() {
+  NS_LOG_FUNCTION(this);
+
   m_probingRtt = false;
 }
 
@@ -350,6 +358,8 @@ IncastAggregator::StartBurst() {
 void
 IncastAggregator::SendRequest(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
+
+  StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
 
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
@@ -433,7 +443,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
 void
 IncastAggregator::HandleAccept(Ptr<Socket> socket, const Address &from) {
-  NS_LOG_FUNCTION(this << socket << from);
+  NS_LOG_FUNCTION(this << " socket: " << socket << " from: " << from);
 
   socket->SetRecvCallback(MakeCallback(&IncastAggregator::HandleRead, this));
 }
@@ -454,11 +464,13 @@ IncastAggregator::StopApplication() {
 
 void
 IncastAggregator::WriteLogs() {
+  NS_LOG_FUNCTION(this);
+
   for (const auto &p : m_bytesReceived) {
     if (p.second < m_bytesPerSender) {
       uint32_t nid = m_sockets[p.first];
       NS_LOG_ERROR(
-          "Sender " << nid << "(" << (*m_senders)[nid].second << ") only sent "
+          "Sender " << nid << " (" << (*m_senders)[nid].second << ") only sent "
                     << p.second << "/" << m_bytesPerSender << " bytes");
     }
   }
@@ -498,21 +510,32 @@ IncastAggregator::WriteLogs() {
 
 void
 IncastAggregator::StaticRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
+  NS_LOG_FUNCTION(this << tcpSocket);
+
   if (m_rwndStrategy != "static") {
     return;
   }
+
   // Set the RWND to 64KB for all sockets
   if (m_staticRwndBytes < 2000 || m_staticRwndBytes > 65535) {
     NS_FATAL_ERROR(
         "RWND tuning is only supported for values in the range [2000, "
         "65535]");
   }
-  tcpSocket->SetOverrideWindowSize(
-      m_staticRwndBytes >> tcpSocket->GetRcvWindShift());
+
+  uint32_t rwndToSet = m_staticRwndBytes >> tcpSocket->GetRcvWindShift();
+  NS_LOG_LOGIC(
+      "StaticRwndTuning for socket: "
+      << tcpSocket << " - Base RWND: " << m_staticRwndBytes << " bytes, Shift: "
+      << tcpSocket->GetRcvWindShift() << " to set: " << rwndToSet);
+
+  tcpSocket->SetOverrideWindowSize(rwndToSet);
 }
 
 void
 IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
+  NS_LOG_FUNCTION(this << tcpSocket);
+
   if (m_rwndStrategy == "bdp+connections") {
     // Set RWND based on the number of the BDP and number of connections.
     Time rtt = tcpSocket->GetRttEstimator()->GetEstimate();
@@ -565,6 +588,8 @@ IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
 
 void
 IncastAggregator::SetCurrentBurstCount(uint32_t *currentBurstCount) {
+  NS_LOG_FUNCTION(this << currentBurstCount);
+
   m_currentBurstCount = currentBurstCount;
 }
 
@@ -572,6 +597,8 @@ void
 IncastAggregator::SetFlowTimesRecord(
     std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
         *flowTimes) {
+  NS_LOG_FUNCTION(this << flowTimes);
+
   m_flowTimes = flowTimes;
 }
 
