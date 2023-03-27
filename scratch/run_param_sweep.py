@@ -9,7 +9,9 @@ import shutil
 import time
 
 NUM_PROCESSES: int = 30
-OUTPUT_DIRECTORY: str = "/data_ssd/incast/out/"
+NUM_TRIALS: int = 3
+# OUTPUT_DIRECTORY: str = "/data_ssd/incast/out/"
+OUTPUT_DIRECTORY: str = "scratch/traces"
 
 # Parameter sweeping boundaries
 MIN_BURST_DURATION_MS: int = 5
@@ -100,6 +102,7 @@ class Params:
         smallLinkBandwidthMbps: int,
         smallQueueThresholdPackets: int,
         smallQueueSizePackets: int,
+        trial: int,
     ):
         self.time = int(time.time())
         self.bytesPerSender = bytesPerSender
@@ -111,6 +114,7 @@ class Params:
         self.smallLinkBandwidthMbps = smallLinkBandwidthMbps
         self.smallQueueThresholdPackets = smallQueueThresholdPackets
         self.smallQueueSizePackets = smallQueueSizePackets
+        self.trial = trial
         self.commandLineOptions = {
             "bytesPerSender": self.bytesPerSender,
             "jitterUs": self.jitterUs,
@@ -142,6 +146,7 @@ class Params:
             str(self.smallQueueThresholdPackets),
             str(self.smallQueueThresholdPackets),
             str(self.smallQueueSizePackets),
+            str(self.trial),
         ]
 
         return "_".join(elems) + "/"
@@ -186,11 +191,11 @@ class Params:
         with open(self.trace_path + "stderr.txt", "w") as stderr_file:
             with open(self.trace_path + "stdout.txt", "w") as stdout_file:
                 return subprocess.run(
-                        self.getRunCommand(),
-                        stdout=stdout_file,
-                        stderr=stderr_file,
-                        shell=True,
-                    ).returncode
+                    self.getRunCommand(),
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    shell=True,
+                ).returncode
 
 
 if __name__ == "__main__":
@@ -249,6 +254,7 @@ if __name__ == "__main__":
             STEP_SMALL_QUEUE_SIZE_PACKETS,
         )
     )
+    trials_set: set[int] = set(range(1, NUM_TRIALS + 1))
 
     # Combine all parameters
     params_tuples = list(
@@ -261,6 +267,7 @@ if __name__ == "__main__":
             smallLinkBandwidthMbps_set,
             smallQueueThresholdPackets_set,
             smallQueueSizePackets_set,
+            trials_set
         )
     )
 
@@ -275,6 +282,7 @@ if __name__ == "__main__":
         smallLinkBandwidthMbps,
         smallQueueThresholdPackets,
         smallQueueSizePackets,
+        trial,
     ) in params_tuples:
         jitterUs: int = getJitterUs(delayPerLinkUs)
         largeLinkBandwidthMbps: int = 10 * smallLinkBandwidthMbps
@@ -294,6 +302,7 @@ if __name__ == "__main__":
                 smallLinkBandwidthMbps,
                 smallQueueThresholdPackets,
                 smallQueueSizePackets,
+                trial,
             )
         )
 
@@ -308,12 +317,8 @@ if __name__ == "__main__":
     num_failures = 0
 
     cwd_path: str = os.getcwd()
-    failures_path : str = os.path.join(
-        cwd_path, OUTPUT_DIRECTORY, "failures.txt"
-    )
-    progress_path : str = os.path.join(
-        cwd_path, OUTPUT_DIRECTORY, "progress.txt"
-    )
+    failures_path: str = os.path.join(cwd_path, OUTPUT_DIRECTORY, "failures.txt")
+    progress_path: str = os.path.join(cwd_path, OUTPUT_DIRECTORY, "progress.txt")
 
     # Run an experiment
     def run(params: Params):
@@ -339,3 +344,14 @@ if __name__ == "__main__":
     # Run all experiments in parallel
     with ThreadPoolExecutor(NUM_PROCESSES) as executor:
         executor.map(run, params_set)
+
+    # test_params_set = set()
+    # test_params_set.add(Params(1001, 100, 100, 100, 100, 50, 100, 100, 100))
+    # test_params_set.add(Params(1002, 100, 100, 100, 100, 50, 100, 100, 100))
+    # test_params_set.add(Params(1003, 100, 100, 100, 100, 50, 100, 100, 100))
+    # test_params_set.add(
+    #     Params(1003, 100, 1000000000000000, 100, 100, 50, 100, 100, 100)
+    # )
+
+    # with ThreadPoolExecutor(NUM_PROCESSES) as executor:
+    #     executor.map(run, params_set)
