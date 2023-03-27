@@ -223,12 +223,11 @@ void
 IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(this);
 
-  size_t sentBytes = 0;
+  // Record the start time for this flow in the current burst
+  (*m_flowTimes)[*m_currentBurstCount - 1][GetNode()->GetId()].first =
+      Simulator::Now();
 
-  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-  PointerValue ccPtr;
-  tcpSocket->GetAttribute("CongestionOps", ccPtr);
-  Ptr<TcpCongestionOps> cc = ccPtr.Get<TcpCongestionOps>();
+  size_t sentBytes = 0;
 
   while (sentBytes < totalBytes && socket->GetTxAvailable()) {
     int toSend = totalBytes - sentBytes;
@@ -321,6 +320,18 @@ IncastSender::WriteLogs() {
                << entry.alpha << std::endl;
   }
   congEstOut.close();
+}
+
+void
+IncastSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
+  m_currentBurstCount = currentBurstCount;
+}
+
+void
+IncastSender::SetFlowTimesRecord(
+    std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
+        *flowTimes) {
+  m_flowTimes = flowTimes;
 }
 
 }  // Namespace ns3

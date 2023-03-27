@@ -22,10 +22,17 @@
 #ifndef INCAST_AGGREGATOR_H
 #define INCAST_AGGREGATOR_H
 
+#include "incast-sender.h"
+
 #include "ns3/application.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/internet-module.h"
 #include "ns3/ipv4-interface-container.h"
+#include "ns3/ptr.h"
+
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace ns3 {
 
@@ -52,7 +59,9 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SetSenders(const std::vector<Ipv4Address>& senders);
+  void SetSenders(
+      std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+          *senders);
 
   /**
    * @brief TODO
@@ -60,6 +69,12 @@ class IncastAggregator : public Application {
   std::vector<std::pair<Time, Time>> GetBurstTimes();
 
   void WriteLogs();
+
+  void SetCurrentBurstCount(uint32_t *currentBurstCount);
+
+  void SetFlowTimesRecord(
+      std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
+          *flowTimes);
 
  protected:
   /**
@@ -112,7 +127,7 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void HandleAccept(Ptr<Socket> socket, const Address& from);
+  void HandleAccept(Ptr<Socket> socket, const Address &from);
 
   /**
    * @brief TODO
@@ -162,8 +177,8 @@ class IncastAggregator : public Application {
   // Number of bursts to simulate
   uint32_t m_numBursts;
 
-  // Which burst is currently running
-  uint32_t m_burstCount;
+  // Pointer to the global record which burst is currently running.
+  uint32_t *m_currentBurstCount;
 
   // For each burst, the number of bytes to request from each sender
   uint32_t m_bytesPerSender;
@@ -177,11 +192,8 @@ class IncastAggregator : public Application {
   // TypeId of the protocol used
   TypeId m_tid;
 
-  // Map from socket to remote IP address
-  std::unordered_map<Ptr<Socket>, Ipv4Address> m_sockets;
-
-  // List of addresses for associated senders
-  std::vector<Ipv4Address> m_senders;
+  // Map from socket to remote node ID
+  std::unordered_map<Ptr<Socket>, uint32_t> m_sockets;
 
   // Max random jitter in microseconds
   uint32_t m_requestJitterUs;
@@ -218,6 +230,16 @@ class IncastAggregator : public Application {
 
   // Number of senders that have finished the current burst
   uint32_t m_sendersFinished;
+
+  // Pointer to the global record of flow start and end times, which is a vector
+  // of bursts, where each entry is a maps from sender node ID to (start time,
+  // end time) pair.
+  std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>> *m_flowTimes;
+
+  // Point to the global record of senders, which maps sender node ID to a pair
+  // of SenderApp and sender IP address.
+  std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+      *m_senders;
 };
 
 }  // namespace ns3

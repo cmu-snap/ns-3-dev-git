@@ -37,6 +37,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <nlohmann/json.hpp>
 
 /*
  * Incast Topology
@@ -322,6 +323,7 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
+  Config::SetDefault("ns3::TcpSocket::TcpNoDelay", BooleanValue(true));
   //   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
   Config::SetDefault(
       "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(0)));
@@ -329,31 +331,23 @@ main(int argc, char *argv[]) {
   //       "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(5)));
   // TODO: Try 9k
   Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
-
-  // Important: Must do this before configuring IP addresses.
-  NS_LOG_INFO("Creating queues...");
-
-  // Set default parameters for RED queue disc
-  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
+  Config::SetDefault(
+      "ns3::TcpSocketBase::MinRto", TimeValue(MilliSeconds(200)));
+  Config::SetDefault("ns3::TcpSocketBase::Timestamp", BooleanValue(true));
   if (tcpTypeId == "TcpDctcp") {
     // TODO: For non-DCTCP, try with and without
     Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
   }
-  // ARED may be used but the queueing delays will increase; it is disabled
-  // here because the SIGCOMM paper did not mention it
-  // Config::SetDefault ("ns3::RedQueueDisc::ARED", BooleanValue (true));
-  // Config::SetDefault ("ns3::RedQueueDisc::Gentle", BooleanValue (true));
+
+  // Important: Must set up queues before configuring IP addresses.
+  NS_LOG_INFO("Creating queues...");
+
+  // Set default parameters for RED queue disc
+  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
   Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
   Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
-
-  // Triumph and Scorpion switches used in DCTCP Paper have 4 MB of buffer
-  // If every packet is 1500 bytes, 2666 packets can be stored in 4 MB
-  // Config::SetDefault(
-  //     "ns3::RedQueueDisc::MaxSize", QueueSizeValue(QueueSize("2666p")));
   // DCTCP tracks instantaneous queue length only; so set QW = 1
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
-  // Config::SetDefault("ns3::RedQueueDisc::MinTh", minThresholdValue);
-  // Config::SetDefault("ns3::RedQueueDisc::MaxTh", maxThresholdValue);
 
   // Configure different queues for the small and large links
   TrafficControlHelper smallLinkQueueHelper;
@@ -416,12 +410,6 @@ main(int argc, char *argv[]) {
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
 
-  // Collect all sender addresses
-  std::vector<Ipv4Address> allSenderAddresses;
-  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    allSenderAddresses.push_back(dumbbellHelper.GetRightIpv4Address(i));
-  }
-
   NS_LOG_INFO("Configuring static global routing...");
 
   // Build the global routing table
@@ -429,9 +417,21 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Creating applications...");
 
+  // Global record which burst is currently running.
+  uint32_t currentBurstCount = 0;
+  // Global record of senders, which maps sender node ID to a pair of SenderApp
+  // and sender IP address.
+  std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+      senders;
+  // Global record of flow start and end times, which is a vector of bursts,
+  // where each entry is a maps from sender node ID to (start time, end time)
+  // pair.
+  std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>> flowTimes;
+
   // Create the aggregator application
   Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
-  aggregatorApp->SetSenders(allSenderAddresses);
+  aggregatorApp->SetCurrentBurstCount(&currentBurstCount);
+  aggregatorApp->SetFlowTimesRecord(&flowTimes);
   aggregatorApp->SetStartTime(Seconds(1.0));
   aggregatorApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
   aggregatorApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
@@ -450,10 +450,14 @@ main(int argc, char *argv[]) {
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
-  std::vector<Ptr<IncastSender>> senderApps;
+
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
-    senderApps.push_back(senderApp);
+    senders[dumbbellHelper.GetRight(i)->GetId()] = {
+        senderApp, dumbbellHelper.GetRightIpv4Address(i)};
+
+    senderApp->SetCurrentBurstCount(&currentBurstCount);
+    senderApp->SetFlowTimesRecord(&flowTimes);
     senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
     senderApp->SetAttribute(
@@ -462,8 +466,10 @@ main(int argc, char *argv[]) {
     senderApp->SetAttribute(
         "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
     senderApp->SetStartTime(Seconds(1.0));
+
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
+  aggregatorApp->SetSenders(&senders);
 
   NS_LOG_INFO("Enabling tracing...");
 
@@ -550,8 +556,8 @@ main(int argc, char *argv[]) {
 
   // Write application output files
   aggregatorApp->WriteLogs();
-  for (const auto &senderApp : senderApps) {
-    senderApp->WriteLogs();
+  for (const auto &p : senders) {
+    p.second.first->WriteLogs();
   }
 
   Simulator::Destroy();
@@ -587,6 +593,28 @@ main(int argc, char *argv[]) {
         burstDuration.As(Time::MS)
         << " (" << burstDuration.GetSeconds() / idealBurstDurationSec << "x)");
   }
+
+  // Serialize the flow times to a JSON file.
+  nlohmann::json flowTimesJson;
+  for (uint32_t i = 0; i < flowTimes.size(); ++i) {
+    nlohmann::json burstJson;
+    for (const auto &flow : flowTimes[i]) {
+      Ipv4Address ip = senders[flow.first].second;
+      std::ostringstream ipStr;
+      ip.Print(ipStr);
+
+      burstJson[ipStr.str()] = {
+          {"start", flow.second.first.GetSeconds()},
+          {"end", flow.second.second.GetSeconds()}};
+    }
+    flowTimesJson[std::to_string(i)] = burstJson;
+  }
+  std::ofstream burstTimesOut;
+  burstTimesOut.open(
+      outputDirectory + "/" + traceDirectory + "/log/flow_times.json",
+      std::ios::out);
+  burstTimesOut << std::setw(4) << flowTimesJson << std::endl;
+  burstTimesOut.close();
 
   return 0;
 }

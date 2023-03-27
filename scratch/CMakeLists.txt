@@ -44,11 +44,17 @@ function(create_scratch source_files)
   string(REPLACE "${PROJECT_SOURCE_DIR}" "${CMAKE_OUTPUT_DIRECTORY}"
                  scratch_directory ${scratch_absolute_directory}
   )
+
+  include(FetchContent)
+
+  FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz)
+  FetchContent_MakeAvailable(json)
+
   build_exec(
           EXECNAME ${scratch_name}
           EXECNAME_PREFIX ${target_prefix}
           SOURCE_FILES "${source_files}"
-          LIBRARIES_TO_LINK "${ns3-libs}" "${ns3-contrib-libs}"
+          LIBRARIES_TO_LINK "${ns3-libs}" "${ns3-contrib-libs}" "nlohmann_json::nlohmann_json"
           EXECUTABLE_DIRECTORY_PATH ${scratch_directory}/
   )
 endfunction()

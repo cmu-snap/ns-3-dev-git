@@ -144,7 +144,6 @@ IncastAggregator::GetTypeId() {
 
 IncastAggregator::IncastAggregator()
     : m_numBursts(10),
-      m_burstCount(0),
       m_bytesPerSender(1448),
       m_totalBytesSoFar(0),
       m_port(8888),
@@ -169,7 +168,9 @@ IncastAggregator::DoDispose() {
 }
 
 void
-IncastAggregator::SetSenders(const std::vector<Ipv4Address> &senders) {
+IncastAggregator::SetSenders(
+    std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+        *senders) {
   NS_LOG_FUNCTION(this);
   m_senders = senders;
 }
@@ -201,7 +202,17 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool isLast) {
                                  << " failed: " << socket->GetErrno());
   }
 
-  m_sockets[socket] = sender;
+  // Store a mapping from socket to sender node ID
+  // Look up the node ID for this sender
+  uint32_t nid = 0;
+  for (const auto &p : *m_senders) {
+    if (p.second.second == sender) {
+      nid = p.first;
+      break;
+    }
+  }
+  NS_ASSERT(nid != 0);
+  m_sockets[socket] = nid;
 
   if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
     // Set the congestion control algorithm
@@ -237,15 +248,22 @@ void
 IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
-  NS_LOG_LOGIC("Aggregator: num senders: " << m_senders.size());
+  // Make sure that the burst index pointer is defined and set to 0.
+  NS_ASSERT(m_currentBurstCount != nullptr && *m_currentBurstCount == 0);
+  NS_ASSERT(m_senders != nullptr);
 
-  for (uint32_t i = 0; i < m_senders.size(); ++i) {
+  NS_LOG_LOGIC("Aggregator: num senders: " << m_senders->size());
+
+  // Setup a connection with each sender.
+  uint32_t i = 0;
+  for (const auto &p : *m_senders) {
     Simulator::Schedule(
         MilliSeconds(1 + i),
         &IncastAggregator::SetupConnection,
         this,
-        m_senders[i],
-        i == m_senders.size() - 1);
+        p.second.second,
+        i == m_senders->size() - 1);
+    ++i;
   }
 }
 
@@ -263,18 +281,21 @@ void
 IncastAggregator::ScheduleNextBurst() {
   NS_LOG_FUNCTION(this);
 
-  if (m_burstCount == m_numBursts) {
+  if (*m_currentBurstCount == m_numBursts) {
     Simulator::Schedule(
         MilliSeconds(10), &IncastAggregator::CloseConnections, this);
     return;
   }
 
-  ++m_burstCount;
+  ++(*m_currentBurstCount);
   m_totalBytesSoFar = 0;
   m_sendersFinished = 0;
   for (const auto &p : m_sockets) {
     m_bytesReceived[p.first] = 0;
   }
+  // Create a new entry in the flow times map for the next burst
+  std::unordered_map<uint32_t, std::pair<Time, Time>> newFlowTimesEntry;
+  m_flowTimes->push_back(newFlowTimesEntry);
 
   // Schedule the next burst for 1 second later
   Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
@@ -312,7 +333,7 @@ IncastAggregator::SendRttProbe() {
 void
 IncastAggregator::StartBurst() {
   NS_LOG_FUNCTION(this);
-  NS_LOG_INFO("Burst " << m_burstCount << " of " << m_numBursts);
+  NS_LOG_INFO("Burst " << *m_currentBurstCount << " of " << m_numBursts);
 
   m_currentBurstStartTime = Simulator::Now();
 
@@ -333,11 +354,6 @@ IncastAggregator::SendRequest(Ptr<Socket> socket) {
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
   socket->Send(packet);
-
-  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-  PointerValue ccPtr;
-  tcpSocket->GetAttribute("CongestionOps", ccPtr);
-  Ptr<TcpCongestionOps> cc = ccPtr.Get<TcpCongestionOps>();
 }
 
 void
@@ -368,11 +384,15 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   if (m_bytesReceived[socket] >= m_bytesPerSender) {
     ++m_sendersFinished;
 
+    // Record when this flow finished.
+    (*m_flowTimes)[*m_currentBurstCount - 1][m_sockets[socket]].second =
+        Simulator::Now();
+
     NS_LOG_INFO(
-        "Aggregator: " << m_sendersFinished << "/" << m_senders.size()
+        "Aggregator: " << m_sendersFinished << "/" << m_senders->size()
                        << " senders finished");
 
-    // if (m_sendersFinished == m_senders.size() - 1) {
+    // if (m_sendersFinished == m_senders->size() - 1) {
     //   Ptr<Socket> remainingSocket = nullptr;
     //   for (const auto &p : m_bytesReceived) {
     //     if (p.second < m_bytesPerSender) {
@@ -395,13 +415,13 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   NS_LOG_LOGIC(
       "Aggregator: Received " << m_totalBytesSoFar << "/"
-                              << m_bytesPerSender * m_senders.size()
+                              << m_bytesPerSender * m_senders->size()
                               << " bytes");
-  if (m_totalBytesSoFar > m_bytesPerSender * m_senders.size()) {
+  if (m_totalBytesSoFar > m_bytesPerSender * m_senders->size()) {
     NS_LOG_ERROR("Aggregator: Received too many bytes");
   }
 
-  if (m_sendersFinished == m_senders.size()) {
+  if (m_sendersFinished == m_senders->size()) {
     NS_LOG_INFO("Burst done.");
     m_burstTimesLog.push_back({m_currentBurstStartTime, Simulator::Now()});
 
@@ -436,9 +456,10 @@ void
 IncastAggregator::WriteLogs() {
   for (const auto &p : m_bytesReceived) {
     if (p.second < m_bytesPerSender) {
+      uint32_t nid = m_sockets[p.first];
       NS_LOG_ERROR(
-          "Sender " << m_sockets[p.first] << " only sent " << p.second << "/"
-                    << m_bytesPerSender << " bytes");
+          "Sender " << nid << "(" << (*m_senders)[nid].second << ") only sent "
+                    << p.second << "/" << m_bytesPerSender << " bytes");
     }
   }
 
@@ -540,6 +561,18 @@ IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
     NS_LOG_LOGIC(rwndBytes);
     tcpSocket->SetOverrideWindowSize(rwndBytes >> tcpSocket->GetRcvWindShift());
   }
+}
+
+void
+IncastAggregator::SetCurrentBurstCount(uint32_t *currentBurstCount) {
+  m_currentBurstCount = currentBurstCount;
+}
+
+void
+IncastAggregator::SetFlowTimesRecord(
+    std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
+        *flowTimes) {
+  m_flowTimes = flowTimes;
 }
 
 }  // Namespace ns3
