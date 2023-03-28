@@ -137,15 +137,14 @@ main(int argc, char *argv[]) {
   LogComponentEnable("IncastAggregator", logConfig);
   LogComponentEnable("IncastSender", logConfig);
 
-  // Initialize variables
-  std::string outputDirectory = "scratch/traces/";
-  std::string traceDirectory = "trace_directory/";
+  // Parameters for the simulation
   std::string tcpTypeId = "TcpCubic";
   uint32_t numBursts = 5;
   uint32_t numSenders = 10;
   uint32_t bytesPerSender = 500000;
   float delayPerLinkUs = 5;
   uint32_t jitterUs = 100;
+  uint32_t segmentSizeBytes = 1448;
 
   // Parameters for the small links (ToR to node)
   uint32_t smallLinkBandwidthMbps = 12500;
@@ -162,6 +161,11 @@ main(int argc, char *argv[]) {
   // Parameters for RWND tuning
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
+
+  // Configurations for tracing
+  std::string outputDirectory = "scratch/traces/";
+  std::string traceDirectory = "trace_directory/";
+  bool enableSenderPcap = false;
 
   // Define command line arguments
   CommandLine cmd;
@@ -187,6 +191,8 @@ main(int argc, char *argv[]) {
       "jitterUs",
       "Maximum random jitter when sending requests (in microseconds)",
       jitterUs);
+  cmd.AddValue(
+      "segmentSizeBytes", "TCP segment size (in bytes)", segmentSizeBytes);
   cmd.AddValue(
       "smallLinkBandwidthMbps",
       "Small link bandwidth (in Mbps)",
@@ -231,6 +237,10 @@ main(int argc, char *argv[]) {
       "staticRwndBytes",
       "If --rwndStrategy=static, then use this static RWND value",
       staticRwndBytes);
+  cmd.AddValue(
+      "enableSenderPcap",
+      "Enable pcap traces for the senders",
+      enableSenderPcap);
   cmd.Parse(argc, argv);
 
   // Check if the large link will be overwhelmed
@@ -330,7 +340,8 @@ main(int argc, char *argv[]) {
   //   Config::SetDefault(
   //       "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(5)));
   // TODO: Try 9k
-  Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(1448));
+  Config::SetDefault(
+      "ns3::TcpSocket::SegmentSize", UintegerValue(segmentSizeBytes));
   Config::SetDefault(
       "ns3::TcpSocketBase::MinRto", TimeValue(MilliSeconds(200)));
   Config::SetDefault("ns3::TcpSocketBase::Timestamp", BooleanValue(true));
@@ -479,16 +490,18 @@ main(int argc, char *argv[]) {
 
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
-      outputDirectory + "/" + traceDirectory + "/pcap/incast-sockets",
+      outputDirectory + traceDirectory + "/pcap/incast",
       dumbbellHelper.GetLeft(0)->GetId(),
       0);
 
   // Enable tracing at each sender
-  for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    largeLinkHelper.EnablePcap(
-        outputDirectory + "/" + traceDirectory + "/pcap/incast-sockets",
-        dumbbellHelper.GetRight(i)->GetId(),
-        0);
+  if (enableSenderPcap) {
+    for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+      largeLinkHelper.EnablePcap(
+          outputDirectory + traceDirectory + "/pcap/incast",
+          dumbbellHelper.GetRight(i)->GetId(),
+          0);
+    }
   }
 
   // Compute the data per burst
@@ -507,33 +520,33 @@ main(int argc, char *argv[]) {
   //
   // Depth
   incastQueueDepthOut.open(
-      outputDirectory + "/" + traceDirectory + "/log/incast_queue_depth.log",
+      outputDirectory + traceDirectory + "/log/incast_queue_depth.log",
       std::ios::out);
   incastQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
   uplinkQueueDepthOut.open(
-      outputDirectory + "/" + traceDirectory + "/log/uplink_queue_depth.log",
+      outputDirectory + traceDirectory + "/log/uplink_queue_depth.log",
       std::ios::out);
   uplinkQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
   // Marks
   incastQueueMarkOut.open(
-      outputDirectory + "/" + traceDirectory + "/log/incast_queue_mark.log",
+      outputDirectory + traceDirectory + "/log/incast_queue_mark.log",
       std::ios::out);
   incastQueueMarkOut << "# Time (s)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogIncastQueueMark));
   uplinkQueueMarkOut.open(
-      outputDirectory + "/" + traceDirectory + "/log/uplink_queue_mark.log",
+      outputDirectory + traceDirectory + "/log/uplink_queue_mark.log",
       std::ios::out);
   uplinkQueueMarkOut << "# Time (s)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogUplinkQueueMark));
   // Drops
   incastQueueDropOut.open(
-      outputDirectory + "/" + traceDirectory + "/log/incast_queue_drop.log",
+      outputDirectory + traceDirectory + "/log/incast_queue_drop.log",
       std::ios::out);
   incastQueueDropOut << "# Time (s) Drop type" << std::endl;
   incastQueue->TraceConnectWithoutContext(
@@ -543,7 +556,7 @@ main(int argc, char *argv[]) {
   incastQueue->TraceConnectWithoutContext(
       "DropAfterDequeue", MakeCallback(&LogIncastQueueDropAfterDequeue));
   uplinkQueueDropOut.open(
-      outputDirectory + "/" + traceDirectory + "/log/uplink_queue_drop.log",
+      outputDirectory + traceDirectory + "/log/uplink_queue_drop.log",
       std::ios::out);
   uplinkQueueDropOut << "# Time (s) Drop type" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(

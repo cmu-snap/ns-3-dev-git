@@ -2,67 +2,42 @@ from concurrent.futures import ThreadPoolExecutor
 import itertools
 import json
 import math
-import threading
 import os
-import subprocess
+import random
 import shutil
+import subprocess
+import sys
+import threading
 import time
 
-NUM_PROCESSES: int = 30
-NUM_TRIALS: int = 3
-# OUTPUT_DIRECTORY: str = "/data_ssd/incast/out/"
-OUTPUT_DIRECTORY: str = "scratch/traces"
-
-# Parameter sweeping boundaries
-MIN_BURST_DURATION_MS: int = 5
-MAX_BURST_DURATION_MS: int = 50
-STEP_BURST_DURATION_MS: int = math.ceil(
-    (MAX_BURST_DURATION_MS + 1 - MIN_BURST_DURATION_MS) / 10
-)
-
-MIN_DELAY_PER_LINK_US: int = 2
-MAX_DELAY_PER_LINK_US: int = 25
-STEP_DELAY_PER_LINK_US: int = math.ceil(
-    (MAX_DELAY_PER_LINK_US + 1 - MIN_DELAY_PER_LINK_US) / 10
-)
-
-# MIN_LARGE_LINK_BANDWIDTH_MBPS: int = 5000
-# MAX_LARGE_LINK_BANDWIDTH_MBPS: int = 100000
-# STEP_LARGE_LINK_BANDWIDTH_MBPS: int = 1
-
-MIN_LARGE_QUEUE_THRESHOLD_PACKETS: int = 80
-MAX_LARGE_QUEUE_THRESHOLD_PACKETS: int = 80
-STEP_LARGE_QUEUE_THRESHOLD_PACKETS: int = 1
-
-MIN_LARGE_QUEUE_SIZE_PACKETS: int = 1200
-MAX_LARGE_QUEUE_SIZE_PACKETS: int = 1200
-STEP_LARGE_QUEUE_SIZE_PACKETS: int = 1
-
-MIN_NUM_SENDERS: int = 100
-MAX_NUM_SENDERS: int = 1000
-STEP_NUM_SENDERS: int = math.ceil((MAX_NUM_SENDERS + 1 - MIN_NUM_SENDERS) / 10)
-
-MIN_SMALL_LINK_BANDWIDTH_MBPS: int = 50000
-MAX_SMALL_LINK_BANDWIDTH_MBPS: int = 800000
-NUM_SMALL_LINK_BANDWIDTH_MBPS: int = 10
-
-MIN_SMALL_QUEUE_THRESHOLD_PACKETS: int = 80
-MAX_SMALL_QUEUE_THRESHOLD_PACKETS: int = 80
-STEP_SMALL_QUEUE_THRESHOLD_PACKETS: int = 1
-
-MIN_SMALL_QUEUE_SIZE_PACKETS: int = 1200
-MAX_SMALL_QUEUE_SIZE_PACKETS: int = 1200
-STEP_SMALL_QUEUE_SIZE_PACKETS: int = 1
 
 # Constants for calculations
+BASE_TO_MICRO: int = pow(10, 6)
 BASE_TO_MILLI: int = pow(10, 3)
 MEGA_TO_BASE: int = pow(10, 6)
 NUM_BITS_PER_BYTE: int = 8
+NUM_HOPS: int = 3
 
 
-def getExponentialSet(start: int, end: int, num: int) -> set[int]:
+def getSetParams(experiment_config: dict[str, int], param: str) -> list[int]:
+    return [
+        experiment_config[f"MIN_{param}"],
+        experiment_config[f"MAX_{param}"],
+        experiment_config[f"NUM_{param}"],
+    ]
+
+
+def getLinearSet(experiment_config: dict[str, int], param: str) -> set[int]:
+    start, end, num = getSetParams(experiment_config, param)
+    step: int = math.ceil((end + 1 - start) / num)
+
+    return set(range(start, end + 1, step))
+
+
+def getExponentialSet(experiment_config: dict[str, int], param: str) -> set[int]:
+    start, end, num = getSetParams(experiment_config, param)
     curr: float = 1.0 * start
-    factor: float = math.log(end / curr) / math.log(num)
+    factor: float = math.log(math.ceil(end / curr)) / math.log(num)
     output: set[int] = {int(curr)}
 
     while curr < end:
@@ -90,45 +65,63 @@ def getJitterUs(delayPerLinkUs: int) -> int:
     return int(delayPerLinkUs / 2)
 
 
+def getLinkCapacityPps(linkBandwidthMbps: int, segmentSizeBytes: int) -> int:
+    linkBandwidthBps: float = linkBandwidthMbps * MEGA_TO_BASE / NUM_BITS_PER_BYTE
+
+    return int(linkBandwidthBps / segmentSizeBytes)
+
+
+def getRttS(delayPerLinkUs: int) -> float:
+    return float(NUM_HOPS * 2 * delayPerLinkUs / BASE_TO_MICRO)
+
+
 class Params:
     def __init__(
         self,
         bytesPerSender: int,
+        cca: str,
         jitterUs: int,
         largeLinkBandwidthMbps: int,
         largeQueueThresholdPackets: int,
         largeQueueSizePackets: int,
         numSenders: int,
+        segmentSizeBytes: int,
         smallLinkBandwidthMbps: int,
         smallQueueThresholdPackets: int,
         smallQueueSizePackets: int,
         trial: int,
+        outputDirectory: str,
     ):
         self.time = int(time.time())
         self.bytesPerSender = bytesPerSender
+        self.cca = cca
         self.jitterUs = jitterUs
         self.largeLinkBandwidthMbps = largeLinkBandwidthMbps
         self.largeQueueThresholdPackets = largeQueueThresholdPackets
         self.largeQueueSizePackets = largeQueueSizePackets
         self.numSenders = numSenders
+        self.segmentSizeBytes = segmentSizeBytes
         self.smallLinkBandwidthMbps = smallLinkBandwidthMbps
         self.smallQueueThresholdPackets = smallQueueThresholdPackets
         self.smallQueueSizePackets = smallQueueSizePackets
         self.trial = trial
+        self.outputDirectory = outputDirectory
         self.commandLineOptions = {
             "bytesPerSender": self.bytesPerSender,
+            "cca": self.cca,
             "jitterUs": self.jitterUs,
             "largeLinkBandwidthMbps": self.largeLinkBandwidthMbps,
             "largeQueueMaxThresholdPackets": self.largeQueueThresholdPackets,
             "largeQueueMinThresholdPackets": self.largeQueueThresholdPackets,
             "largeQueueSizePackets": self.largeQueueSizePackets,
             "numSenders": self.numSenders,
+            "segmentSizeBytes": self.segmentSizeBytes,
             "smallLinkBandwidthMbps": self.smallLinkBandwidthMbps,
             "smallQueueMaxThresholdPackets": self.smallQueueThresholdPackets,
             "smallQueueMinThresholdPackets": self.smallQueueThresholdPackets,
             "smallQueueSizePackets": self.smallQueueSizePackets,
             "traceDirectory": self.getTraceDirectory(),
-            "outputDirectory": OUTPUT_DIRECTORY,
+            "outputDirectory": self.outputDirectory,
         }
 
     def getTraceDirectory(self) -> str:
@@ -136,12 +129,14 @@ class Params:
             "traces",
             str(self.time),
             str(self.bytesPerSender),
+            str(self.cca),
             str(self.jitterUs),
             str(self.largeLinkBandwidthMbps),
             str(self.largeQueueThresholdPackets),
             str(self.largeQueueThresholdPackets),
             str(self.largeQueueSizePackets),
             str(self.numSenders),
+            str(self.segmentSizeBytes),
             str(self.smallLinkBandwidthMbps),
             str(self.smallQueueThresholdPackets),
             str(self.smallQueueThresholdPackets),
@@ -155,7 +150,7 @@ class Params:
         cwd_path: str = os.getcwd()
 
         self.trace_path: str = os.path.join(
-            cwd_path, OUTPUT_DIRECTORY, self.getTraceDirectory()
+            cwd_path, self.outputDirectory, self.getTraceDirectory()
         )
         if not os.path.exists(self.trace_path):
             os.makedirs(self.trace_path)
@@ -173,8 +168,14 @@ class Params:
             shutil.rmtree(self.trace_path)
 
     def writeConfig(self):
-        with open(self.trace_path + "config.txt", "w") as f:
-            f.write(json.dumps(self.commandLineOptions, indent=4))
+        with open(self.trace_path + "config.json", "w") as f:
+            configDict = {}
+
+            for k, v in self.commandLineOptions.items():
+                if "Directory" not in k:
+                    configDict[k] = v
+
+            f.write(json.dumps(configDict, indent=4))
 
     def getCommandLineOption(self, option: str) -> str:
         return f"--{option}={self.commandLineOptions[option]}"
@@ -199,75 +200,56 @@ class Params:
 
 
 if __name__ == "__main__":
+    # Read the parameter configurations from a file
+    if len(sys.argv) != 2:
+        print("Usage: python scratch/run_param_sweep.py <experiment_config_file>")
+        exit(1)
+
+    with open(sys.argv[1], "r") as f:
+        experiment_config = json.load(f)
+
     # Create sets for all parameter values
-    burstDurationMs_set: set[int] = set(
-        range(
-            MIN_BURST_DURATION_MS,
-            MAX_BURST_DURATION_MS + 1,
-            STEP_BURST_DURATION_MS,
-        )
+    burstDurationMs_set: set[int] = getLinearSet(
+        experiment_config,
+        "BURST_DURATION_MS",
     )
-    delayPerLinkUs_set: set[int] = set(
-        range(
-            MIN_DELAY_PER_LINK_US,
-            MAX_DELAY_PER_LINK_US + 1,
-            STEP_DELAY_PER_LINK_US,
-        )
+    delayPerLinkUs_set: set[int] = getLinearSet(
+        experiment_config,
+        "DELAY_PER_LINK_US",
     )
-    numSenders_set: set[int] = set(
-        range(
-            MIN_NUM_SENDERS,
-            MAX_NUM_SENDERS + 1,
-            STEP_NUM_SENDERS,
-        )
+    largeLinkBandwidthMbps_set: set[int] = getLinearSet(
+        experiment_config,
+        "LARGE_LINK_BANDWIDTH_MBPS",
     )
-    largeQueueThresholdPackets_set: set[int] = set(
-        range(
-            MIN_LARGE_QUEUE_THRESHOLD_PACKETS,
-            MAX_LARGE_QUEUE_THRESHOLD_PACKETS + 1,
-            STEP_LARGE_QUEUE_THRESHOLD_PACKETS,
-        )
+    numSenders_set: set[int] = getLinearSet(
+        experiment_config,
+        "NUM_SENDERS",
     )
-    largeQueueSizePackets_set: set[int] = set(
-        range(
-            MIN_LARGE_QUEUE_SIZE_PACKETS,
-            MAX_LARGE_QUEUE_SIZE_PACKETS + 1,
-            STEP_LARGE_QUEUE_SIZE_PACKETS,
-        )
+    queueSizeFactor_set: set[int] = getExponentialSet(
+        experiment_config,
+        "QUEUE_SIZE_FACTOR",
     )
-    smallLinkBandwidthMbps_set: set[int] = getExponentialSet(
-        MIN_SMALL_LINK_BANDWIDTH_MBPS,
-        MAX_SMALL_LINK_BANDWIDTH_MBPS,
-        NUM_SMALL_LINK_BANDWIDTH_MBPS,
+    segmentSizeBytes_set: set[int] = getLinearSet(
+        experiment_config,
+        "SEGMENT_SIZE_BYTES",
     )
-    smallQueueThresholdPackets_set: set[int] = set(
-        range(
-            MIN_SMALL_QUEUE_THRESHOLD_PACKETS,
-            MAX_SMALL_QUEUE_THRESHOLD_PACKETS + 1,
-            STEP_LARGE_QUEUE_SIZE_PACKETS,
-        )
+    smallLinkBandwidthMbps_set: set[int] = getLinearSet(
+        experiment_config,
+        "SMALL_LINK_BANDWIDTH_MBPS",
     )
-    smallQueueSizePackets_set: set[int] = set(
-        range(
-            MIN_SMALL_QUEUE_SIZE_PACKETS,
-            MAX_SMALL_QUEUE_SIZE_PACKETS + 1,
-            STEP_SMALL_QUEUE_SIZE_PACKETS,
-        )
-    )
-    trials_set: set[int] = set(range(1, NUM_TRIALS + 1))
+    trials_set: set[int] = set(range(1, experiment_config["NUM_TRIALS"] + 1))
 
     # Combine all parameters
     params_tuples = list(
         itertools.product(
             burstDurationMs_set,
             delayPerLinkUs_set,
-            largeQueueThresholdPackets_set,
-            largeQueueSizePackets_set,
+            largeLinkBandwidthMbps_set,
             numSenders_set,
+            queueSizeFactor_set,
+            segmentSizeBytes_set,
             smallLinkBandwidthMbps_set,
-            smallQueueThresholdPackets_set,
-            smallQueueSizePackets_set,
-            trials_set
+            trials_set,
         )
     )
 
@@ -276,40 +258,62 @@ if __name__ == "__main__":
     for (
         burstDurationMs,
         delayPerLinkUs,
-        largeQueueThresholdPackets,
-        largeQueueSizePackets,
+        largeLinkBandwidthMbps,
         numSenders,
+        queueSizeFactor,
+        segmentSizeBytes,
         smallLinkBandwidthMbps,
-        smallQueueThresholdPackets,
-        smallQueueSizePackets,
         trial,
     ) in params_tuples:
+        cca: str = experiment_config["CCA"]
         jitterUs: int = getJitterUs(delayPerLinkUs)
-        largeLinkBandwidthMbps: int = 10 * smallLinkBandwidthMbps
         bytesPerSender: int = getBytesPerSender(
             burstDurationMs,
             numSenders,
             smallLinkBandwidthMbps,
         )
+
+        largeLinkCapacityPps: int = getLinkCapacityPps(
+            largeLinkBandwidthMbps,
+            segmentSizeBytes,
+        )
+        smallLinkCapacityPps: int = getLinkCapacityPps(
+            smallLinkBandwidthMbps,
+            segmentSizeBytes,
+        )
+        rttS: float = getRttS(delayPerLinkUs)
+
+        largeQueueThresholdPackets: int = int(largeLinkCapacityPps * rttS / 7)
+        largeQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
+
+        smallQueueThresholdPackets: int = int(smallLinkCapacityPps * rttS / 7)
+        smallQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
+
         params_set.add(
             Params(
                 bytesPerSender,
+                cca,
                 jitterUs,
                 largeLinkBandwidthMbps,
                 largeQueueThresholdPackets,
                 largeQueueSizePackets,
                 numSenders,
+                segmentSizeBytes,
                 smallLinkBandwidthMbps,
                 smallQueueThresholdPackets,
                 smallQueueSizePackets,
                 trial,
+                experiment_config["OUTPUT_DIRECTORY"],
             )
         )
 
+    num_samples = min(len(params_set), experiment_config["NUM_SAMPLES"])
+    params_sample = random.sample(list(params_set), num_samples)
+
     # Build NS3
-    # subprocess.call("./ns3 clean", shell=True)
-    # subprocess.call("./ns3 configure", shell=True)
-    # subprocess.call("./ns3 build scratch/incast.cc", shell=True)
+    subprocess.call("./ns3 clean", shell=True)
+    subprocess.call("./ns3 configure", shell=True)
+    subprocess.call("./ns3 build scratch/incast.cc", shell=True)
 
     run_lock = threading.RLock()
     num_experiments = len(params_set)
@@ -317,8 +321,16 @@ if __name__ == "__main__":
     num_failures = 0
 
     cwd_path: str = os.getcwd()
-    failures_path: str = os.path.join(cwd_path, OUTPUT_DIRECTORY, "failures.txt")
-    progress_path: str = os.path.join(cwd_path, OUTPUT_DIRECTORY, "progress.txt")
+    failures_path: str = os.path.join(
+        cwd_path,
+        experiment_config["OUTPUT_DIRECTORY"],
+        "failures.txt",
+    )
+    progress_path: str = os.path.join(
+        cwd_path,
+        experiment_config["OUTPUT_DIRECTORY"],
+        "progress.txt",
+    )
 
     # Run an experiment
     def run(params: Params):
@@ -342,16 +354,5 @@ if __name__ == "__main__":
                 f.write("\n")
 
     # Run all experiments in parallel
-    with ThreadPoolExecutor(NUM_PROCESSES) as executor:
-        executor.map(run, params_set)
-
-    # test_params_set = set()
-    # test_params_set.add(Params(1001, 100, 100, 100, 100, 50, 100, 100, 100))
-    # test_params_set.add(Params(1002, 100, 100, 100, 100, 50, 100, 100, 100))
-    # test_params_set.add(Params(1003, 100, 100, 100, 100, 50, 100, 100, 100))
-    # test_params_set.add(
-    #     Params(1003, 100, 1000000000000000, 100, 100, 50, 100, 100, 100)
-    # )
-
-    # with ThreadPoolExecutor(NUM_PROCESSES) as executor:
-    #     executor.map(run, params_set)
+    with ThreadPoolExecutor(experiment_config["NUM_PROCESSES"]) as executor:
+        executor.map(run, params_sample)
