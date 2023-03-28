@@ -162,13 +162,16 @@ IncastSender::StartApplication() {
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
   // Enable TCP timestamp option.
   if (m_socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
-    // Set the congestion control algorithm
     Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(m_socket);
-    ObjectFactory ccaFactory;
-    ccaFactory.SetTypeId(m_cca);
-    Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
-    tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
+    // Set the congestion control algorithm
+    if (m_cca.GetName() == "ns3::TcpDctcp") {
+      ObjectFactory ccaFactory;
+      ccaFactory.SetTypeId(m_cca);
+      Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
+      tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
+    }
+    
     // Enable TCP timestamp option
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
   }
@@ -286,13 +289,15 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   socket->TraceConnectWithoutContext(
       "RTT", MakeCallback(&IncastSender::LogRtt, this));
 
-  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-  PointerValue congOpsValue;
-  tcpSocket->GetAttribute("CongestionOps", congOpsValue);
-  Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
-  Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
-  dctcp->TraceConnectWithoutContext(
-      "CongestionEstimate", MakeCallback(&IncastSender::LogCongEst, this));
+  if (m_cca.GetName() == "ns3::TcpDctcp") {
+    Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+    PointerValue congOpsValue;
+    tcpSocket->GetAttribute("CongestionOps", congOpsValue);
+    Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
+    Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
+    dctcp->TraceConnectWithoutContext(
+        "CongestionEstimate", MakeCallback(&IncastSender::LogCongEst, this));
+  }
 }
 
 void
