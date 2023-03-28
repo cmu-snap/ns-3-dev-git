@@ -136,9 +136,7 @@ main(int argc, char *argv[]) {
   LogComponentEnable("IncastAggregator", logConfig);
   LogComponentEnable("IncastSender", logConfig);
 
-  // Initialize variables
-  std::string outputDirectory = "scratch/traces/";
-  std::string traceDirectory = "trace_directory/";
+  // Parameters for the simulation
   std::string tcpTypeId = "TcpCubic";
   uint32_t numBursts = 5;
   uint32_t numSenders = 10;
@@ -161,6 +159,11 @@ main(int argc, char *argv[]) {
   // Parameters for RWND tuning
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
+
+  // Configurations for tracing
+  std::string outputDirectory = "scratch/traces/";
+  std::string traceDirectory = "trace_directory/";
+  bool enableSenderPcap = false;
 
   // Define command line arguments
   CommandLine cmd;
@@ -230,6 +233,10 @@ main(int argc, char *argv[]) {
       "staticRwndBytes",
       "If --rwndStrategy=static, then use this static RWND value",
       staticRwndBytes);
+  cmd.AddValue(
+      "enableSenderPcap",
+      "Enable pcap traces for the senders",
+      enableSenderPcap);
   cmd.Parse(argc, argv);
 
   // Check if the large link will be overwhelmed
@@ -472,18 +479,20 @@ main(int argc, char *argv[]) {
 
   // Enable tracing at the aggregator
   largeLinkHelper.EnablePcap(
-      outputDirectory + "/" + traceDirectory + "/pcap/incast-sockets",
+      outputDirectory + "/" + traceDirectory + "/pcap/incast",
       dumbbellHelper.GetLeft(0)->GetId(),
       0);
 
   // Enable tracing at each sender
-  for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    largeLinkHelper.EnablePcap(
-        outputDirectory + "/" + traceDirectory + "/pcap/incast-sockets",
-        dumbbellHelper.GetRight(i)->GetId(),
-        0);
+  if (enableSenderPcap) {
+    for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
+        largeLinkHelper.EnablePcap(
+            outputDirectory + "/" + traceDirectory + "/pcap/incast",
+            dumbbellHelper.GetRight(i)->GetId(),
+            0);
+    }
   }
-
+  
   // Compute the data per burst
   double totalBytesPerBurst = bytesPerSender * numSenders;
   double totalBytes = totalBytesPerBurst * numBursts;

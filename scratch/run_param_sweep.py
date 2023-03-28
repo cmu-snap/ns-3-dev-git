@@ -2,13 +2,14 @@ from concurrent.futures import ThreadPoolExecutor
 import itertools
 import json
 import math
-import threading
 import os
-import subprocess
+import random
 import shutil
+import subprocess
+import sys
+import threading
 import time
 
-EXPERIMENT_CONFIG: str = "scratch/experiments/test.txt"
 
 # Constants for calculations
 BASE_TO_MILLI: int = pow(10, 3)
@@ -147,7 +148,7 @@ class Params:
             shutil.rmtree(self.trace_path)
 
     def writeConfig(self):
-        with open(self.trace_path + "config.txt", "w") as f:
+        with open(self.trace_path + "config.json", "w") as f:
             f.write(json.dumps(self.commandLineOptions, indent=4))
 
     def getCommandLineOption(self, option: str) -> str:
@@ -173,7 +174,12 @@ class Params:
 
 
 if __name__ == "__main__":
-    with open(EXPERIMENT_CONFIG, "r") as f:
+    # Read the parameter configurations from a file
+    if len(sys.argv) != 2:
+        print("Usage: python scratch/run_param_sweep.py <experiment_config_file>")
+        exit(1)
+
+    with open(sys.argv[1], "r") as f:
         experiment_config = json.load(f)
 
     # Create sets for all parameter values
@@ -266,10 +272,13 @@ if __name__ == "__main__":
             )
         )
 
+    num_samples = min(len(params_set), experiment_config["NUM_SAMPLES"])
+    params_sample = random.sample(list(params_set), num_samples)
+
     # Build NS3
-    # subprocess.call("./ns3 clean", shell=True)
-    # subprocess.call("./ns3 configure", shell=True)
-    # subprocess.call("./ns3 build scratch/incast.cc", shell=True)
+    subprocess.call("./ns3 clean", shell=True)
+    subprocess.call("./ns3 configure", shell=True)
+    subprocess.call("./ns3 build scratch/incast.cc", shell=True)
 
     run_lock = threading.RLock()
     num_experiments = len(params_set)
@@ -311,4 +320,4 @@ if __name__ == "__main__":
 
     # Run all experiments in parallel
     with ThreadPoolExecutor(experiment_config["NUM_PROCESSES"]) as executor:
-        executor.map(run, params_set)
+        executor.map(run, params_sample)

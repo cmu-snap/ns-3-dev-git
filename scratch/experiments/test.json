@@ -1,7 +1,7 @@
 {
   "NUM_PROCESSES" : 30,
-  "NUM_SAMPLES" : 2000,
-  "NUM_TRIALS" : 2,
+  "NUM_SAMPLES" : 5,
+  "NUM_TRIALS" : 1,
   "OUTPUT_DIRECTORY" : "scratch/traces/",
 
   "MIN_BURST_DURATION_MS" : 5,
