@@ -12,9 +12,11 @@ import time
 
 
 # Constants for calculations
+BASE_TO_MICRO: int = pow(10, 6)
 BASE_TO_MILLI: int = pow(10, 3)
 MEGA_TO_BASE: int = pow(10, 6)
 NUM_BITS_PER_BYTE: int = 8
+NUM_HOPS: int = 3
 
 
 def getSetParams(experiment_config: dict[str, int], param: str) -> list[int]:
@@ -63,15 +65,27 @@ def getJitterUs(delayPerLinkUs: int) -> int:
     return int(delayPerLinkUs / 2)
 
 
+def getLinkCapacityPps(linkBandwidthMbps: int, segmentSizeBytes: int) -> int:
+    linkBandwidthBps: float = linkBandwidthMbps * MEGA_TO_BASE / NUM_BITS_PER_BYTE
+
+    return int(linkBandwidthBps / segmentSizeBytes)
+
+
+def getRttS(delayPerLinkUs: int) -> float:
+    return float(NUM_HOPS * 2 * delayPerLinkUs / BASE_TO_MICRO)
+
+
 class Params:
     def __init__(
         self,
         bytesPerSender: int,
+        cca: str,
         jitterUs: int,
         largeLinkBandwidthMbps: int,
         largeQueueThresholdPackets: int,
         largeQueueSizePackets: int,
         numSenders: int,
+        segmentSizeBytes: int,
         smallLinkBandwidthMbps: int,
         smallQueueThresholdPackets: int,
         smallQueueSizePackets: int,
@@ -80,11 +94,13 @@ class Params:
     ):
         self.time = int(time.time())
         self.bytesPerSender = bytesPerSender
+        self.cca = cca
         self.jitterUs = jitterUs
         self.largeLinkBandwidthMbps = largeLinkBandwidthMbps
         self.largeQueueThresholdPackets = largeQueueThresholdPackets
         self.largeQueueSizePackets = largeQueueSizePackets
         self.numSenders = numSenders
+        self.segmentSizeBytes = segmentSizeBytes
         self.smallLinkBandwidthMbps = smallLinkBandwidthMbps
         self.smallQueueThresholdPackets = smallQueueThresholdPackets
         self.smallQueueSizePackets = smallQueueSizePackets
@@ -92,12 +108,14 @@ class Params:
         self.outputDirectory = outputDirectory
         self.commandLineOptions = {
             "bytesPerSender": self.bytesPerSender,
+            "cca": self.cca,
             "jitterUs": self.jitterUs,
             "largeLinkBandwidthMbps": self.largeLinkBandwidthMbps,
             "largeQueueMaxThresholdPackets": self.largeQueueThresholdPackets,
             "largeQueueMinThresholdPackets": self.largeQueueThresholdPackets,
             "largeQueueSizePackets": self.largeQueueSizePackets,
             "numSenders": self.numSenders,
+            "segmentSizeBytes": self.segmentSizeBytes,
             "smallLinkBandwidthMbps": self.smallLinkBandwidthMbps,
             "smallQueueMaxThresholdPackets": self.smallQueueThresholdPackets,
             "smallQueueMinThresholdPackets": self.smallQueueThresholdPackets,
@@ -111,12 +129,14 @@ class Params:
             "traces",
             str(self.time),
             str(self.bytesPerSender),
+            str(self.cca),
             str(self.jitterUs),
             str(self.largeLinkBandwidthMbps),
             str(self.largeQueueThresholdPackets),
             str(self.largeQueueThresholdPackets),
             str(self.largeQueueSizePackets),
             str(self.numSenders),
+            str(self.segmentSizeBytes),
             str(self.smallLinkBandwidthMbps),
             str(self.smallQueueThresholdPackets),
             str(self.smallQueueThresholdPackets),
@@ -149,7 +169,13 @@ class Params:
 
     def writeConfig(self):
         with open(self.trace_path + "config.json", "w") as f:
-            f.write(json.dumps(self.commandLineOptions, indent=4))
+            configDict = {}
+
+            for k, v in self.commandLineOptions.items():
+                if "Directory" not in k:
+                    configDict[k] = v
+
+            f.write(json.dumps(configDict, indent=4))
 
     def getCommandLineOption(self, option: str) -> str:
         return f"--{option}={self.commandLineOptions[option]}"
@@ -191,33 +217,25 @@ if __name__ == "__main__":
         experiment_config,
         "DELAY_PER_LINK_US",
     )
-    numSenders_set: set[int] = getLinearSet(
-        experiment_config,
-        "NUM_SENDERS",
-    )
     largeLinkBandwidthMbps_set: set[int] = getLinearSet(
         experiment_config,
         "LARGE_LINK_BANDWIDTH_MBPS",
     )
-    largeQueueThresholdPackets_set: set[int] = getLinearSet(
+    numSenders_set: set[int] = getLinearSet(
         experiment_config,
-        "LARGE_QUEUE_THRESHOLD_PACKETS",
+        "NUM_SENDERS",
     )
-    largeQueueSizePackets_set: set[int] = getLinearSet(
+    queueSizeFactor_set: set[int] = getExponentialSet(
         experiment_config,
-        "LARGE_QUEUE_SIZE_PACKETS",
+        "QUEUE_SIZE_FACTOR",
+    )
+    segmentSizeBytes_set: set[int] = getLinearSet(
+        experiment_config,
+        "SEGMENT_SIZE_BYTES",
     )
     smallLinkBandwidthMbps_set: set[int] = getLinearSet(
         experiment_config,
         "SMALL_LINK_BANDWIDTH_MBPS",
-    )
-    smallQueueThresholdPackets_set: set[int] = getLinearSet(
-        experiment_config,
-        "SMALL_QUEUE_THRESHOLD_PACKETS",
-    )
-    smallQueueSizePackets_set: set[int] = getLinearSet(
-        experiment_config,
-        "SMALL_QUEUE_SIZE_PACKETS",
     )
     trials_set: set[int] = set(range(1, experiment_config["NUM_TRIALS"] + 1))
 
@@ -226,12 +244,11 @@ if __name__ == "__main__":
         itertools.product(
             burstDurationMs_set,
             delayPerLinkUs_set,
-            largeQueueThresholdPackets_set,
-            largeQueueSizePackets_set,
+            largeLinkBandwidthMbps_set,
             numSenders_set,
+            queueSizeFactor_set,
+            segmentSizeBytes_set,
             smallLinkBandwidthMbps_set,
-            smallQueueThresholdPackets_set,
-            smallQueueSizePackets_set,
             trials_set,
         )
     )
@@ -241,29 +258,47 @@ if __name__ == "__main__":
     for (
         burstDurationMs,
         delayPerLinkUs,
-        largeQueueThresholdPackets,
-        largeQueueSizePackets,
+        largeLinkBandwidthMbps,
         numSenders,
+        queueSizeFactor,
+        segmentSizeBytes,
         smallLinkBandwidthMbps,
-        smallQueueThresholdPackets,
-        smallQueueSizePackets,
         trial,
     ) in params_tuples:
+        cca: str = experiment_config["CCA"]
         jitterUs: int = getJitterUs(delayPerLinkUs)
-        largeLinkBandwidthMbps: int = 10 * smallLinkBandwidthMbps
         bytesPerSender: int = getBytesPerSender(
             burstDurationMs,
             numSenders,
             smallLinkBandwidthMbps,
         )
+
+        largeLinkCapacityPps: int = getLinkCapacityPps(
+            largeLinkBandwidthMbps,
+            segmentSizeBytes,
+        )
+        smallLinkCapacityPps: int = getLinkCapacityPps(
+            smallLinkBandwidthMbps,
+            segmentSizeBytes,
+        )
+        rttS: float = getRttS(delayPerLinkUs)
+
+        largeQueueThresholdPackets: int = int(largeLinkCapacityPps * rttS / 7)
+        largeQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
+
+        smallQueueThresholdPackets: int = int(smallLinkCapacityPps * rttS / 7)
+        smallQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
+
         params_set.add(
             Params(
                 bytesPerSender,
+                cca,
                 jitterUs,
                 largeLinkBandwidthMbps,
                 largeQueueThresholdPackets,
                 largeQueueSizePackets,
                 numSenders,
+                segmentSizeBytes,
                 smallLinkBandwidthMbps,
                 smallQueueThresholdPackets,
                 smallQueueSizePackets,
