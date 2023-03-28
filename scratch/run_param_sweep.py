@@ -237,7 +237,6 @@ if __name__ == "__main__":
         experiment_config,
         "SMALL_LINK_BANDWIDTH_MBPS",
     )
-    trials_set: set[int] = set(range(1, experiment_config["NUM_TRIALS"] + 1))
 
     # Combine all parameters
     params_tuples = list(
@@ -249,10 +248,11 @@ if __name__ == "__main__":
             queueSizeFactor_set,
             segmentSizeBytes_set,
             smallLinkBandwidthMbps_set,
-            trials_set,
         )
     )
 
+    num_samples = min(len(params_tuples), experiment_config["NUM_SAMPLES"])
+    params_sample = random.sample(list(params_tuples), num_samples)
     params_set = set()
 
     for (
@@ -263,8 +263,7 @@ if __name__ == "__main__":
         queueSizeFactor,
         segmentSizeBytes,
         smallLinkBandwidthMbps,
-        trial,
-    ) in params_tuples:
+    ) in params_sample:
         cca: str = experiment_config["CCA"]
         jitterUs: int = getJitterUs(delayPerLinkUs)
         bytesPerSender: int = getBytesPerSender(
@@ -283,32 +282,30 @@ if __name__ == "__main__":
         )
         rttS: float = getRttS(delayPerLinkUs)
 
-        largeQueueThresholdPackets: int = int(largeLinkCapacityPps * rttS / 7)
+        largeQueueThresholdPackets: int = math.ceil(largeLinkCapacityPps * rttS / 7)
         largeQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
 
-        smallQueueThresholdPackets: int = int(smallLinkCapacityPps * rttS / 7)
+        smallQueueThresholdPackets: int = math.ceil(smallLinkCapacityPps * rttS / 7)
         smallQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
 
-        params_set.add(
-            Params(
-                bytesPerSender,
-                cca,
-                jitterUs,
-                largeLinkBandwidthMbps,
-                largeQueueThresholdPackets,
-                largeQueueSizePackets,
-                numSenders,
-                segmentSizeBytes,
-                smallLinkBandwidthMbps,
-                smallQueueThresholdPackets,
-                smallQueueSizePackets,
-                trial,
-                experiment_config["OUTPUT_DIRECTORY"],
+        for trial in range(1, experiment_config["NUM_TRIALS"] + 1):
+            params_set.add(
+                Params(
+                    bytesPerSender,
+                    cca,
+                    jitterUs,
+                    largeLinkBandwidthMbps,
+                    largeQueueThresholdPackets,
+                    largeQueueSizePackets,
+                    numSenders,
+                    segmentSizeBytes,
+                    smallLinkBandwidthMbps,
+                    smallQueueThresholdPackets,
+                    smallQueueSizePackets,
+                    trial,
+                    experiment_config["OUTPUT_DIRECTORY"],
+                )
             )
-        )
-
-    num_samples = min(len(params_set), experiment_config["NUM_SAMPLES"])
-    params_sample = random.sample(list(params_set), num_samples)
 
     # Build NS3
     subprocess.call("./ns3 clean", shell=True)
@@ -334,6 +331,7 @@ if __name__ == "__main__":
 
     # Run an experiment
     def run(params: Params):
+        global failures_path, progress_path, num_experiments, num_successes, num_failures
         params.createDirectories()
         params.writeConfig()
         returncode: int = params.run()
@@ -341,18 +339,17 @@ if __name__ == "__main__":
         with run_lock:
             if returncode != 0:
                 num_failures += 1
-                with open(failures_path, "a") as f:
+                with open(failures_path, "w") as f:
                     f.write(params.getRunCommand())
                     f.write("\n")
             else:
                 num_successes += 1
 
-            with open(progress_path, "a") as f:
+            with open(progress_path, "w") as f:
                 f.write(f"num_successes: {num_successes}\n")
                 f.write(f"num_failures: {num_failures}\n")
-                f.write(f"num_experiments: {num_experiments}\n")
-                f.write("\n")
+                f.write(f"num_experiments: {num_experiments}")
 
     # Run all experiments in parallel
     with ThreadPoolExecutor(experiment_config["NUM_PROCESSES"]) as executor:
-        executor.map(run, params_sample)
+        executor.map(run, params_set)
