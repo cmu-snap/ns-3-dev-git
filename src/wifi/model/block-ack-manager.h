@@ -44,27 +44,6 @@ class WifiMacQueue;
 class MacRxMiddle;
 
 /**
- * \ingroup wifi
- * \brief BlockAckRequest frame information
- *
- */
-struct Bar
-{
-    Bar();
-    /**
-     * Store a BlockAckRequest along with the corresponding TID or a MU-BAR Trigger Frame.
-     *
-     * \param bar the BAR
-     * \param tid the Traffic ID
-     * \param skipIfNoDataQueued true to hold this BAR if there is no data queued
-     */
-    Bar(Ptr<const WifiMpdu> bar, uint8_t tid, bool skipIfNoDataQueued = false);
-    Ptr<const WifiMpdu> bar; ///< BlockAckRequest or MU-BAR Trigger Frame
-    uint8_t tid;             ///< TID (unused if MU-BAR)
-    bool skipIfNoDataQueued; ///< do not send if there is no data queued (unused if MU-BAR)
-};
-
-/**
  * \brief Manages all block ack agreements for an originator station.
  * \ingroup wifi
  */
@@ -94,13 +73,6 @@ class BlockAckManager : public Object
     // Delete copy constructor and assignment operator to avoid misuse
     BlockAckManager(const BlockAckManager&) = delete;
     BlockAckManager& operator=(const BlockAckManager&) = delete;
-
-    /**
-     * Provide information about all the Block Ack Managers installed on this device.
-     *
-     * \param bamMap an AC-indexed map of all the Block Ack Managers installed on this device
-     */
-    void SetBlockAckManagerMap(const std::map<AcIndex, Ptr<BlockAckManager>>& bamMap);
 
     /// optional const reference to OriginatorBlockAckAgreement
     using OriginatorAgreementOptConstRef =
@@ -197,21 +169,6 @@ class BlockAckManager : public Object
      * if the packet, in a BlockAck frame, is indicated by recipient as not received.
      */
     void StorePacket(Ptr<WifiMpdu> mpdu);
-    /**
-     * Returns the next BlockAckRequest or MU-BAR Trigger Frame to send, if any.
-     * If the given recipient is not the broadcast address and the given TID is less
-     * than 8, then only return a BlockAckRequest, if any, addressed to that recipient
-     * and for the given TID.
-     *
-     * \param remove true if the BAR has to be removed from the queue
-     * \param tid the TID
-     * \param recipient the recipient of the BAR
-     *
-     * \return the next BAR to be sent, if any
-     */
-    Ptr<const WifiMpdu> GetBar(bool remove = true,
-                               uint8_t tid = 8,
-                               const Mac48Address& recipient = Mac48Address::GetBroadcast());
     /**
      * Invoked upon receipt of an Ack frame on the given link after the transmission of a
      * QoS data frame sent under an established block ack agreement. Remove the acknowledged
@@ -407,7 +364,7 @@ class BlockAckManager : public Object
     void SetTxOkCallback(TxOk callback);
     /**
      * \param callback the callback to invoke when a
-     * packet transmission was completed unsuccessfully.
+     * packet transmission was completed unsuccessfuly.
      */
     void SetTxFailedCallback(TxFailed callback);
     /**
@@ -452,14 +409,46 @@ class BlockAckManager : public Object
 
     /**
      * \param bar the BlockAckRequest to enqueue
-     * \param skipIfNoDataQueued do not send if there is no data queued
      *
-     * Enqueue the given BlockAckRequest into the queue storing the next BAR
+     * Enqueue the given BlockAckRequest into the queue storing the next (MU-)BAR
      * frames to transmit. If a BAR for the same recipient and TID is already present
      * in the queue, it is replaced by the new one. If the given BAR is retransmitted,
      * it is placed at the head of the queue, otherwise at the tail.
      */
-    void ScheduleBar(Ptr<const WifiMpdu> bar, bool skipIfNoDataQueued = false);
+    void ScheduleBar(Ptr<WifiMpdu> bar);
+    /**
+     * \param muBar the MU-BAR Trigger Frame to enqueue
+     *
+     * Enqueue the given MU-BAR Trigger Frame into the queue storing the next (MU-)BAR
+     * frames to transmit. If the given MU-BAR Trigger Frame is retransmitted,
+     * it is placed at the head of the queue, otherwise at the tail.
+     */
+    void ScheduleMuBar(Ptr<WifiMpdu> muBar);
+
+    /// agreement key typedef (MAC address and TID)
+    using AgreementKey = std::pair<Mac48Address, uint8_t>;
+
+    /**
+     * \return the list of BA agreements (identified by the recipient and TID pair) for which a BAR
+     * shall only be sent if there are queued data frames belonging to those agreements
+     */
+    const std::list<AgreementKey>& GetSendBarIfDataQueuedList() const;
+    /**
+     * Add the given (recipient, TID) pair to the list of BA agreements for which a BAR
+     * shall only be sent if there are queued data frames belonging to those agreements
+     *
+     * \param recipient the recipient
+     * \param tid the TID
+     */
+    void AddToSendBarIfDataQueuedList(const Mac48Address& recipient, uint8_t tid);
+    /**
+     * Remove the given (recipient, TID) pair from the list of BA agreements for which a BAR
+     * shall only be sent if there are queued data frames belonging to those agreements
+     *
+     * \param recipient the recipient
+     * \param tid the TID
+     */
+    void RemoveFromSendBarIfDataQueuedList(const Mac48Address& recipient, uint8_t tid);
 
   protected:
     void DoDispose() override;
@@ -480,9 +469,6 @@ class BlockAckManager : public Object
      * typedef for an iterator for PacketQueue.
      */
     typedef std::list<Ptr<WifiMpdu>>::iterator PacketQueueI;
-
-    /// agreement key typedef (MAC address and TID)
-    using AgreementKey = std::pair<Mac48Address, uint8_t>;
 
     /// AgreementKey-indexed map of originator block ack agreements
     using OriginatorAgreements =
@@ -523,11 +509,11 @@ class BlockAckManager : public Object
     OriginatorAgreements m_originatorAgreements;
     RecipientAgreements m_recipientAgreements; //!< Recipient Block Ack agreements
 
-    std::list<Bar> m_bars; ///< list of BARs
+    std::list<AgreementKey> m_sendBarIfDataQueued; ///< list of BA agreements for which a BAR shall
+                                                   ///< only be sent if data is queued
 
-    std::map<AcIndex, Ptr<BlockAckManager>> m_bamMap; ///< AC-indexed map of all Block Ack Managers
-    uint8_t m_blockAckThreshold;                      ///< block ack threshold
-    Ptr<WifiMacQueue> m_queue;                        ///< queue
+    uint8_t m_blockAckThreshold; ///< block ack threshold
+    Ptr<WifiMacQueue> m_queue;   ///< queue
     Callback<void, Mac48Address, uint8_t, bool>
         m_blockAckInactivityTimeout;                      ///< BlockAck inactivity timeout callback
     Callback<void, Mac48Address, uint8_t> m_blockPackets; ///< block packets callback

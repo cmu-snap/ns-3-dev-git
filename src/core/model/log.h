@@ -134,7 +134,7 @@ enum LogLevel
  * \param [in] name The log component name.
  * \param [in] level The logging level.
  */
-void LogComponentEnable(const char* name, LogLevel level);
+void LogComponentEnable(const std::string& name, LogLevel level);
 
 /**
  * Enable the logging output for all registered log components.
@@ -155,7 +155,7 @@ void LogComponentEnableAll(LogLevel level);
  * \param [in] name The log component name.
  * \param [in] level The logging level.
  */
-void LogComponentDisable(const char* name, LogLevel level);
+void LogComponentDisable(const std::string& name, LogLevel level);
 
 /**
  * Disable all logging for all components.
@@ -367,7 +367,7 @@ class LogComponent
      *
      * \return The name of this LogComponent.
      */
-    const char* Name() const;
+    std::string Name() const;
     /**
      * Get the compilation unit defining this LogComponent.
      * \returns The file name.
@@ -398,7 +398,7 @@ class LogComponent
     typedef std::map<std::string, LogComponent*> ComponentList;
 
     /**
-     * Get the list of LogComponnents.
+     * Get the list of LogComponents.
      *
      * \internal
      * This should really be considered an internal API.

@@ -639,7 +639,7 @@ BaseStationNetDevice::DoSend(Ptr<Packet> packet,
     NS_LOG_INFO("BS (" << source << "):");
     NS_LOG_INFO("\tSending packet...");
     NS_LOG_INFO("\t\tDestination: " << dest);
-    NS_LOG_INFO("\t\tPaket Size:  " << packet->GetSize());
+    NS_LOG_INFO("\t\tPacket Size:  " << packet->GetSize());
     NS_LOG_INFO("\t\tProtocol:    " << protocolNumber);
 
     if (protocolNumber == 2048)
@@ -920,7 +920,7 @@ BaseStationNetDevice::CreateMapMessages()
 
     /*either DCD and UCD must be created first because CCC is set during their
      creation, or CCC must be calculated first so that it could be set during
-     creation of DL-MAP and UL-MAP and then set duirng creation of DCD and UCD*/
+     creation of DL-MAP and UL-MAP and then set during creation of DCD and UCD*/
 
     if (sendDcd)
     {
@@ -990,7 +990,7 @@ BaseStationNetDevice::SendBursts()
     OfdmDlMapIe* dlMapIe;
     Cid cid;
 
-    while (downlinkBursts->size())
+    while (!downlinkBursts->empty())
     {
         pair = downlinkBursts->front();
         burst = pair.second;

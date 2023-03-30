@@ -1338,16 +1338,17 @@ WifiRemoteStationManager::GetInfo(Mac48Address address)
     return LookupState(address)->m_info;
 }
 
-double
+std::optional<double>
 WifiRemoteStationManager::GetMostRecentRssi(Mac48Address address) const
 {
-    auto stationIt = m_stations.find(address);
-    NS_ASSERT_MSG(stationIt != m_stations.end(), "Address: " << address << " not found");
-    auto station = stationIt->second;
+    auto station = Lookup(address);
     auto rssi = station->m_rssiAndUpdateTimePair.first;
     auto ts = station->m_rssiAndUpdateTimePair.second;
-    NS_ASSERT_MSG(ts.IsStrictlyPositive(), "address: " << address << " ts:" << ts);
-    return rssi;
+    if (ts.IsStrictlyPositive())
+    {
+        return rssi;
+    }
+    return std::nullopt;
 }
 
 std::shared_ptr<WifiRemoteStationState>

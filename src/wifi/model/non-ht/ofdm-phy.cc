@@ -295,12 +295,14 @@ OfdmPhy::BuildPpdu(const WifiConstPsduMap& psdus,
                    Time /* ppduDuration */)
 {
     NS_LOG_FUNCTION(this << psdus << txVector);
-    return Create<OfdmPpdu>(psdus.begin()->second,
-                            txVector,
-                            m_wifiPhy->GetOperatingChannel().GetPrimaryChannelCenterFrequency(
-                                txVector.GetChannelWidth()),
-                            m_wifiPhy->GetPhyBand(),
-                            ObtainNextUid(txVector));
+    return Create<OfdmPpdu>(
+        psdus.begin()->second,
+        txVector,
+        m_wifiPhy->GetOperatingChannel().GetPrimaryChannelCenterFrequency(
+            txVector.GetChannelWidth()),
+        m_wifiPhy->GetPhyBand(),
+        m_wifiPhy->GetLatestPhyEntity()->ObtainNextUid(
+            txVector)); // use latest PHY entity to handle MU-RTS sent with non-HT rate
 }
 
 PhyEntity::PhyFieldRxStatus
@@ -369,14 +371,29 @@ OfdmPhy::GetTxPowerSpectralDensity(double txPowerW, Ptr<const WifiPpdu> ppdu) co
     uint16_t channelWidth = txVector.GetChannelWidth();
     NS_LOG_FUNCTION(this << centerFrequency << channelWidth << txPowerW);
     const auto& txMaskRejectionParams = GetTxMaskRejectionParams();
-    Ptr<SpectrumValue> v = WifiSpectrumValueHelper::CreateOfdmTxPowerSpectralDensity(
-        centerFrequency,
-        channelWidth,
-        txPowerW,
-        GetGuardBandwidth(channelWidth),
-        std::get<0>(txMaskRejectionParams),
-        std::get<1>(txMaskRejectionParams),
-        std::get<2>(txMaskRejectionParams));
+    Ptr<SpectrumValue> v;
+    if (txVector.IsNonHtDuplicate())
+    {
+        v = WifiSpectrumValueHelper::CreateDuplicated20MhzTxPowerSpectralDensity(
+            centerFrequency,
+            channelWidth,
+            txPowerW,
+            GetGuardBandwidth(channelWidth),
+            std::get<0>(txMaskRejectionParams),
+            std::get<1>(txMaskRejectionParams),
+            std::get<2>(txMaskRejectionParams));
+    }
+    else
+    {
+        v = WifiSpectrumValueHelper::CreateOfdmTxPowerSpectralDensity(
+            centerFrequency,
+            channelWidth,
+            txPowerW,
+            GetGuardBandwidth(channelWidth),
+            std::get<0>(txMaskRejectionParams),
+            std::get<1>(txMaskRejectionParams),
+            std::get<2>(txMaskRejectionParams));
+    }
     return v;
 }
 

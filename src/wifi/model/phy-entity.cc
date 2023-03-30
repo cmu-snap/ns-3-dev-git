@@ -239,11 +239,9 @@ PhyEntity::GetPhyHeaderSections(const WifiTxVector& txVector, Time ppduStart) co
 }
 
 Ptr<WifiPpdu>
-PhyEntity::BuildPpdu(const WifiConstPsduMap& psdus,
-                     const WifiTxVector& txVector,
-                     Time /* ppduDuration */)
+PhyEntity::BuildPpdu(const WifiConstPsduMap& psdus, const WifiTxVector& txVector, Time ppduDuration)
 {
-    NS_LOG_FUNCTION(this << psdus << txVector);
+    NS_LOG_FUNCTION(this << psdus << txVector << ppduDuration);
     NS_FATAL_ERROR("This method is unsupported for the base PhyEntity class. Use the overloaded "
                    "version in the amendment-specific subclasses instead!");
     return Create<WifiPpdu>(psdus.begin()->second,
@@ -410,7 +408,9 @@ PhyEntity::StartReceivePreamble(Ptr<const WifiPpdu> ppdu,
            const std::pair<WifiSpectrumBand, double>& p2) { return p1.second < p2.second; });
     NS_LOG_FUNCTION(this << ppdu << it->second);
 
-    Ptr<Event> event = DoGetEvent(ppdu, rxPowersW);
+    Ptr<Event> event = m_wifiPhy->GetPhyEntityForPpdu(ppdu)->DoGetEvent(
+        ppdu,
+        rxPowersW); // use latest PHY entity to handle MU-RTS sent with non-HT rate
     if (!event)
     {
         // PPDU should be simply considered as interference (once it has been accounted for in
@@ -1301,6 +1301,8 @@ PhyEntity::Transmit(Time txDuration,
     txParams->duration = txDuration;
     txParams->psd = txPowerSpectrum;
     txParams->ppdu = ppdu;
+    txParams->txWidth = ppdu->GetTxVector().GetChannelWidth();
+    ;
     NS_LOG_DEBUG("Starting " << type << " with power " << txPowerDbm << " dBm on channel "
                              << +m_wifiPhy->GetChannelNumber() << " for "
                              << txParams->duration.As(Time::MS));
@@ -1335,7 +1337,7 @@ PhyEntity::CalculateTxDuration(WifiConstPsduMap psduMap,
 }
 
 bool
-PhyEntity::CanStartRx(Ptr<const WifiPpdu> ppdu) const
+PhyEntity::CanStartRx(Ptr<const WifiPpdu> ppdu, uint16_t txChannelWidth) const
 {
     // The PHY shall not issue a PHY-RXSTART.indication primitive in response to a PPDU that does
     // not overlap the primary channel
@@ -1348,8 +1350,14 @@ PhyEntity::CanStartRx(Ptr<const WifiPpdu> ppdu) const
         m_wifiPhy->GetOperatingChannel().GetPrimaryChannelCenterFrequency(primaryWidth);
     const auto p20MinFreq = p20CenterFreq - (primaryWidth / 2);
     const auto p20MaxFreq = p20CenterFreq + (primaryWidth / 2);
-
-    return ppdu->DoesCoverChannel(p20MinFreq, p20MaxFreq);
+    const auto txCenterFreq = ppdu->GetTxCenterFreq();
+    const auto minTxFreq = txCenterFreq - txChannelWidth / 2;
+    const auto maxTxFreq = txCenterFreq + txChannelWidth / 2;
+    if (p20MinFreq < minTxFreq || p20MaxFreq > maxTxFreq)
+    {
+        return false;
+    }
+    return true;
 }
 
 Ptr<const WifiPpdu>

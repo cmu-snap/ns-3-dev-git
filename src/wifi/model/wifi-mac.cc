@@ -295,7 +295,7 @@ WifiMac::GetTypeId()
                             TypeId::OBSOLETE,
                             "Use the AckedMpdu trace instead.")
             .AddTraceSource("TxErrHeader",
-                            "The header of unsuccessfully transmitted packet.",
+                            "The header of unsuccessfuly transmitted packet.",
                             MakeTraceSourceAccessor(&WifiMac::m_txErrCallback),
                             "ns3::WifiMacHeader::TracedCallback",
                             TypeId::OBSOLETE,
@@ -320,8 +320,9 @@ WifiMac::GetTypeId()
                 "An MPDU whose response was not received before the timeout, along with "
                 "an identifier of the type of timeout (see WifiTxTimer::Reason) and the "
                 "TXVECTOR used to transmit the MPDU. This trace source is fired when a "
-                "CTS is missing after an RTS or a Normal Ack is missing after an MPDU "
-                "or after a DL MU PPDU acknowledged in SU format.",
+                "CTS is missing after an RTS, when all CTS frames are missing after an MU-RTS, "
+                "or when a Normal Ack is missing after an MPDU or after a DL MU PPDU "
+                "acknowledged in SU format.",
                 MakeTraceSourceAccessor(&WifiMac::m_mpduResponseTimeoutCallback),
                 "ns3::WifiMac::MpduResponseTimeoutCallback")
             .AddTraceSource(
@@ -860,7 +861,7 @@ WifiMac::SetWifiRemoteStationManagers(
 {
     NS_LOG_FUNCTION(this);
 
-    NS_ABORT_MSG_UNLESS(m_links.size() == 0 || m_links.size() == stationManagers.size(),
+    NS_ABORT_MSG_UNLESS(m_links.empty() || m_links.size() == stationManagers.size(),
                         "If links have been already created, the number of provided "
                         "Remote Manager objects ("
                             << stationManagers.size()
@@ -926,7 +927,7 @@ WifiMac::SetWifiPhys(const std::vector<Ptr<WifiPhy>>& phys)
     NS_LOG_FUNCTION(this);
     ResetWifiPhys();
 
-    NS_ABORT_MSG_UNLESS(m_links.size() == 0 || m_links.size() == phys.size(),
+    NS_ABORT_MSG_UNLESS(m_links.empty() || m_links.size() == phys.size(),
                         "If links have been already created, the number of provided "
                         "PHY objects ("
                             << phys.size()
@@ -998,16 +999,6 @@ WifiMac::SetQosSupported(bool enable)
         SetupEdcaQueue(AC_VI);
         SetupEdcaQueue(AC_BE);
         SetupEdcaQueue(AC_BK);
-
-        std::map<AcIndex, Ptr<BlockAckManager>> bamMap;
-        for (const auto& ac : {AC_BE, AC_BK, AC_VI, AC_VO})
-        {
-            bamMap[ac] = GetQosTxop(ac)->GetBaManager();
-        }
-        for (const auto& ac : {AC_BE, AC_BK, AC_VI, AC_VO})
-        {
-            GetQosTxop(ac)->GetBaManager()->SetBlockAckManagerMap(bamMap);
-        }
     }
 }
 
@@ -1252,6 +1243,40 @@ WifiMac::GetMldAddress(const Mac48Address& remoteAddr) const
         }
     }
     return std::nullopt;
+}
+
+Mac48Address
+WifiMac::GetLocalAddress(const Mac48Address& remoteAddr) const
+{
+    for (const auto& link : m_links)
+    {
+        if (auto mldAddress = link->stationManager->GetMldAddress(remoteAddr))
+        {
+            // this is a link setup with remote MLD
+            if (mldAddress != remoteAddr)
+            {
+                // the remote address is the address of a STA affiliated with the remote MLD
+                return link->feManager->GetAddress();
+            }
+            // we have to return our MLD address
+            return m_address;
+        }
+    }
+    // we get here if no ML setup was established between this device and the remote device,
+    // i.e., they are not both multi-link devices
+    if (GetNLinks() == 1)
+    {
+        // this is a single link device
+        return m_address;
+    }
+    // this is an MLD (hence the remote device is single link)
+    return DoGetLocalAddress(remoteAddr);
+}
+
+Mac48Address
+WifiMac::DoGetLocalAddress(const Mac48Address& remoteAddr [[maybe_unused]]) const
+{
+    return m_address;
 }
 
 WifiMac::OriginatorAgreementOptConstRef

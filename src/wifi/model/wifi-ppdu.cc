@@ -37,9 +37,12 @@ WifiPpdu::WifiPpdu(Ptr<const WifiPsdu> psdu,
       m_modulation(txVector.IsValid() ? txVector.GetModulationClass() : WIFI_MOD_CLASS_UNKNOWN),
       m_txCenterFreq(txCenterFreq),
       m_uid(uid),
+      m_txVector(txVector),
+#ifdef NS3_BUILD_PROFILE_DEBUG
+      m_phyHeaders(Create<Packet>()),
+#endif
       m_truncatedTx(false),
-      m_txPowerLevel(txVector.GetTxPowerLevel()),
-      m_txVector(txVector)
+      m_txPowerLevel(txVector.GetTxPowerLevel())
 {
     NS_LOG_FUNCTION(this << *psdu << txVector << txCenterFreq << uid);
     m_psdus.insert(std::make_pair(SU_STA_ID, psdu));
@@ -54,10 +57,13 @@ WifiPpdu::WifiPpdu(const WifiConstPsduMap& psdus,
                                       : WIFI_MOD_CLASS_UNKNOWN),
       m_txCenterFreq(txCenterFreq),
       m_uid(uid),
+      m_txVector(txVector),
+#ifdef NS3_BUILD_PROFILE_DEBUG
+      m_phyHeaders(Create<Packet>()),
+#endif
       m_truncatedTx(false),
       m_txPowerLevel(txVector.GetTxPowerLevel()),
-      m_txAntennas(txVector.GetNTx()),
-      m_txVector(txVector)
+      m_txAntennas(txVector.GetNTx())
 {
     NS_LOG_FUNCTION(this << psdus << txVector << txCenterFreq << uid);
     m_psdus = psdus;
@@ -93,10 +99,18 @@ WifiPpdu::DoGetTxVector() const
 }
 
 void
-WifiPpdu::ResetTxVector()
+WifiPpdu::ResetTxVector() const
 {
     NS_LOG_FUNCTION(this);
     m_txVector.reset();
+}
+
+void
+WifiPpdu::UpdateTxVector(const WifiTxVector& updatedTxVector) const
+{
+    NS_LOG_FUNCTION(this << updatedTxVector);
+    ResetTxVector();
+    m_txVector = updatedTxVector;
 }
 
 Ptr<const WifiPsdu>
@@ -128,6 +142,12 @@ uint16_t
 WifiPpdu::GetTransmissionChannelWidth() const
 {
     return GetTxVector().GetChannelWidth();
+}
+
+uint16_t
+WifiPpdu::GetTxCenterFreq() const
+{
+    return m_txCenterFreq;
 }
 
 bool
@@ -167,20 +187,6 @@ WifiPpdu::DoesOverlapChannel(uint16_t minFreq, uint16_t maxFreq) const
      *                   └──────────────────────────────┘
      */
     if (minTxFreq >= maxFreq || maxTxFreq <= minFreq)
-    {
-        return false;
-    }
-    return true;
-}
-
-bool
-WifiPpdu::DoesCoverChannel(uint16_t p20MinFreq, uint16_t p20MaxFreq) const
-{
-    NS_LOG_FUNCTION(this << p20MinFreq << p20MaxFreq);
-    uint16_t txChannelWidth = GetTxVector().GetChannelWidth();
-    uint16_t minTxFreq = m_txCenterFreq - txChannelWidth / 2;
-    uint16_t maxTxFreq = m_txCenterFreq + txChannelWidth / 2;
-    if (p20MinFreq < minTxFreq || p20MaxFreq > maxTxFreq)
     {
         return false;
     }

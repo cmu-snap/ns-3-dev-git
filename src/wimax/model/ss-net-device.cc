@@ -581,7 +581,7 @@ SubscriberStationNetDevice::SetScheduler(Ptr<SSScheduler> scheduler)
 bool
 SubscriberStationNetDevice::HasServiceFlows() const
 {
-    return GetServiceFlowManager()->GetServiceFlows(ServiceFlow::SF_TYPE_ALL).size() > 0;
+    return !GetServiceFlowManager()->GetServiceFlows(ServiceFlow::SF_TYPE_ALL).empty();
 }
 
 Ptr<IpcsClassifier>
@@ -640,13 +640,13 @@ SubscriberStationNetDevice::Stop()
 }
 
 void
-SubscriberStationNetDevice::AddServiceFlow(ServiceFlow sf)
+SubscriberStationNetDevice::AddServiceFlow(ServiceFlow sf) const
 {
     GetServiceFlowManager()->AddServiceFlow(sf);
 }
 
 void
-SubscriberStationNetDevice::AddServiceFlow(ServiceFlow* sf)
+SubscriberStationNetDevice::AddServiceFlow(ServiceFlow* sf) const
 {
     GetServiceFlowManager()->AddServiceFlow(sf);
 }
@@ -672,7 +672,7 @@ SubscriberStationNetDevice::DoSend(Ptr<Packet> packet,
     else
     {
         NS_LOG_DEBUG("SS (" << GetMacAddress() << ")");
-        NS_LOG_INFO("\tCan't send packet! (NotRegitered with the network)");
+        NS_LOG_INFO("\tCan't send packet! (NotRegistered with the network)");
         return false;
     }
 

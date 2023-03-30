@@ -907,8 +907,9 @@ class WifiPhy : public Object
      * \param maxAllowedBandWidth the maximum allowed TX bandwidth
      * \return the bandwidth for the transmission
      */
-    uint16_t GetTxBandwidth(WifiMode mode,
-                            uint16_t maxAllowedBandWidth = std::numeric_limits<uint16_t>::max());
+    uint16_t GetTxBandwidth(
+        WifiMode mode,
+        uint16_t maxAllowedBandWidth = std::numeric_limits<uint16_t>::max()) const;
     /**
      * \param antennas the number of antennas on this node.
      */
@@ -1068,6 +1069,19 @@ class WifiPhy : public Object
      * \return the pointer to the static implemented PHY entity
      */
     static const Ptr<const PhyEntity> GetStaticPhyEntity(WifiModulationClass modulation);
+
+    /**
+     * Get the supported PHY entity to use for a received PPDU.
+     * This typically returns the entity corresponding to the modulation class used to transmit the
+     * PPDU. If the modulation class used to transmit the PPDU is not supported by the PHY, the
+     * latest PHY entity corresponding to the configured standard is returned. If the modulation
+     * used to transmit the PPDU is non-HT (duplicate), the latest PHY entity corresponding to the
+     * configured standard is also returned.
+     *
+     * \param ppdu the received PPDU
+     * \return the pointer to the supported PHY entity
+     */
+    Ptr<PhyEntity> GetPhyEntityForPpdu(const Ptr<const WifiPpdu> ppdu) const;
 
     /**
      * Get the supported PHY entity corresponding to the modulation class.

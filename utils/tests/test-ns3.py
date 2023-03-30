@@ -144,7 +144,8 @@ def get_libraries_list(lib_outdir=usual_lib_outdir):
     @param lib_outdir: path containing libraries
     @return list of built libraries.
     """
-    return glob.glob(lib_outdir + '/*', recursive=True)
+    libraries = glob.glob(lib_outdir + '/*', recursive=True)
+    return list(filter(lambda x: "scratch-nested-subdir-lib" not in x, libraries))
 
 
 def get_headers_list(outdir=usual_outdir):
@@ -2519,7 +2520,7 @@ class NS3ExpectedUseTestCase(NS3BaseTestCase):
         doc_folder = os.path.abspath(os.sep.join([".", "doc"]))
 
         # For each sphinx doc target.
-        for target in ["contributing", "manual", "models", "tutorial"]:
+        for target in ["installation", "contributing", "manual", "models", "tutorial"]:
             # First we need to clean old docs, or it will not make any sense.
             doc_build_folder = os.sep.join([doc_folder, target, "build"])
             doc_temp_folder = os.sep.join([doc_folder, target, "source-temp"])
@@ -2770,6 +2771,8 @@ class NS3QualityControlTestCase(unittest.TestCase):
         # Skip this test if requests library is not available
         try:
             import requests
+            import urllib3
+            urllib3.disable_warnings()
         except ImportError:
             requests = None  # noqa
             self.skipTest("Requests library is not available")
@@ -2807,10 +2810,15 @@ class NS3QualityControlTestCase(unittest.TestCase):
                 if "build" in root or "_static" in root or "source-temp" in root or 'html' in root:
                     continue
                 for file in files:
+                    filepath = os.path.join(root, file)
+
+                    # skip everything that isn't a file
+                    if not os.path.isfile(filepath):
+                        continue
+
                     # skip svg files
                     if file.endswith(".svg"):
                         continue
-                    filepath = os.path.join(root, file)
 
                     try:
                         with open(filepath, "r") as f:
@@ -2849,37 +2857,39 @@ class NS3QualityControlTestCase(unittest.TestCase):
                 validate_url(test_url)
             except ValidationError:
                 dead_link_msg = "%s: URL %s, invalid URL" % (test_filepath, test_url)
+            except Exception as e:
+                self.assertEqual(False, True, msg=e.__str__())
 
+            if dead_link_msg is not None:
+                return dead_link_msg
+            tries = 3
             # Check if valid URLs are alive
-            if dead_link_msg is None:
+            while tries > 0:
+                # Not verifying the certificate (verify=False) is potentially dangerous
+                # HEAD checks are not as reliable as GET ones,
+                # in some cases they may return bogus error codes and reasons
                 try:
-                    tries = 3
-                    while tries > 0:
-                        # Not verifying the certificate (verify=False) is potentially dangerous
-                        # HEAD checks are not as reliable as GET ones,
-                        # in some cases they may return bogus error codes and reasons
-                        response = requests.get(test_url, verify=False, headers=headers)
+                    response = requests.get(test_url, verify=False, headers=headers, timeout=50)
 
-                        # In case of success and redirection
-                        if response.status_code in [200, 301]:
+                    # In case of success and redirection
+                    if response.status_code in [200, 301]:
+                        dead_link_msg = None
+                        break
+
+                    # People use the wrong code, but the reason
+                    # can still be correct
+                    if response.status_code in [302, 308, 500, 503]:
+                        if response.reason.lower() in ['found',
+                                                       'moved temporarily',
+                                                       'permanent redirect',
+                                                       'ok',
+                                                       'service temporarily unavailable'
+                                                       ]:
                             dead_link_msg = None
                             break
-
-                        # People use the wrong code, but the reason
-                        # can still be correct
-                        if response.status_code in [302, 308, 500, 503]:
-                            if response.reason.lower() in ['found',
-                                                           'moved temporarily',
-                                                           'permanent redirect',
-                                                           'ok',
-                                                           'service temporarily unavailable'
-                                                           ]:
-                                dead_link_msg = None
-                                break
-                        # In case it didn't pass in any of the previous tests,
-                        # set dead_link_msg with the most recent error and try again
-                        dead_link_msg = "%s: URL %s: returned code %d" % (test_filepath, test_url, response.status_code)
-                        tries -= 1
+                    # In case it didn't pass in any of the previous tests,
+                    # set dead_link_msg with the most recent error and try again
+                    dead_link_msg = "%s: URL %s: returned code %d" % (test_filepath, test_url, response.status_code)
                 except requests.exceptions.InvalidURL:
                     dead_link_msg = "%s: URL %s: invalid URL" % (test_filepath, test_url)
                 except requests.exceptions.SSLError:
@@ -2892,11 +2902,12 @@ class NS3QualityControlTestCase(unittest.TestCase):
                     except AttributeError:
                         error_msg = e.args[0]
                     dead_link_msg = "%s: URL %s: failed with exception: %s" % (test_filepath, test_url, error_msg)
+                tries -= 1
             return dead_link_msg
 
         # Dispatch threads to test multiple URLs concurrently
         from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=20) as executor:
+        with ThreadPoolExecutor(max_workers=100) as executor:
             dead_links = list(executor.map(test_file_url, list(files_and_urls)))
 
         # Filter out None entries

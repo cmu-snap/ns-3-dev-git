@@ -1427,8 +1427,8 @@ SixLowPanNetDevice::DecompressLowPanIphc(Ptr<Packet> packet, const Address& src,
                 return true;
             }
 
-            uint8_t contexPrefix[16];
-            m_contextTable[contextId].contextPrefix.GetBytes(contexPrefix);
+            uint8_t contextPrefix[16];
+            m_contextTable[contextId].contextPrefix.GetBytes(contextPrefix);
             uint8_t contextLength = m_contextTable[contextId].contextPrefix.GetPrefixLength();
 
             uint8_t srcAddress[16] = {};
@@ -1453,13 +1453,13 @@ SixLowPanNetDevice::DecompressLowPanIphc(Ptr<Packet> packet, const Address& src,
             // Do not combine the prefix - we want to override the bytes.
             for (uint8_t i = 0; i < bytesToCopy; i++)
             {
-                srcAddress[i] = contexPrefix[i];
+                srcAddress[i] = contextPrefix[i];
             }
             if (bitsToCopy)
             {
                 uint8_t addressBitMask = (1 << (8 - bitsToCopy)) - 1;
                 uint8_t prefixBitMask = ~addressBitMask;
-                srcAddress[bytesToCopy] = (contexPrefix[bytesToCopy] & prefixBitMask) |
+                srcAddress[bytesToCopy] = (contextPrefix[bytesToCopy] & prefixBitMask) |
                                           (srcAddress[bytesToCopy] & addressBitMask);
             }
             ipHeader.SetSource(Ipv6Address::Deserialize(srcAddress));
@@ -1524,8 +1524,8 @@ SixLowPanNetDevice::DecompressLowPanIphc(Ptr<Packet> packet, const Address& src,
             return true;
         }
 
-        uint8_t contexPrefix[16];
-        m_contextTable[contextId].contextPrefix.GetBytes(contexPrefix);
+        uint8_t contextPrefix[16];
+        m_contextTable[contextId].contextPrefix.GetBytes(contextPrefix);
         uint8_t contextLength = m_contextTable[contextId].contextPrefix.GetPrefixLength();
 
         if (encoding.GetM() == false)
@@ -1553,13 +1553,13 @@ SixLowPanNetDevice::DecompressLowPanIphc(Ptr<Packet> packet, const Address& src,
             // Do not combine the prefix - we want to override the bytes.
             for (uint8_t i = 0; i < bytesToCopy; i++)
             {
-                dstAddress[i] = contexPrefix[i];
+                dstAddress[i] = contextPrefix[i];
             }
             if (bitsToCopy)
             {
                 uint8_t addressBitMask = (1 << (8 - bitsToCopy)) - 1;
                 uint8_t prefixBitMask = ~addressBitMask;
-                dstAddress[bytesToCopy] = (contexPrefix[bytesToCopy] & prefixBitMask) |
+                dstAddress[bytesToCopy] = (contextPrefix[bytesToCopy] & prefixBitMask) |
                                           (dstAddress[bytesToCopy] & addressBitMask);
             }
             ipHeader.SetDestination(Ipv6Address::Deserialize(dstAddress));
@@ -1572,7 +1572,7 @@ SixLowPanNetDevice::DecompressLowPanIphc(Ptr<Packet> packet, const Address& src,
             dstAddress[0] = 0xff;
             memcpy(dstAddress + 1, encoding.GetDstInlinePart(), 2);
             dstAddress[3] = contextLength;
-            memcpy(dstAddress + 4, contexPrefix, 8);
+            memcpy(dstAddress + 4, contextPrefix, 8);
             memcpy(dstAddress + 12, encoding.GetDstInlinePart() + 2, 4);
             ipHeader.SetDestination(Ipv6Address::Deserialize(dstAddress));
         }
@@ -2356,7 +2356,7 @@ SixLowPanNetDevice::DoFragmentation(Ptr<Packet> packet,
     NS_ASSERT_MSG(l2Mtu > frag1Hdr.GetSerializedSize(),
                   "6LoWPAN: can not fragment, 6LoWPAN headers are bigger than MTU");
 
-    // All the headers are substracted to get remaining units for data
+    // All the headers are subtracted to get remaining units for data
     size = l2Mtu - frag1Hdr.GetSerializedSize() - compressedHeaderSize - extraHdrSize;
     size -= size % 8;
     size += compressedHeaderSize;
@@ -2485,7 +2485,7 @@ SixLowPanNetDevice::ProcessFragment(Ptr<Packet>& packet,
             FragmentsTimeoutsListI_t iter = m_timeoutEventList.begin();
             FragmentKey_t oldestKey = std::get<1>(*iter);
 
-            std::list<Ptr<Packet>> storedFragments = m_fragments[oldestKey]->GetFraments();
+            std::list<Ptr<Packet>> storedFragments = m_fragments[oldestKey]->GetFragments();
             for (std::list<Ptr<Packet>>::iterator fragIter = storedFragments.begin();
                  fragIter != storedFragments.end();
                  fragIter++)
@@ -2589,7 +2589,7 @@ SixLowPanNetDevice::Fragments::IsEntire() const
 {
     NS_LOG_FUNCTION(this);
 
-    bool ret = m_fragments.size() > 0;
+    bool ret = !m_fragments.empty();
     uint16_t lastEndOffset = 0;
 
     if (ret)
@@ -2658,7 +2658,7 @@ SixLowPanNetDevice::Fragments::SetPacketSize(uint32_t packetSize)
 }
 
 std::list<Ptr<Packet>>
-SixLowPanNetDevice::Fragments::GetFraments() const
+SixLowPanNetDevice::Fragments::GetFragments() const
 {
     std::list<Ptr<Packet>> fragments;
     std::list<std::pair<Ptr<Packet>, uint16_t>>::const_iterator iter;
@@ -2687,7 +2687,7 @@ SixLowPanNetDevice::HandleFragmentsTimeout(FragmentKey_t key, uint32_t iif)
     NS_LOG_FUNCTION(this);
 
     MapFragments_t::iterator it = m_fragments.find(key);
-    std::list<Ptr<Packet>> storedFragments = it->second->GetFraments();
+    std::list<Ptr<Packet>> storedFragments = it->second->GetFragments();
     for (std::list<Ptr<Packet>>::iterator fragIter = storedFragments.begin();
          fragIter != storedFragments.end();
          fragIter++)
@@ -2877,7 +2877,7 @@ SixLowPanNetDevice::FindUnicastCompressionContext(Ipv6Address address, uint8_t& 
         {
             if (address.HasPrefix(context.contextPrefix))
             {
-                NS_LOG_LOGIC("Fount context "
+                NS_LOG_LOGIC("Found context "
                              << +contextId << " "
                              << Ipv6Address::GetOnes().CombinePrefix(context.contextPrefix)
                              << context.contextPrefix << " matching");
@@ -2920,7 +2920,7 @@ SixLowPanNetDevice::FindMulticastCompressionContext(Ipv6Address address, uint8_t
                     addressBytes[9] == contextBytes[5] && addressBytes[10] == contextBytes[6] &&
                     addressBytes[11] == contextBytes[7])
                 {
-                    NS_LOG_LOGIC("Fount context "
+                    NS_LOG_LOGIC("Found context "
                                  << +contextId << " "
                                  << Ipv6Address::GetOnes().CombinePrefix(context.contextPrefix)
                                  << context.contextPrefix << " matching");

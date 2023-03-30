@@ -303,7 +303,7 @@ TxDurationTest::CheckMuTxDuration(std::list<uint32_t> sizes,
                 MicroSeconds(6); // 2.4 GHz band should be at the end of the bands to test
         }
         Time calculatedDuration = NanoSeconds(0);
-        uint32_t longuestSize = 0;
+        uint32_t longestSize = 0;
         auto iterStaId = staIds.begin();
         for (auto& size : sizes)
         {
@@ -313,7 +313,7 @@ TxDurationTest::CheckMuTxDuration(std::list<uint32_t> sizes,
             {
                 calculatedDuration = ppduDurationForSta;
                 staId = *iterStaId;
-                longuestSize = size;
+                longestSize = size;
             }
             ++iterStaId;
         }
@@ -322,7 +322,7 @@ TxDurationTest::CheckMuTxDuration(std::list<uint32_t> sizes,
         if (calculatedDuration != knownDuration ||
             calculatedDuration != calculatedDurationUsingList)
         {
-            std::cerr << "size=" << longuestSize << " band=" << testedBand << " staId=" << staId
+            std::cerr << "size=" << longestSize << " band=" << testedBand << " staId=" << staId
                       << " nss=" << +txVector.GetNss(staId) << " mode=" << txVector.GetMode(staId)
                       << " channelWidth=" << channelWidth << " guardInterval=" << guardInterval
                       << " datarate="
@@ -1308,7 +1308,7 @@ class HeSigBDurationTest : public TestCase
 
   private:
     /**
-     * Build a TXVECTOR for HE MU with the given bandwith and user informations.
+     * Build a TXVECTOR for HE MU with the given bandwidth and user information.
      *
      * \param bw the channel width of the PPDU in MHz
      * \param userInfos the list of HE MU specific user transmission parameters
@@ -1762,8 +1762,8 @@ PhyHeaderSectionsTest::DoRun()
 
     // ==================================================================================
     // 11be (EHT)
-    sections.erase(WIFI_PPDU_FIELD_SIG_A); // FIXME: do we keep using seperate type for 11be?
-    sections.erase(WIFI_PPDU_FIELD_SIG_B); // FIXME: do we keep using seperate type for 11be?
+    sections.erase(WIFI_PPDU_FIELD_SIG_A); // FIXME: do we keep using separate type for 11be?
+    sections.erase(WIFI_PPDU_FIELD_SIG_B); // FIXME: do we keep using separate type for 11be?
     phyEntity = Create<EhtPhy>();
     txVector.SetChannelWidth(20);
     txVector.SetNss(2); // EHT-LTF duration assumed to be always 8 us for the time being (see note

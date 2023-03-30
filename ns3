@@ -140,6 +140,7 @@ def parse_args(argv):
         ("build-version", "embedding git changes as a build version during build"),
         ("clang-tidy", "clang-tidy static analysis"),
         ("dpdk", "the fd-net-device DPDK features"),
+        ("eigen", "Eigen3 library support"),
         ("examples", "the ns-3 examples"),
         ("gcov", "code coverage analysis"),
         ("gsl", "GNU Scientific Library (GSL) features"),
@@ -281,7 +282,7 @@ def parse_args(argv):
                                         help='Try "./ns3 docs --help" for more documentation options')
     parser_docs.add_argument('docs',
                              help='Build project documentation',
-                             choices=["manual", "models", "tutorial", "contributing",
+                             choices=["contributing", "installation", "manual", "models", "tutorial",
                                       "sphinx", "doxygen-no-build", "doxygen", "all"],
                              action="store", type=str, default=None)
 
@@ -496,6 +497,15 @@ def clean_docs_and_tests_artifacts(dry_run=False):
         remove_file(file, dry_run)
 
 
+def clean_pip_packaging_artifacts(dry_run=False):
+    pip_dirs = [os.path.join(ns3_path, "dist"),
+                os.path.join(ns3_path, "nsnam.egg-info"),
+                os.path.join(ns3_path, "wheelhouse")
+                ]
+    for directory in pip_dirs:
+        remove_dir(directory, dry_run)
+
+
 def search_cmake_cache(build_profile):
     # Search for the CMake cache
     cmake_cache_files = glob.glob("%s/**/CMakeCache.txt" % ns3_path, recursive=True)
@@ -600,6 +610,14 @@ def configure_cmake(cmake, args, current_cmake_cache_folder, current_cmake_gener
         if args.G is None:
             args.G = current_cmake_generator
 
+        # Get the current Python information to supply
+        # CMake with the respective installation
+        if args.enable_python_bindings is True:
+            import sysconfig
+            cmake_args.append(f"-DPython3_LIBRARY_DIRS={sysconfig.get_config_var('LIBDIR')}")
+            cmake_args.append(f"-DPython3_INCLUDE_DIRS={sysconfig.get_config_var('INCLUDEPY')}")
+            cmake_args.append(f"-DPython3_EXECUTABLE={sys.executable}")
+
     # C++ standard
     if args.cxx_standard is not None:
         cmake_args.append("-DCMAKE_CXX_STANDARD=%s" % args.cxx_standard)
@@ -630,6 +648,7 @@ def configure_cmake(cmake, args, current_cmake_cache_folder, current_cmake_gener
                ("COVERAGE", "gcov"),
                ("DES_METRICS", "des_metrics"),
                ("DPDK", "dpdk"),
+               ("EIGEN", "eigen"),
                ("ENABLE_BUILD_VERSION", "build_version"),
                ("ENABLE_SUDO", "sudo"),
                ("EXAMPLES", "examples"),
@@ -783,7 +802,7 @@ def get_program_shortcuts(build_profile, ns3_version):
 
             ns3_program_map[shortcut_path] = [program]
 
-            # Add an additional shortcut with .exe suffix when running on Windows
+            # Add a shortcut with .exe suffix when running on Windows
             if sys.platform == "win32":
                 ns3_program_map[shortcut_path.replace("\\", "/")] = [program]
                 ns3_program_map[shortcut_path + ".exe"] = [program]
@@ -1034,6 +1053,7 @@ def build_step(args,
                                   "docs",
                                   "doxygen",
                                   "doxygen-no-build",
+                                  "installation",
                                   "sphinx",
                                   "manual",
                                   "models",
@@ -1052,7 +1072,7 @@ def build_step(args,
                 target = get_target_to_build(target, ns3_version, build_profile)
             else:
                 # Sphinx target should have the sphinx prefix
-                if target in ["contributing", "manual", "models", "tutorial"]:
+                if target in ["contributing", "installation", "manual", "models", "tutorial"]:
                     target = "sphinx_%s" % target
 
                 # Docs should build both doxygen and sphinx based docs
@@ -1424,6 +1444,7 @@ def main():
     if args.distclean:
         clean_cmake_artifacts(dry_run=args.dry_run)
         clean_docs_and_tests_artifacts(dry_run=args.dry_run)
+        clean_pip_packaging_artifacts(dry_run=args.dry_run)
         # We end things earlier when cleaning
         return
 
@@ -1445,7 +1466,7 @@ def main():
         args.build = [args.docs] if args.docs != "all" else ["sphinx", "doxygen"]
         if "doxygen" in args.build and (not build_info["ENABLE_EXAMPLES"] or not build_info["ENABLE_TESTS"]):
             print('The "./ns3 docs doxygen" and "./ns3 docs all" commands,\n'
-                  'require examples and tests to generate introspected documentation.\n'
+                  'requires examples and tests to generate introspected documentation.\n'
                   'Try "./ns3 docs doxygen-no-build" or enable examples and tests.')
             exit(1)
 
@@ -1572,30 +1593,7 @@ def main():
                    output
                    )
 
-    def remove_overlapping_path(base_path, target_path):
-        """
-        Remove overlapping paths from output directory and target_to_run
-        :param base_path: output path of the ns-3 build
-        :param target_path: path to the executable to run
-        :return: target_path without the overlapping parts
-        """
-        target_path = target_path.replace('/', os.sep).split(os.sep)
-        base_path = base_path.replace('/', os.sep).split(os.sep)
-        while target_path[0] in base_path:
-            target_path = target_path[1:]
-        target_path = os.sep.join(target_path)
-        return target_path
-
     if not args.shell and target_to_run and ".py" not in target_to_run:
-        target_to_run = remove_overlapping_path(out_dir, target_to_run)
-
-        # Waf doesn't add version prefix and build type suffix to the scratches, so we remove them
-        if current_cmake_cache_folder is None:
-            if "scratch" in target_to_run and run_only:
-                waf_target_to_run = target_to_run.replace(os.path.basename(target_to_run), args.run)
-                if os.path.exists(os.sep.join([out_dir, waf_target_to_run])):
-                    target_to_run = waf_target_to_run
-        target_to_run = os.sep.join([out_dir, target_to_run])
         if sys.platform == "win32":
             target_to_run += ".exe"
 

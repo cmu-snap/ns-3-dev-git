@@ -458,10 +458,11 @@ class PhyEntity : public SimpleRefCount<PhyEntity>
      * given PPDU.
      *
      * \param ppdu the PPDU
+     * \param txChannelWidth the channel width (MHz) used to transmit the PPDU
      * \return true if the PHY shall issue a PHY-RXSTART.indication primitive in response to a PPDU,
      * false otherwise
      */
-    virtual bool CanStartRx(Ptr<const WifiPpdu> ppdu) const;
+    virtual bool CanStartRx(Ptr<const WifiPpdu> ppdu, uint16_t txChannelWidth) const;
 
     /**
      * Check if PHY state should move to CCA busy state based on current
@@ -537,6 +538,15 @@ class PhyEntity : public SimpleRefCount<PhyEntity>
      * \return the WifiPpdu to be used by the RX PHY
      */
     virtual Ptr<const WifiPpdu> GetRxPpduFromTxPpdu(Ptr<const WifiPpdu> ppdu);
+
+    /**
+     * Obtain the next UID for the PPDU to transmit.
+     * Note that the global UID counter could be incremented.
+     *
+     * \param txVector the transmission parameters
+     * \return the UID to use for the PPDU to transmit
+     */
+    virtual uint64_t ObtainNextUid(const WifiTxVector& txVector);
 
   protected:
     /**
@@ -731,7 +741,7 @@ class PhyEntity : public SimpleRefCount<PhyEntity>
                                     uint16_t staId,
                                     const std::vector<bool>& statusPerMpdu);
     /**
-     * Perform amendment-specific actions when the payload is unsuccessfully received.
+     * Perform amendment-specific actions when the payload is unsuccessfuly received.
      *
      * \param psdu the PSDU that we failed to received
      * \param snr the SNR of the received PSDU in linear scale
@@ -838,15 +848,6 @@ class PhyEntity : public SimpleRefCount<PhyEntity>
      * \param reset whether to reset WifiPhy
      */
     void NotifyInterferenceRxEndAndClear(bool reset);
-
-    /**
-     * Obtain the next UID for the PPDU to transmit.
-     * Note that the global UID counter could be incremented.
-     *
-     * \param txVector the transmission parameters
-     * \return the UID to use for the PPDU to transmit
-     */
-    virtual uint64_t ObtainNextUid(const WifiTxVector& txVector);
 
     /**
      * \param txPowerW power in W to spread across the bands

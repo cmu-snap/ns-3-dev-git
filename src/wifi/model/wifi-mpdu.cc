@@ -87,15 +87,32 @@ WifiMpdu::CreateAlias(uint8_t linkId) const
     return alias;
 }
 
-Ptr<const Packet>
-WifiMpdu::GetPacket() const
+WifiMpdu::OriginalInfo&
+WifiMpdu::GetOriginalInfo()
 {
     if (auto original = std::get_if<ORIGINAL>(&m_instanceInfo))
     {
-        return original->m_packet;
+        return *original;
+    }
+    auto& origInstanceInfo = std::get<Ptr<WifiMpdu>>(m_instanceInfo)->m_instanceInfo;
+    return std::get<OriginalInfo>(origInstanceInfo);
+}
+
+const WifiMpdu::OriginalInfo&
+WifiMpdu::GetOriginalInfo() const
+{
+    if (auto original = std::get_if<ORIGINAL>(&m_instanceInfo))
+    {
+        return *original;
     }
     const auto& origInstanceInfo = std::get<Ptr<WifiMpdu>>(m_instanceInfo)->m_instanceInfo;
-    return std::get<OriginalInfo>(origInstanceInfo).m_packet;
+    return std::get<OriginalInfo>(origInstanceInfo);
+}
+
+Ptr<const Packet>
+WifiMpdu::GetPacket() const
+{
+    return GetOriginalInfo().m_packet;
 }
 
 const WifiMacHeader&
@@ -234,12 +251,7 @@ WifiMpdu::DoAggregate(Ptr<const WifiMpdu> msdu)
 bool
 WifiMpdu::IsQueued() const
 {
-    if (auto original = std::get_if<ORIGINAL>(&m_instanceInfo))
-    {
-        return original->m_queueIt.has_value();
-    }
-    const auto& origInstanceInfo = std::get<Ptr<WifiMpdu>>(m_instanceInfo)->m_instanceInfo;
-    return std::get<OriginalInfo>(origInstanceInfo).m_queueIt.has_value();
+    return GetOriginalInfo().m_queueIt.has_value();
 }
 
 void
@@ -262,12 +274,7 @@ WifiMpdu::Iterator
 WifiMpdu::GetQueueIt() const
 {
     NS_ASSERT(IsQueued());
-    if (auto original = std::get_if<ORIGINAL>(&m_instanceInfo))
-    {
-        return original->m_queueIt.value();
-    }
-    auto& origInstanceInfo = std::get<Ptr<WifiMpdu>>(m_instanceInfo)->m_instanceInfo;
-    return std::get<OriginalInfo>(origInstanceInfo).m_queueIt.value();
+    return GetOriginalInfo().m_queueIt.value();
 }
 
 AcIndex
@@ -315,26 +322,42 @@ WifiMpdu::IsInFlight() const
     return IsQueued() && !GetQueueIt()->inflights.empty();
 }
 
+void
+WifiMpdu::AssignSeqNo(uint16_t seqNo)
+{
+    NS_LOG_FUNCTION(this << seqNo);
+
+    m_header.SetSequenceNumber(seqNo);
+    // if this is an alias, set the sequence number on the original copy, too
+    if (auto originalPtr = std::get_if<ALIAS>(&m_instanceInfo))
+    {
+        (*originalPtr)->m_header.SetSequenceNumber(seqNo);
+    }
+    GetOriginalInfo().m_seqNoAssigned = true;
+}
+
+bool
+WifiMpdu::HasSeqNoAssigned() const
+{
+    return GetOriginalInfo().m_seqNoAssigned;
+}
+
+void
+WifiMpdu::UnassignSeqNo()
+{
+    GetOriginalInfo().m_seqNoAssigned = false;
+}
+
 WifiMpdu::DeaggregatedMsdusCI
 WifiMpdu::begin() const
 {
-    if (auto original = std::get_if<ORIGINAL>(&m_instanceInfo))
-    {
-        return original->m_msduList.cbegin();
-    }
-    auto& origInstanceInfo = std::get<Ptr<WifiMpdu>>(m_instanceInfo)->m_instanceInfo;
-    return std::get<OriginalInfo>(origInstanceInfo).m_msduList.cbegin();
+    return GetOriginalInfo().m_msduList.cbegin();
 }
 
 WifiMpdu::DeaggregatedMsdusCI
 WifiMpdu::end() const
 {
-    if (auto original = std::get_if<ORIGINAL>(&m_instanceInfo))
-    {
-        return original->m_msduList.cend();
-    }
-    auto& origInstanceInfo = std::get<Ptr<WifiMpdu>>(m_instanceInfo)->m_instanceInfo;
-    return std::get<OriginalInfo>(origInstanceInfo).m_msduList.cend();
+    return GetOriginalInfo().m_msduList.cend();
 }
 
 void

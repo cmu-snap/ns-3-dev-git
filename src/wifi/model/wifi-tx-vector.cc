@@ -32,7 +32,8 @@ namespace ns3
 {
 
 WifiTxVector::WifiTxVector()
-    : m_preamble(WIFI_PREAMBLE_LONG),
+    : m_txPowerLevel(1),
+      m_preamble(WIFI_PREAMBLE_LONG),
       m_channelWidth(20),
       m_guardInterval(800),
       m_nTx(1),
@@ -43,6 +44,7 @@ WifiTxVector::WifiTxVector()
       m_ldpc(false),
       m_bssColor(0),
       m_length(0),
+      m_triggerResponding(false),
       m_modeInitialized(false),
       m_inactiveSubchannels(),
       m_ruAllocation(),
@@ -62,7 +64,8 @@ WifiTxVector::WifiTxVector(WifiMode mode,
                            bool stbc,
                            bool ldpc,
                            uint8_t bssColor,
-                           uint16_t length)
+                           uint16_t length,
+                           bool triggerResponding)
     : m_mode(mode),
       m_txPowerLevel(powerLevel),
       m_preamble(preamble),
@@ -76,6 +79,7 @@ WifiTxVector::WifiTxVector(WifiMode mode,
       m_ldpc(ldpc),
       m_bssColor(bssColor),
       m_length(length),
+      m_triggerResponding(triggerResponding),
       m_modeInitialized(true),
       m_inactiveSubchannels(),
       m_ruAllocation(),
@@ -97,6 +101,7 @@ WifiTxVector::WifiTxVector(const WifiTxVector& txVector)
       m_ldpc(txVector.m_ldpc),
       m_bssColor(txVector.m_bssColor),
       m_length(txVector.m_length),
+      m_triggerResponding(txVector.m_triggerResponding),
       m_modeInitialized(txVector.m_modeInitialized),
       m_inactiveSubchannels(txVector.m_inactiveSubchannels),
       m_sigBMcs(txVector.m_sigBMcs),
@@ -248,6 +253,13 @@ WifiTxVector::IsLdpc() const
     return m_ldpc;
 }
 
+bool
+WifiTxVector::IsNonHtDuplicate() const
+{
+    return ((m_channelWidth >= 40) && !IsMu() &&
+            (GetMode().GetModulationClass() < WIFI_MOD_CLASS_HT));
+}
+
 void
 WifiTxVector::SetMode(WifiMode mode)
 {
@@ -354,6 +366,18 @@ uint16_t
 WifiTxVector::GetLength() const
 {
     return m_length;
+}
+
+bool
+WifiTxVector::IsTriggerResponding() const
+{
+    return m_triggerResponding;
+}
+
+void
+WifiTxVector::SetTriggerResponding(bool triggerResponding)
+{
+    m_triggerResponding = triggerResponding;
 }
 
 void
@@ -506,6 +530,11 @@ WifiTxVector::GetHeMuUserInfoMap()
 std::pair<std::size_t, std::size_t>
 WifiTxVector::GetNumRusPerHeSigBContentChannel() const
 {
+    if (m_preamble == WIFI_PREAMBLE_EHT_MU && m_ehtPpduType == 1)
+    {
+        return {1, 0};
+    }
+
     // MU-MIMO is not handled for now, i.e. one station per RU
     auto ruAllocation = GetRuAllocation();
     NS_ASSERT_MSG(!ruAllocation.empty(), "RU allocation is not set");
@@ -587,6 +616,10 @@ operator<<(std::ostream& os, const WifiTxVector& v)
     if (v.IsUlMu())
     {
         os << " Length: " << v.GetLength();
+    }
+    if (ns3::IsDlMu(v.GetPreambleType()))
+    {
+        os << " SIG-B mode: " << v.GetSigBMode();
     }
     if (v.IsMu())
     {

@@ -61,7 +61,8 @@ WifiNetDevice::GetTypeId()
                           MakePointerAccessor(&WifiNetDevice::GetChannel),
                           MakePointerChecker<Channel>(),
                           TypeId::DEPRECATED,
-                          "Use the Channel attribute of WifiPhy")
+                          "class WifiNetDevice; use the Channel "
+                          "attribute of WifiPhy")
             .AddAttribute("Phy",
                           "The PHY layer attached to this device.",
                           PointerValue(),
@@ -94,7 +95,7 @@ WifiNetDevice::GetTypeId()
                           ObjectVectorValue(),
                           MakeObjectVectorAccessor(&WifiNetDevice::GetRemoteStationManager,
                                                    &WifiNetDevice::GetNRemoteStationManagers),
-                          MakeObjectVectorChecker<WifiPhy>())
+                          MakeObjectVectorChecker<WifiRemoteStationManager>())
             .AddAttribute("HtConfiguration",
                           "The HtConfiguration object.",
                           PointerValue(),

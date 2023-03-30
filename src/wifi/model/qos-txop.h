@@ -144,15 +144,7 @@ class QosTxop : public Txop
      * corresponding to the given TID. A block ack agreement with the given recipient
      * for the given TID must have been established by such QosTxop.
      */
-    Ptr<const WifiMpdu> PrepareBlockAckRequest(Mac48Address recipient, uint8_t tid) const;
-    /**
-     * \param bar the BlockAckRequest to schedule
-     * \param skipIfNoDataQueued do not send if there is no data queued
-     *
-     * Request the block ack manager to schedule the transmission of the given
-     * BlockAckRequest.
-     */
-    void ScheduleBar(Ptr<const WifiMpdu> bar, bool skipIfNoDataQueued = false);
+    Ptr<WifiMpdu> PrepareBlockAckRequest(Mac48Address recipient, uint8_t tid) const;
 
     /* Event handlers */
     /**

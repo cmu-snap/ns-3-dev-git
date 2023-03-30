@@ -217,7 +217,7 @@ class TestRunnerImpl : public Singleton<TestRunnerImpl>
      *
      * \param [in] begin Iterator to the first TestCase to print.
      * \param [in] end Iterator to the end of the list.
-     * \param [in] printTestType Preprend the test type label if \c true.
+     * \param [in] printTestType Prepend the test type label if \c true.
      */
     void PrintTestNameList(std::list<TestCase*>::const_iterator begin,
                            std::list<TestCase*>::const_iterator end,
@@ -424,7 +424,7 @@ TestCase::CreateDataDirFilename(std::string filename)
 {
     NS_LOG_FUNCTION(this << filename);
     const TestCase* current = this;
-    while (current != nullptr && current->m_dataDir == "")
+    while (current != nullptr && current->m_dataDir.empty())
     {
         current = current->m_parent;
     }
@@ -849,7 +849,7 @@ TestRunnerImpl::FilterTests(std::string testName,
             // skip test
             continue;
         }
-        if (testName != "" && test->GetName() != testName)
+        if (!testName.empty() && test->GetName() != testName)
         {
             // skip test
             continue;
@@ -1007,7 +1007,7 @@ TestRunnerImpl::Run(int argc, char* argv[])
         argi++;
     }
     enum TestSuite::Type testType;
-    if (testTypeString == "")
+    if (testTypeString.empty())
     {
         testType = TestSuite::ALL;
     }
@@ -1040,7 +1040,7 @@ TestRunnerImpl::Run(int argc, char* argv[])
 
     std::list<TestCase*> tests = FilterTests(testName, testType, maximumTestDuration);
 
-    if (m_tempDir == "")
+    if (m_tempDir.empty())
     {
         m_tempDir = SystemPath::MakeTemporaryDirectoryName();
     }
@@ -1060,7 +1060,7 @@ TestRunnerImpl::Run(int argc, char* argv[])
     }
 
     std::ostream* os;
-    if (out != "")
+    if (!out.empty())
     {
         std::ofstream* ofs;
         ofs = new std::ofstream();
@@ -1134,7 +1134,7 @@ TestRunnerImpl::Run(int argc, char* argv[])
         }
     }
 
-    if (out != "")
+    if (!out.empty())
     {
         delete os;
     }

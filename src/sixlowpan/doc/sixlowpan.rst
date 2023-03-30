@@ -112,8 +112,8 @@ attribute.
 Scope and Limitations
 =====================
 
-Contex-based compression
-########################
+Context-based compression
+#########################
 
 IPHC sateful (context-based) compression is supported but, since :rfc:`6775`
 ("Neighbor Discovery Optimization for IPv6 over Low-Power Wireless Personal Area Networks (6LoWPANs)")
@@ -144,7 +144,7 @@ where part of the nodes are using HC1 and part IPHC because this would lead to c
 what the IPv6 address of a node is.
 
 Due to this, the nodes configured to use IPHC will drop the packets compressed with HC1
-and viceversa. The drop is logged in the drop trace as ``DROP_DISALLOWED_COMPRESSION``.
+and vice-versa. The drop is logged in the drop trace as ``DROP_DISALLOWED_COMPRESSION``.
 
 
 Using 6LoWPAN with IPv4 (or other L3 protocols)

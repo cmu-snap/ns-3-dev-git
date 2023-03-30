@@ -60,7 +60,7 @@ using namespace ns3;
 // ---------- Prototypes ------------------------------------------------------
 
 std::vector<std::vector<bool>> readNxNMatrix(std::string adj_mat_file_name);
-std::vector<std::vector<double>> readCordinatesFile(std::string node_coordinates_file_name);
+std::vector<std::vector<double>> readCoordinatesFile(std::string node_coordinates_file_name);
 void printCoordinateArray(const char* description, std::vector<std::vector<double>> coord_array);
 void printMatrix(const char* description, std::vector<std::vector<bool>> array);
 
@@ -115,9 +115,9 @@ main(int argc, char* argv[])
     // ---------- Read Node Coordinates File -----------------------------------
 
     std::vector<std::vector<double>> coord_array;
-    coord_array = readCordinatesFile(node_coordinates_file_name);
+    coord_array = readCoordinatesFile(node_coordinates_file_name);
 
-    // Optionally display node co-ordinates file
+    // Optionally display node coordinates file
     // printCoordinateArray (node_coordinates_file_name.c_str (),coord_array);
 
     int n_nodes = coord_array.size();
@@ -312,7 +312,7 @@ readNxNMatrix(std::string adj_mat_file_name)
     {
         std::string line;
         getline(adj_mat_file, line);
-        if (line == "")
+        if (line.empty())
         {
             NS_LOG_WARN("WARNING: Ignoring blank row in the array: " << i);
             break;
@@ -361,7 +361,7 @@ readNxNMatrix(std::string adj_mat_file_name)
 }
 
 std::vector<std::vector<double>>
-readCordinatesFile(std::string node_coordinates_file_name)
+readCoordinatesFile(std::string node_coordinates_file_name)
 {
     std::ifstream node_coordinates_file;
     node_coordinates_file.open(node_coordinates_file_name, std::ios::in);
@@ -377,7 +377,7 @@ readCordinatesFile(std::string node_coordinates_file_name)
         std::string line;
         getline(node_coordinates_file, line);
 
-        if (line == "")
+        if (line.empty())
         {
             NS_LOG_WARN("WARNING: Ignoring blank row: " << m);
             break;

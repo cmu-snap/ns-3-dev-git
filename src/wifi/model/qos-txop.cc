@@ -275,33 +275,29 @@ QosTxop::GetBaStartingSequence(Mac48Address address, uint8_t tid) const
     return m_baManager->GetOriginatorStartingSequence(address, tid);
 }
 
-Ptr<const WifiMpdu>
+Ptr<WifiMpdu>
 QosTxop::PrepareBlockAckRequest(Mac48Address recipient, uint8_t tid) const
 {
     NS_LOG_FUNCTION(this << recipient << +tid);
     NS_ASSERT(QosUtilsMapTidToAc(tid) == m_ac);
 
+    auto recipientMld = m_mac->GetMldAddress(recipient);
+
     CtrlBAckRequestHeader reqHdr =
-        m_baManager->GetBlockAckReqHeader(m_mac->GetMldAddress(recipient).value_or(recipient), tid);
+        m_baManager->GetBlockAckReqHeader(recipientMld.value_or(recipient), tid);
     Ptr<Packet> bar = Create<Packet>();
     bar->AddHeader(reqHdr);
 
     WifiMacHeader hdr;
     hdr.SetType(WIFI_MAC_CTL_BACKREQ);
     hdr.SetAddr1(recipient);
-    hdr.SetAddr2(m_mac->GetAddress());
+    hdr.SetAddr2(m_mac->GetLocalAddress(recipient));
     hdr.SetDsNotTo();
     hdr.SetDsNotFrom();
     hdr.SetNoRetry();
     hdr.SetNoMoreFragments();
 
-    return Create<const WifiMpdu>(bar, hdr);
-}
-
-void
-QosTxop::ScheduleBar(Ptr<const WifiMpdu> bar, bool skipIfNoDataQueued)
-{
-    m_baManager->ScheduleBar(bar, skipIfNoDataQueued);
+    return Create<WifiMpdu>(bar, hdr);
 }
 
 bool
@@ -313,16 +309,12 @@ QosTxop::UseExplicitBarAfterMissedBlockAck() const
 bool
 QosTxop::HasFramesToTransmit(uint8_t linkId)
 {
-    // check if the BA manager has anything to send, so that expired
-    // frames (if any) are removed and a BlockAckRequest is scheduled to advance
-    // the starting sequence number of the transmit (and receiver) window
-    bool baManagerHasPackets{m_baManager->GetBar(false)};
     // remove MSDUs with expired lifetime starting from the head of the queue
     m_queue->WipeAllExpiredMpdus();
     bool queueIsNotEmpty = (bool)(m_queue->PeekFirstAvailable(linkId, m_qosBlockedDestinations));
 
-    NS_LOG_FUNCTION(this << baManagerHasPackets << queueIsNotEmpty);
-    return baManagerHasPackets || queueIsNotEmpty;
+    NS_LOG_FUNCTION(this << queueIsNotEmpty);
+    return queueIsNotEmpty;
 }
 
 uint16_t
@@ -386,7 +378,15 @@ QosTxop::PeekNextMpdu(uint8_t linkId, uint8_t tid, Mac48Address recipient, Ptr<c
     // not get a sequence number assigned)
     while (item && !item->IsFragment())
     {
-        if ((item->GetHeader().IsRetry() || item->IsInFlight()) && IsQosOldPacket(item))
+        if (item->GetHeader().IsCtl())
+        {
+            NS_LOG_DEBUG("Skipping control frame: " << *item);
+            mpdu = item;
+            item = peek();
+            continue;
+        }
+
+        if (item->HasSeqNoAssigned() && IsQosOldPacket(item))
         {
             NS_LOG_DEBUG("Removing an old packet from EDCA queue: " << *item);
             if (!m_droppedMpduCallback.IsNull())
@@ -444,9 +444,8 @@ QosTxop::PeekNextMpdu(uint8_t linkId, uint8_t tid, Mac48Address recipient, Ptr<c
 
     // peek the next sequence number and check if it is within the transmit window
     // in case of QoS data frame
-    uint16_t sequence = (hdr.IsRetry() || item->IsInFlight())
-                            ? hdr.GetSequenceNumber()
-                            : m_txMiddle->PeekNextSequenceNumberFor(&hdr);
+    uint16_t sequence = item->HasSeqNoAssigned() ? hdr.GetSequenceNumber()
+                                                 : m_txMiddle->PeekNextSequenceNumberFor(&hdr);
     if (hdr.IsQosData())
     {
         Mac48Address recipient = hdr.GetAddr1();
@@ -462,8 +461,8 @@ QosTxop::PeekNextMpdu(uint8_t linkId, uint8_t tid, Mac48Address recipient, Ptr<c
         }
     }
 
-    // Assign a sequence number if this is not a fragment nor a retransmission nor an in-flight MPDU
-    if (!item->IsFragment() && !hdr.IsRetry() && !item->IsInFlight())
+    // Assign a sequence number if this is not a fragment nor it already has one assigned
+    if (!item->IsFragment() && !item->HasSeqNoAssigned())
     {
         hdr.SetSequenceNumber(sequence);
     }
@@ -515,8 +514,7 @@ QosTxop::GetNextMpdu(uint8_t linkId,
 
         // try A-MSDU aggregation
         if (m_mac->GetHtSupported() && !recipient.IsBroadcast() &&
-            !peekedItem->GetHeader().IsRetry() && !peekedItem->IsFragment() &&
-            !peekedItem->IsInFlight())
+            !peekedItem->HasSeqNoAssigned() && !peekedItem->IsFragment())
         {
             auto htFem = StaticCast<HtFrameExchangeManager>(qosFem);
             mpdu = htFem->GetMsduAggregator()->GetNextAmsdu(peekedItem, txParams, availableTime);
@@ -546,18 +544,12 @@ QosTxop::AssignSequenceNumber(Ptr<WifiMpdu> mpdu) const
 {
     NS_LOG_FUNCTION(this << *mpdu);
 
-    if (!mpdu->IsFragment() && !mpdu->GetHeader().IsRetry() && !mpdu->IsInFlight())
+    if (!mpdu->IsFragment() && !mpdu->HasSeqNoAssigned())
     {
         // in case of 11be MLDs, sequence numbers refer to the MLD address
         auto origMpdu = m_queue->GetOriginal(mpdu);
         uint16_t sequence = m_txMiddle->GetNextSequenceNumberFor(&origMpdu->GetHeader());
-        mpdu->GetHeader().SetSequenceNumber(sequence);
-        // if this is not the original copy of the MPDU, assign the sequence number to
-        // the original copy as well
-        if (!mpdu->IsOriginal())
-        {
-            origMpdu->GetHeader().SetSequenceNumber(sequence);
-        }
+        mpdu->AssignSeqNo(sequence);
     }
 }
 

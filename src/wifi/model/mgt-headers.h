@@ -1212,7 +1212,7 @@ class MgtProbeResponseHeader : public Header
      *
      * \return time stamp
      */
-    uint64_t GetTimestamp();
+    uint64_t GetTimestamp() const;
 
     /**
      * Register this type.
@@ -1354,9 +1354,9 @@ class WifiActionHeader : public Header
             4, // Action Value:4 in Category 13: Mesh MCCA-Setup-Request (not used so far)
         MDA_SETUP_REPLY =
             5, // Action Value:5 in Category 13: Mesh MCCA-Setup-Reply (not used so far)
-        MDAOP_ADVERTISMENT_REQUEST =
+        MDAOP_ADVERTISEMENT_REQUEST =
             6, // Action Value:6 in Category 13: Mesh MCCA-Advertisement-Request (not used so far)
-        MDAOP_ADVERTISMENTS = 7,       // Action Value:7 in Category 13: Mesh (not used so far)
+        MDAOP_ADVERTISEMENTS = 7,      // Action Value:7 in Category 13: Mesh (not used so far)
         MDAOP_SET_TEARDOWN = 8,        // Action Value:8 in Category 13: Mesh (not used so far)
         TBTT_ADJUSTMENT_REQUEST = 9,   // Action Value:9 in Category 13: Mesh (not used so far)
         TBTT_ADJUSTMENT_RESPONSE = 10, // Action Value:10 in Category 13: Mesh (not used so far)
@@ -1467,13 +1467,13 @@ class WifiActionHeader : public Header
      *
      * \return CategoryValue
      */
-    CategoryValue GetCategory();
+    CategoryValue GetCategory() const;
     /**
      * Return the action value.
      *
      * \return ActionValue
      */
-    ActionValue GetAction();
+    ActionValue GetAction() const;
 
     /**
      * Register this type.

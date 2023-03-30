@@ -117,7 +117,7 @@ class TestThresholdPreambleDetectionWithoutFrameCapture : public TestCase
     /**
      * Check the number of received packets
      * \param expectedSuccessCount the number of successfully received packets
-     * \param expectedFailureCount the number of unsuccessfully received packets
+     * \param expectedFailureCount the number of unsuccessfuly received packets
      */
     void CheckRxPacketCount(uint32_t expectedSuccessCount, uint32_t expectedFailureCount);
 
@@ -162,6 +162,7 @@ TestThresholdPreambleDetectionWithoutFrameCapture::SendPacket(double rxPowerDbm)
     txParams->txPhy = nullptr;
     txParams->duration = txDuration;
     txParams->ppdu = ppdu;
+    txParams->txWidth = CHANNEL_WIDTH;
 
     m_phy->StartRx(txParams);
 }
@@ -790,7 +791,7 @@ class TestThresholdPreambleDetectionWithFrameCapture : public TestCase
     /**
      * Check the number of received packets
      * \param expectedSuccessCount the number of successfully received packets
-     * \param expectedFailureCount the number of unsuccessfully received packets
+     * \param expectedFailureCount the number of unsuccessfuly received packets
      */
     void CheckRxPacketCount(uint32_t expectedSuccessCount, uint32_t expectedFailureCount);
 
@@ -2613,8 +2614,8 @@ class TestAmpduReception : public TestCase
     uint8_t m_rxSuccessBitmapAmpdu1; ///< bitmap of successfully received MPDUs in A-MPDU #1
     uint8_t m_rxSuccessBitmapAmpdu2; ///< bitmap of successfully received MPDUs in A-MPDU #2
 
-    uint8_t m_rxFailureBitmapAmpdu1; ///< bitmap of unsuccessfully received MPDUs in A-MPDU #1
-    uint8_t m_rxFailureBitmapAmpdu2; ///< bitmap of unsuccessfully received MPDUs in A-MPDU #2
+    uint8_t m_rxFailureBitmapAmpdu1; ///< bitmap of unsuccessfuly received MPDUs in A-MPDU #1
+    uint8_t m_rxFailureBitmapAmpdu2; ///< bitmap of unsuccessfuly received MPDUs in A-MPDU #2
 
     uint8_t m_rxDroppedBitmapAmpdu1; ///< bitmap of dropped MPDUs in A-MPDU #1
     uint8_t m_rxDroppedBitmapAmpdu2; ///< bitmap of dropped MPDUs in A-MPDU #2
@@ -2872,6 +2873,7 @@ TestAmpduReception::SendAmpduWithThreeMpdus(double rxPowerDbm, uint32_t referenc
     txParams->txPhy = nullptr;
     txParams->duration = txDuration;
     txParams->ppdu = ppdu;
+    txParams->txWidth = CHANNEL_WIDTH;
 
     m_phy->StartRx(txParams);
 }
@@ -4334,7 +4336,7 @@ class TestUnsupportedBandwidthReception : public TestCase
                    std::vector<bool> statusPerMpdu);
 
     /**
-     * Function called upon a PSDU received unsuccessfully
+     * Function called upon a PSDU received unsuccessfuly
      * \param psdu the PSDU
      */
     void RxFailure(Ptr<const WifiPsdu> psdu);
@@ -4417,6 +4419,7 @@ TestUnsupportedBandwidthReception::SendPpdu(WifiPhyBand band,
     txParams->txPhy = nullptr;
     txParams->duration = txDuration;
     txParams->ppdu = ppdu;
+    txParams->txWidth = bandwidthMhz;
 
     m_phy->StartRx(txParams);
 }
@@ -4596,7 +4599,8 @@ class TestPrimary20CoveredByPpdu : public TestCase
      * \param p20Index the primary20 index
      * \param ppduCenterFreqMhz the center frequency used for the transmission of the PPDU (in MHz)
      * \param expectedP20Overlap flag whether the primary 20 MHz channel is expected to be fully
-     * covered by the bandwidth of the incoming PPDU \param expectedP20Covered flag whether the
+     * covered by the bandwidth of the incoming PPDU
+     * \param expectedP20Covered flag whether the
      * primary 20 MHz channel is expected to overlap with the bandwidth of the incoming PPDU
      */
     void RunOne(WifiPhyBand band,
@@ -4610,8 +4614,8 @@ class TestPrimary20CoveredByPpdu : public TestCase
 };
 
 TestPrimary20CoveredByPpdu::TestPrimary20CoveredByPpdu()
-    : TestCase("Check correct detection of whether P20 is fully covered or overlaps with the "
-               "bandwidth of an incoming PPDU")
+    : TestCase("Check correct detection of whether P20 is fully covered (hence it can be received) "
+               "or overlaps with the bandwidth of an incoming PPDU")
 {
 }
 
@@ -4670,16 +4674,21 @@ TestPrimary20CoveredByPpdu::RunOne(WifiPhyBand band,
     auto ppdu = CreatePpdu(band, ppduCenterFreqMhz);
 
     auto p20Overlap = ppdu->DoesOverlapChannel(p20MinFreq, p20MaxFreq);
-    NS_ASSERT(p20Overlap == expectedP20Overlap);
     NS_TEST_ASSERT_MSG_EQ(p20Overlap,
                           expectedP20Overlap,
-                          "PPDU is not expected to overlap with the P20");
+                          "PPDU is " << (expectedP20Overlap ? "expected" : "not expected")
+                                     << " to overlap with the P20");
 
-    auto p20Covered = ppdu->DoesCoverChannel(p20MinFreq, p20MaxFreq);
-    NS_ASSERT(p20Covered == expectedP20Covered);
+    auto p20Covered =
+        m_phy->GetPhyEntity(WIFI_STANDARD_80211ax)
+            ->CanStartRx(
+                ppdu,
+                ppdu->GetTxVector()
+                    .GetChannelWidth()); // CanStartRx returns true is the P20 is fully covered
     NS_TEST_ASSERT_MSG_EQ(p20Covered,
                           expectedP20Covered,
-                          "PPDU is not expected to cover the whole P20");
+                          "PPDU is " << (expectedP20Covered ? "expected" : "not expected")
+                                     << " to cover the whole P20");
 }
 
 void

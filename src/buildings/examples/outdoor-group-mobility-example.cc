@@ -98,7 +98,7 @@ PrintPosition(Ptr<Node> node)
 /**
  * Print the buildings list in a format that can be used by Gnuplot to draw them.
  *
- * \param filename The ouput filename.
+ * \param filename The output filename.
  */
 void
 PrintGnuplottableBuildingListToFile(std::string filename)
@@ -196,7 +196,7 @@ main(int argc, char* argv[])
         outdoorMm->SetPosition(Vector(10, 10, 0));
         streamIndex += outdoorMm->AssignStreams(streamIndex);
 
-        // Each HierachicalMobilityModel contains the above model as the Parent,
+        // Each HierarchicalMobilityModel contains the above model as the Parent,
         // and a user defined model as the Child.  Two MobilityModel objects are
         // instantiated per node, and each node also shares the same parent model.
 

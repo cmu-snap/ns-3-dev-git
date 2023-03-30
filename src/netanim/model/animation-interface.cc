@@ -301,7 +301,7 @@ AnimationInterface::IsInitialized()
 }
 
 bool
-AnimationInterface::IsStarted()
+AnimationInterface::IsStarted() const
 {
     return m_started;
 }
@@ -1504,7 +1504,7 @@ AnimationInterface::GetPacketMetadata(Ptr<const Packet> p)
 }
 
 uint64_t
-AnimationInterface::GetTracePktCount()
+AnimationInterface::GetTracePktCount() const
 {
     return m_currentPktCount;
 }
@@ -2199,7 +2199,7 @@ AnimationInterface::SetOutputFile(const std::string& fn, bool routing)
 void
 AnimationInterface::CheckMaxPktsPerTraceFile()
 {
-    // Start a new trace file if the current packet count exceeded nax packets per file
+    // Start a new trace file if the current packet count exceeded max packets per file
     ++m_currentPktCount;
     if (m_currentPktCount <= m_maxPktsPerFile)
     {

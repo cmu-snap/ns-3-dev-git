@@ -1308,7 +1308,7 @@ FqCobaltQueueDiscEcnMarking::DoRun()
  *
  * The variable outerhash stores the nearest multiple of 8 that is lesser than
  * the hash. When a flow hash of 20 arrives, the value of outerhash
- * is 16. Since m_flowIndices[16] wasn’t previously allotted, a new flow
+ * is 16. Since m_flowIndices[16] wasn't previously allotted, a new flow
  * is created, and the tag corresponding to this queue is set to 20.
  */
 class FqCobaltQueueDiscSetLinearProbing : public TestCase
@@ -1626,7 +1626,7 @@ FqCobaltQueueDiscL4sMode::DoRun()
                           "Cobalt keeps drop_next as now and the next packet is marked. With "
                           "second dequeue count increases to 2, drop_next becomes now plus around"
                           "70ms which is less than the running time(140), and as the queue delay "
-                          "is persistantly higher than 5ms, second packet is marked.");
+                          "is persistently higher than 5ms, second packet is marked.");
     NS_TEST_EXPECT_MSG_EQ(q1->GetStats().GetNDroppedPackets(CobaltQueueDisc::TARGET_EXCEEDED_DROP),
                           0,
                           "There should not be any dropped packets");

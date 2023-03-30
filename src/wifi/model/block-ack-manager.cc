@@ -37,19 +37,6 @@ namespace ns3
 
 NS_LOG_COMPONENT_DEFINE("BlockAckManager");
 
-Bar::Bar()
-{
-    NS_LOG_FUNCTION(this);
-}
-
-Bar::Bar(Ptr<const WifiMpdu> bar, uint8_t tid, bool skipIfNoDataQueued)
-    : bar(bar),
-      tid(tid),
-      skipIfNoDataQueued(skipIfNoDataQueued)
-{
-    NS_LOG_FUNCTION(this << *bar << +tid << skipIfNoDataQueued);
-}
-
 NS_OBJECT_ENSURE_REGISTERED(BlockAckManager);
 
 TypeId
@@ -82,15 +69,7 @@ BlockAckManager::DoDispose()
 {
     NS_LOG_FUNCTION(this);
     m_originatorAgreements.clear();
-    m_bars.clear();
     m_queue = nullptr;
-    m_bamMap.clear();
-}
-
-void
-BlockAckManager::SetBlockAckManagerMap(const std::map<AcIndex, Ptr<BlockAckManager>>& bamMap)
-{
-    m_bamMap = bamMap;
 }
 
 BlockAckManager::OriginatorAgreementOptConstRef
@@ -163,18 +142,6 @@ BlockAckManager::DestroyOriginatorAgreement(const Mac48Address& recipient, uint8
     if (it != m_originatorAgreements.end())
     {
         m_originatorAgreements.erase(it);
-        // remove scheduled BAR
-        for (std::list<Bar>::const_iterator i = m_bars.begin(); i != m_bars.end();)
-        {
-            if (i->bar->GetHeader().GetAddr1() == recipient && i->tid == tid)
-            {
-                i = m_bars.erase(i);
-            }
-            else
-            {
-                i++;
-            }
-        }
     }
 }
 
@@ -312,68 +279,6 @@ BlockAckManager::StorePacket(Ptr<WifiMpdu> mpdu)
     }
     agreementIt->second.second.insert(it.base(), mpdu);
     agreementIt->second.first.NotifyTransmittedMpdu(mpdu);
-}
-
-Ptr<const WifiMpdu>
-BlockAckManager::GetBar(bool remove, uint8_t tid, const Mac48Address& address)
-{
-    Time now = Simulator::Now();
-    Ptr<const WifiMpdu> bar;
-    // remove all expired MPDUs from the MAC queue, so that
-    // BlockAckRequest frames (if needed) are scheduled
-    m_queue->WipeAllExpiredMpdus();
-
-    auto nextBar = m_bars.begin();
-
-    while (nextBar != m_bars.end())
-    {
-        Mac48Address recipient = nextBar->bar->GetHeader().GetAddr1();
-
-        if (address != Mac48Address::GetBroadcast() && tid != 8 &&
-            (!nextBar->bar->GetHeader().IsBlockAckReq() || address != recipient ||
-             tid != nextBar->tid))
-        {
-            // we can only return a BAR addressed to the given station and for the given TID
-            nextBar++;
-            continue;
-        }
-        if (nextBar->bar->GetHeader().IsBlockAckReq())
-        {
-            auto bam = m_bamMap.at(QosUtilsMapTidToAc(nextBar->tid));
-            auto it = bam->m_originatorAgreements.find({recipient, nextBar->tid});
-            if (it == m_originatorAgreements.end())
-            {
-                // BA agreement was torn down; remove this BAR and continue
-                nextBar = m_bars.erase(nextBar);
-                continue;
-            }
-            if (nextBar->skipIfNoDataQueued &&
-                !m_queue->PeekByTidAndAddress(nextBar->tid, recipient))
-            {
-                // skip this BAR as there is no data queued
-                nextBar++;
-                continue;
-            }
-            // update BAR if the starting sequence number changed
-            CtrlBAckRequestHeader reqHdr;
-            nextBar->bar->GetPacket()->PeekHeader(reqHdr);
-            if (reqHdr.GetStartingSequence() != it->second.first.GetStartingSequence())
-            {
-                reqHdr.SetStartingSequence(it->second.first.GetStartingSequence());
-                Ptr<Packet> packet = Create<Packet>();
-                packet->AddHeader(reqHdr);
-                nextBar->bar = Create<const WifiMpdu>(packet, nextBar->bar->GetHeader());
-            }
-        }
-
-        bar = nextBar->bar;
-        if (remove)
-        {
-            m_bars.erase(nextBar);
-        }
-        break;
-    }
-    return bar;
 }
 
 uint32_t
@@ -652,7 +557,7 @@ BlockAckManager::NotifyDiscardedMpdu(Ptr<const WifiMpdu> mpdu)
         return;
     }
 
-    Mac48Address recipient = mpdu->GetHeader().GetAddr1();
+    Mac48Address recipient = mpdu->GetOriginal()->GetHeader().GetAddr1();
     uint8_t tid = mpdu->GetHeader().GetQosTid();
     auto it = m_originatorAgreements.find({recipient, tid});
     if (it == m_originatorAgreements.end() || !it->second.first.IsEstablished())
@@ -701,14 +606,13 @@ BlockAckManager::NotifyDiscardedMpdu(Ptr<const WifiMpdu> mpdu)
     WifiMacHeader hdr;
     hdr.SetType(WIFI_MAC_CTL_BACKREQ);
     hdr.SetAddr1(recipient);
-    hdr.SetAddr2(mpdu->GetHeader().GetAddr2());
-    hdr.SetAddr3(mpdu->GetHeader().GetAddr3());
+    hdr.SetAddr2(mpdu->GetOriginal()->GetHeader().GetAddr2());
     hdr.SetDsNotTo();
     hdr.SetDsNotFrom();
     hdr.SetNoRetry();
     hdr.SetNoMoreFragments();
 
-    ScheduleBar(Create<const WifiMpdu>(bar, hdr));
+    ScheduleBar(Create<WifiMpdu>(bar, hdr));
 }
 
 void
@@ -756,52 +660,77 @@ BlockAckManager::GetBlockAckReqHeader(const Mac48Address& recipient, uint8_t tid
 }
 
 void
-BlockAckManager::ScheduleBar(Ptr<const WifiMpdu> bar, bool skipIfNoDataQueued)
+BlockAckManager::ScheduleBar(Ptr<WifiMpdu> bar)
 {
     NS_LOG_FUNCTION(this << *bar);
-    NS_ASSERT(bar->GetHeader().IsBlockAckReq() || bar->GetHeader().IsTrigger());
+    NS_ASSERT(bar->GetHeader().IsBlockAckReq());
 
-    uint8_t tid = 0;
-    if (bar->GetHeader().IsBlockAckReq())
-    {
-        CtrlBAckRequestHeader reqHdr;
-        bar->GetPacket()->PeekHeader(reqHdr);
-        tid = reqHdr.GetTidInfo();
-    }
-#ifdef NS3_BUILD_PROFILE_DEBUG
-    else
-    {
-        CtrlTriggerHeader triggerHdr;
-        bar->GetPacket()->PeekHeader(triggerHdr);
-        NS_ASSERT(triggerHdr.IsMuBar());
-    }
-#endif
-    Bar request(bar, tid, skipIfNoDataQueued);
+    CtrlBAckRequestHeader reqHdr;
+    bar->GetPacket()->PeekHeader(reqHdr);
+    uint8_t tid = reqHdr.GetTidInfo();
+
+    WifiContainerQueueId queueId(WIFI_CTL_QUEUE, bar->GetHeader().GetAddr2(), std::nullopt);
+    Ptr<WifiMpdu> item = nullptr;
 
     // if a BAR for the given agreement is present, replace it with the new one
-    std::list<Bar>::const_iterator i = m_bars.end();
-
-    if (bar->GetHeader().IsBlockAckReq())
+    while ((item = m_queue->PeekByQueueId(queueId, item)))
     {
-        for (i = m_bars.begin(); i != m_bars.end(); i++)
+        if (item->GetHeader().IsBlockAckReq() &&
+            item->GetHeader().GetAddr1() == bar->GetHeader().GetAddr1())
         {
-            if (i->bar->GetHeader().IsBlockAckReq() &&
-                i->bar->GetHeader().GetAddr1() == bar->GetHeader().GetAddr1() && i->tid == tid)
+            CtrlBAckRequestHeader otherHdr;
+            item->GetPacket()->PeekHeader(otherHdr);
+            if (otherHdr.GetTidInfo() == tid)
             {
-                i = m_bars.erase(i);
-                break;
+                // replace item with bar
+                m_queue->Replace(item, bar);
+                return;
             }
         }
     }
 
-    if (bar->GetHeader().IsRetry())
+    m_queue->Enqueue(bar);
+}
+
+void
+BlockAckManager::ScheduleMuBar(Ptr<WifiMpdu> muBar)
+{
+    NS_LOG_FUNCTION(this << *muBar);
+    NS_ASSERT(muBar->GetHeader().IsTrigger());
+
+#ifdef NS3_BUILD_PROFILE_DEBUG
+    CtrlTriggerHeader triggerHdr;
+    muBar->GetPacket()->PeekHeader(triggerHdr);
+    NS_ASSERT(triggerHdr.IsMuBar());
+#endif
+
+    m_queue->Enqueue(muBar);
+}
+
+const std::list<BlockAckManager::AgreementKey>&
+BlockAckManager::GetSendBarIfDataQueuedList() const
+{
+    return m_sendBarIfDataQueued;
+}
+
+void
+BlockAckManager::AddToSendBarIfDataQueuedList(const Mac48Address& recipient, uint8_t tid)
+{
+    NS_LOG_FUNCTION(this << recipient << tid);
+    // do nothing if the given pair is already in the list
+    if (std::find(m_sendBarIfDataQueued.begin(),
+                  m_sendBarIfDataQueued.end(),
+                  BlockAckManager::AgreementKey{recipient, tid}) == m_sendBarIfDataQueued.end())
     {
-        m_bars.push_front(request);
+        m_sendBarIfDataQueued.emplace_back(recipient, tid);
     }
-    else
-    {
-        m_bars.insert(i, request);
-    }
+}
+
+void
+BlockAckManager::RemoveFromSendBarIfDataQueuedList(const Mac48Address& recipient, uint8_t tid)
+{
+    NS_LOG_FUNCTION(this << recipient << tid);
+    m_sendBarIfDataQueued.remove({recipient, tid});
 }
 
 void

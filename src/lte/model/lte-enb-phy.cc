@@ -677,7 +677,7 @@ LteEnbPhy::StartSubFrame()
     std::list<Ptr<LteControlMessage>> ctrlMsg = GetControlMessages();
     m_dlDataRbMap.clear();
     m_dlPowerAllocationMap.clear();
-    if (ctrlMsg.size() > 0)
+    if (!ctrlMsg.empty())
     {
         std::list<Ptr<LteControlMessage>>::iterator it;
         it = ctrlMsg.begin();
@@ -706,7 +706,7 @@ LteEnbPhy::StartSubFrame()
                     mask = (mask << 1);
                 }
                 // fire trace of DL Tx PHY stats
-                for (uint8_t i = 0; i < dci->GetDci().m_mcs.size(); i++)
+                for (std::size_t i = 0; i < dci->GetDci().m_mcs.size(); i++)
                 {
                     PhyTransmissionStatParameters params;
                     params.m_cellId = m_cellId;
@@ -1086,7 +1086,7 @@ std::list<UlDciLteControlMessage>
 LteEnbPhy::DequeueUlDci()
 {
     NS_LOG_FUNCTION(this);
-    if (m_ulDciQueue.at(0).size() > 0)
+    if (!m_ulDciQueue.at(0).empty())
     {
         std::list<UlDciLteControlMessage> ret = m_ulDciQueue.at(0);
         m_ulDciQueue.erase(m_ulDciQueue.begin());
@@ -1161,7 +1161,7 @@ LteEnbPhy::ReportUlHarqFeedback(UlInfoListElement_s mes)
 {
     NS_LOG_FUNCTION(this);
     // forward to scheduler
-    m_enbPhySapUser->UlInfoListElementHarqFeeback(mes);
+    m_enbPhySapUser->UlInfoListElementHarqFeedback(mes);
 }
 
 } // namespace ns3

@@ -135,6 +135,36 @@ class LrWpanNetDevice : public NetDevice
      * \returns The short address.
      */
     Address GetAddress() const override;
+
+    /**
+     * This method is use to manually configure the coordinator through
+     * which the device or coordinator is associated. When assigning a short address
+     * the extended address must also be present.
+     *
+     * \param panId The id of the PAN used by the coordinator device.
+     *
+     * \param coordExtAddr The coordinator extended address (EUI-64) through which this
+     *                     device or coordinator is associated.
+     *
+     * \param coordShortAddr The coordinator assigned short address through which this
+     *                       device or coordinator is associated.
+     *                       [FF:FF] address indicates that the value is unknown.
+     *                       [FF:FE] indicates that the associated coordinator is using only
+     *                       its extended address.
+     *
+     *
+     * \param assignedShortAddr The assigned short address for this device.
+     *                          [FF:FF] address indicates that the device have no short address
+     *                                  and is not associated.
+     *                          [FF:FE] address indicates that the devices has associated but
+     *                          has not been allocated a short address.
+     *
+     */
+    void SetPanAssociation(uint16_t panId,
+                           Mac64Address coordExtAddr,
+                           Mac16Address coordShortAddr,
+                           Mac16Address assignedShortAddr);
+
     bool SetMtu(const uint16_t mtu) override;
     uint16_t GetMtu() const override;
     bool IsLinkUp() const override;
@@ -220,7 +250,7 @@ class LrWpanNetDevice : public NetDevice
      *
      * \param panId The PanID
      * \param shortAddr The Short MAC address
-     * \return a Pseudo-Mac48Adress
+     * \return a Pseudo-Mac48Address
      */
     Mac48Address BuildPseudoMacAddress(uint16_t panId, Mac16Address shortAddr) const;
 
@@ -279,8 +309,8 @@ class LrWpanNetDevice : public NetDevice
     /**
      * How the pseudo MAC address is created.
      *
-     * According to \RFC{4944} the psudo-MAC is YYYY:0000:XXXX (with U/L bit set to local)
-     * According to \RFC{6282} the psudo-MAC is 0200:0000:XXXX
+     * According to \RFC{4944} the pseudo-MAC is YYYY:0000:XXXX (with U/L bit set to local)
+     * According to \RFC{6282} the pseudo-MAC is 0200:0000:XXXX
      */
     PseudoMacAddressMode_e m_pseudoMacMode;
 };

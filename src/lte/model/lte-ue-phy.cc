@@ -870,7 +870,7 @@ LteUePhy::CreateDlCqiFeedbackMessage(const SpectrumValue& sinr)
         }
         dlcqi.m_rnti = m_rnti;
         dlcqi.m_ri = 1;                          // not yet used
-        dlcqi.m_cqiType = CqiListElement_s::P10; // Peridic CQI using PUCCH wideband
+        dlcqi.m_cqiType = CqiListElement_s::P10; // Periodic CQI using PUCCH wideband
         NS_ASSERT_MSG(nLayer > 0, " nLayer negative");
         NS_ASSERT_MSG(nLayer < 3, " nLayer limit is 2s");
         for (uint8_t i = 0; i < nLayer; i++)
@@ -1309,7 +1309,7 @@ LteUePhy::SubframeIndication(uint32_t frameNo, uint32_t subframeNo)
         else
         {
             // send only PUCCH (ideal: fake null bandwidth signal)
-            if (ctrlMsg.size() > 0)
+            if (!ctrlMsg.empty())
             {
                 NS_LOG_LOGIC(this << " UE - start TX PUCCH (NO PUSCH)");
                 std::vector<int> dlRb;
@@ -1585,7 +1585,7 @@ LteUePhy::DoResetRlfParams()
 }
 
 void
-LteUePhy::DoStartInSnycDetection()
+LteUePhy::DoStartInSyncDetection()
 {
     NS_LOG_FUNCTION(this);
     // indicates that the downlink radio link quality has to be monitored for in-sync indications
@@ -1617,7 +1617,7 @@ LteUePhy::RlfDetection(double sinrDb)
     m_numOfSubframes++;
     NS_LOG_LOGIC("No of Subframes: " << m_numOfSubframes
                                      << " UE synchronized: " << m_downlinkInSync);
-    // check for out_of_snyc indications first when UE is both DL and UL synchronized
+    // check for out_of_sync indications first when UE is both DL and UL synchronized
     // m_downlinkInSync=true indicates that the evaluation is for out-of-sync indications
     if (m_downlinkInSync && m_numOfSubframes == 10)
     {
@@ -1653,11 +1653,11 @@ LteUePhy::RlfDetection(double sinrDb)
     if (m_downlinkInSync && (m_numOfFrames * 10) == m_numOfQoutEvalSf)
     {
         NS_LOG_LOGIC("At " << Simulator::Now().As(Time::MS)
-                           << " ms UE PHY sending out of snyc indication to UE RRC layer");
+                           << " ms UE PHY sending out of sync indication to UE RRC layer");
         m_ueCphySapUser->NotifyOutOfSync();
         m_numOfFrames = 0;
     }
-    // check for in_snyc indications when T310 timer is started
+    // check for in_sync indications when T310 timer is started
     // m_downlinkInSync=false indicates that the evaluation is for in-sync indications
     if (!m_downlinkInSync && m_numOfSubframes == 10)
     {
@@ -1692,7 +1692,7 @@ LteUePhy::RlfDetection(double sinrDb)
     if (!m_downlinkInSync && (m_numOfFrames * 10) == m_numOfQinEvalSf)
     {
         NS_LOG_LOGIC("At " << Simulator::Now().As(Time::MS)
-                           << " ms UE PHY sending in snyc indication to UE RRC layer");
+                           << " ms UE PHY sending in sync indication to UE RRC layer");
         m_ueCphySapUser->NotifyInSync();
         m_numOfFrames = 0;
     }

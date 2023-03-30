@@ -266,7 +266,7 @@ DsrOptions::PrintVector(std::vector<Ipv4Address>& vec)
     /*
      * Check elements in a route vector
      */
-    if (!vec.size())
+    if (vec.empty())
     {
         NS_LOG_DEBUG("The vector is empty");
     }
@@ -1112,7 +1112,7 @@ DsrOptionRrep::Process(Ptr<Packet> packet,
     {
         RemoveDuplicates(nodeList); // This is for the route reply from intermediate node since we
                                     // didn't remove duplicate there
-        if (nodeList.size() == 0)
+        if (nodeList.empty())
         {
             NS_LOG_DEBUG("The route we have contains 0 entries");
             return 0;
@@ -1634,12 +1634,12 @@ DsrOptionRerr::Process(Ptr<Packet> packet,
         /*
          * Remove the route error header from the packet, and get the error type
          */
-        DsrOptionRerrUnsupportHeader rerrUnsupport;
-        p->RemoveHeader(rerrUnsupport);
+        DsrOptionRerrUnsupportedHeader rerrUnsupported;
+        p->RemoveHeader(rerrUnsupported);
 
         /// \todo This is for the other two error options, not supporting for now
-        // uint32_t rerrSize = rerrUnsupport.GetSerializedSize();
-        // uint32_t serialized = DoSendError (p, rerrUnsupport, rerrSize, ipv4Address, protocol);
+        // uint32_t rerrSize = rerrUnsupported.GetSerializedSize();
+        // uint32_t serialized = DoSendError (p, rerrUnsupported, rerrSize, ipv4Address, protocol);
         uint32_t serialized = 0;
         return serialized;
     }

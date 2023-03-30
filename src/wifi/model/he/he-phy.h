@@ -28,6 +28,8 @@
 #include "ns3/vht-phy.h"
 #include "ns3/wifi-phy-band.h"
 
+#include <optional>
+
 /**
  * \file
  * \ingroup wifi
@@ -114,7 +116,7 @@ class HePhy : public VhtPhy
     void NotifyCcaBusy(const Ptr<const WifiPpdu> ppdu,
                        Time duration,
                        WifiChannelListType channelType) override;
-    bool CanStartRx(Ptr<const WifiPpdu> ppdu) const override;
+    bool CanStartRx(Ptr<const WifiPpdu> ppdu, uint16_t txChannelWidth) const override;
     Ptr<const WifiPpdu> GetRxPpduFromTxPpdu(Ptr<const WifiPpdu> ppdu) override;
 
     /**
@@ -239,7 +241,7 @@ class HePhy : public VhtPhy
 
     /**
      * Fire a EndOfHeSigA callback (if connected) once HE-SIG-A field has been received.
-     * This method is scheduled immediatly after end of HE-SIG-A, once
+     * This method is scheduled immediately after end of HE-SIG-A, once
      * field processing is finished.
      *
      * \param params the HE-SIG-A parameters
@@ -521,9 +523,11 @@ class HePhy : public VhtPhy
         m_beginOfdmaPayloadRxEvents; //!< the beginning of the OFDMA payload reception events
                                      //!< (indexed by STA-ID)
 
-    EndOfHeSigACallback m_endOfHeSigACallback; //!< end of HE-SIG-A callback
-    WifiTxVector m_trigVector;                 //!< the TRIGVECTOR
-    Time m_trigVectorExpirationTime;           //!< expiration time of the TRIGVECTOR
+    EndOfHeSigACallback m_endOfHeSigACallback;      //!< end of HE-SIG-A callback
+    std::optional<WifiTxVector> m_trigVector;       //!< the TRIGVECTOR
+    std::optional<Time> m_trigVectorExpirationTime; //!< expiration time of the TRIGVECTOR
+    std::optional<WifiTxVector> m_currentTxVector;  //!< If the STA is an AP STA, this holds the
+                                                    //!< TXVECTOR of the PPDU that has been sent
 
   private:
     void BuildModeList() override;

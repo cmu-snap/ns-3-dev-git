@@ -257,7 +257,7 @@
  * ---------------
  *    --n0TcpType:           First TCP type (bic, dctcp, or reno) [bic]
  *    --n1TcpType:           Second TCP type (cubic, dctcp, or reno) []
- *    --scenarioNum:         Scenario number from the scenarios avalaible in the file (1-9) [0]
+ *    --scenarioNum:         Scenario number from the scenarios available in the file (1-9) [0]
  *    --bottleneckQueueType: n2 queue type (fq or codel) [fq]
  *    --baseRtt:             base RTT [80ms]
  *    --useCeThreshold:      use CE threshold [false]
@@ -532,7 +532,7 @@ main(int argc, char* argv[])
     cmd.AddValue("n0TcpType", "n0 TCP type (bic, dctcp, or reno)", n0TcpType);
     cmd.AddValue("n1TcpType", "n1 TCP type (bic, dctcp, or reno)", n1TcpType);
     cmd.AddValue("scenarioNum",
-                 "Scenario number from the scenarios avalaible in the file (1-9)",
+                 "Scenario number from the scenarios available in the file (1-9)",
                  scenarioNum);
     cmd.AddValue("bottleneckQueueType", "n2 queue type (fq or codel)", queueType);
     cmd.AddValue("baseRtt", "base RTT", baseRtt);
@@ -613,7 +613,7 @@ main(int argc, char* argv[])
             enableN1Tcp = true;
             n1TcpTypeId = TypeId::LookupByName("ns3::TcpDctcp");
         }
-        else if (n1TcpType == "")
+        else if (n1TcpType.empty())
         {
             NS_LOG_DEBUG("No N1 TCP selected");
         }
@@ -775,7 +775,7 @@ main(int argc, char* argv[])
         proto->SetAttribute("SocketType", TypeIdValue(n1TcpTypeId));
     }
 
-    // InternetStackHelper will install a base TrafficControLayer on the node,
+    // InternetStackHelper will install a base TrafficControlLayer on the node,
     // but the Ipv4AddressHelper below will install the default FqCoDelQueueDisc
     // on all single device nodes.  The below code overrides the configuration
     // that is normally done by the Ipv4AddressHelper::Install() method by

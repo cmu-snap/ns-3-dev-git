@@ -108,7 +108,7 @@ class ApWifiMac : public WifiMac
      * \param linkId the ID of the given link
      * \return a const reference to the map of associated stations
      */
-    const std::map<uint16_t, Mac48Address>& GetStaList(uint8_t linkId = SINGLE_LINK_OP_ID) const;
+    const std::map<uint16_t, Mac48Address>& GetStaList(uint8_t linkId) const;
     /**
      * \param addr the address of the associated station
      * \param linkId the ID of the link on which the station is associated
@@ -125,6 +125,13 @@ class ApWifiMac : public WifiMac
      * \return the ID of a link (if any) that has been setup with the given station
      */
     std::optional<uint8_t> IsAssociated(const Mac48Address& address) const;
+
+    /**
+     * \param aid the given AID
+     * \return the MLD address (in case of MLD) or link address (in case of single link device)
+     *         of the STA having the given AID, if any
+     */
+    std::optional<Mac48Address> GetMldOrLinkAddressByAid(uint16_t aid) const;
 
     /**
      * Return the value of the Queue Size subfield of the last QoS Data or QoS Null
@@ -193,10 +200,15 @@ class ApWifiMac : public WifiMac
      */
     ApLinkEntity& GetLink(uint8_t linkId) const;
 
+    std::map<uint16_t, Mac48Address>
+        m_aidToMldOrLinkAddress; //!< Maps AIDs to MLD addresses (for MLDs) or link addresses (in
+                                 //!< case of single link devices)
+
   private:
     std::unique_ptr<LinkEntity> CreateLinkEntity() const override;
-
+    Mac48Address DoGetLocalAddress(const Mac48Address& remoteAddr) const override;
     void Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId) override;
+
     /**
      * Check whether the supported rate set included in the received (Re)Association
      * Request frame is compatible with our Basic Rate Set. If so, record all the station's

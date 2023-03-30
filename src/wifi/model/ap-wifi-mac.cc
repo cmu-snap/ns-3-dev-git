@@ -823,7 +823,7 @@ ApWifiMac::GetVhtOperation(uint8_t linkId) const
     // segment that contains the primary channel.
     operation.SetChannelCenterFrequencySegment0(
         (bssBandwidth == 160)
-            ? phy->GetOperatingChannel().GetPrimaryChannelNumber(80, WIFI_STANDARD_80211ac)
+            ? phy->GetOperatingChannel().GetPrimaryChannelNumber(80, phy->GetStandard())
             : phy->GetChannelNumber());
     // For a 20, 40, or 80 MHz BSS bandwidth, this subfield is set to 0.
     // For a 160 MHz BSS bandwidth and the Channel Width subfield equal to 1,
@@ -1177,6 +1177,11 @@ ApWifiMac::SetAid(MgtAssocResponseHeader& assoc, const LinkIdStaAddrMap& linkIdS
         aid = GetNextAssociationId(linkIds);
     }
 
+    // store the MLD or link address in the AID-to-address map
+    const auto& [linkId, staAddr] = *linkIdStaAddrMap.cbegin();
+    m_aidToMldOrLinkAddress[aid] =
+        GetWifiRemoteStationManager(linkId)->GetMldAddress(staAddr).value_or(staAddr);
+
     for (const auto& [id, staAddr] : linkIdStaAddrMap)
     {
         auto remoteStationManager = GetWifiRemoteStationManager(id);
@@ -1520,6 +1525,25 @@ ApWifiMac::IsAssociated(const Mac48Address& address) const
         }
     }
     NS_LOG_DEBUG(address << " is not associated");
+    return std::nullopt;
+}
+
+Mac48Address
+ApWifiMac::DoGetLocalAddress(const Mac48Address& remoteAddr) const
+{
+    auto linkId = IsAssociated(remoteAddr);
+    NS_ASSERT_MSG(linkId, remoteAddr << " is not associated");
+    return GetFrameExchangeManager(*linkId)->GetAddress();
+}
+
+std::optional<Mac48Address>
+ApWifiMac::GetMldOrLinkAddressByAid(uint16_t aid) const
+{
+    if (const auto staIt = m_aidToMldOrLinkAddress.find(aid);
+        staIt != m_aidToMldOrLinkAddress.cend())
+    {
+        return staIt->second;
+    }
     return std::nullopt;
 }
 

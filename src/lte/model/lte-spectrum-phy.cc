@@ -923,7 +923,7 @@ LteSpectrumPhy::AddExpectedTb(uint16_t rnti,
     it = m_expectedTbs.find(tbId);
     if (it != m_expectedTbs.end())
     {
-        // migth be a TB of an unreceived packet (due to high progpalosses)
+        // might be a TB of an unreceived packet (due to high progpalosses)
         m_expectedTbs.erase(it);
     }
     // insert new entry
@@ -973,9 +973,9 @@ LteSpectrumPhy::EndRxData()
 
     while (itTb != m_expectedTbs.end())
     {
-        if ((m_dataErrorModelEnabled) &&
-            (m_rxPacketBurstList.size() >
-             0)) // avoid to check for errors when there is no actual data transmitted
+        if (m_dataErrorModelEnabled &&
+            !m_rxPacketBurstList
+                 .empty()) // avoid to check for errors when there is no actual data transmitted
         {
             // retrieve HARQ info
             HarqProcessInfoList_t harqInfoList;

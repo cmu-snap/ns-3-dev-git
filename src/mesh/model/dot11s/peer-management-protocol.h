@@ -189,7 +189,7 @@ class PeerManagementProtocol : public Object
      * Get number of links
      * \returns the number of links
      */
-    uint8_t GetNumberOfLinks();
+    uint8_t GetNumberOfLinks() const;
     /**
      * Set mesh ID to a string value
      * \param s the mesh ID string value
@@ -285,7 +285,7 @@ class PeerManagementProtocol : public Object
      * \param peerAddress the peer address
      * \returns true is should send an open
      */
-    bool ShouldSendOpen(uint32_t interface, Mac48Address peerAddress);
+    bool ShouldSendOpen(uint32_t interface, Mac48Address peerAddress) const;
     /**
      * \brief External peer-chooser
      * \param interface the interface to use
@@ -293,18 +293,20 @@ class PeerManagementProtocol : public Object
      * \param reasonCode reason code
      * \returns true is should send an open
      */
-    bool ShouldAcceptOpen(uint32_t interface, Mac48Address peerAddress, PmpReasonCode& reasonCode);
+    bool ShouldAcceptOpen(uint32_t interface,
+                          Mac48Address peerAddress,
+                          PmpReasonCode& reasonCode) const;
     /**
      * \brief Indicates changes in peer links
      * \param interface the interface
      * \param peerAddress the peer address
-     * \param peerMeshPointAddres the peer mesh point address
+     * \param peerMeshPointAddress the peer mesh point address
      * \param ostate old state
      * \param nstate new state
      */
     void PeerLinkStatus(uint32_t interface,
                         Mac48Address peerAddress,
-                        Mac48Address peerMeshPointAddres,
+                        Mac48Address peerMeshPointAddress,
                         PeerLink::PeerState ostate,
                         PeerLink::PeerState nstate);
     /**

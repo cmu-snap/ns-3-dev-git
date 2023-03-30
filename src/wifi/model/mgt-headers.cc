@@ -304,7 +304,7 @@ MgtProbeResponseHeader::~MgtProbeResponseHeader()
 }
 
 uint64_t
-MgtProbeResponseHeader::GetTimestamp()
+MgtProbeResponseHeader::GetTimestamp() const
 {
     return m_timestamp;
 }
@@ -2188,7 +2188,7 @@ WifiActionHeader::SetAction(WifiActionHeader::CategoryValue type,
 }
 
 WifiActionHeader::CategoryValue
-WifiActionHeader::GetCategory()
+WifiActionHeader::GetCategory() const
 {
     switch (m_category)
     {
@@ -2221,7 +2221,7 @@ WifiActionHeader::GetCategory()
 }
 
 WifiActionHeader::ActionValue
-WifiActionHeader::GetAction()
+WifiActionHeader::GetAction() const
 {
     ActionValue retval;
     retval.selfProtectedAction =
@@ -2357,11 +2357,11 @@ WifiActionHeader::GetAction()
         case MDA_SETUP_REPLY:
             retval.meshAction = MDA_SETUP_REPLY;
             break;
-        case MDAOP_ADVERTISMENT_REQUEST:
-            retval.meshAction = MDAOP_ADVERTISMENT_REQUEST;
+        case MDAOP_ADVERTISEMENT_REQUEST:
+            retval.meshAction = MDAOP_ADVERTISEMENT_REQUEST;
             break;
-        case MDAOP_ADVERTISMENTS:
-            retval.meshAction = MDAOP_ADVERTISMENTS;
+        case MDAOP_ADVERTISEMENTS:
+            retval.meshAction = MDAOP_ADVERTISEMENTS;
             break;
         case MDAOP_SET_TEARDOWN:
             retval.meshAction = MDAOP_SET_TEARDOWN;

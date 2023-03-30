@@ -144,25 +144,25 @@ class RoutingStats
      * \brief Returns the number of bytes received
      * \return the number of bytes received
      */
-    uint32_t GetRxBytes();
+    uint32_t GetRxBytes() const;
 
     /**
      * \brief Returns the cumulative number of bytes received
      * \return the cumulative number of bytes received
      */
-    uint32_t GetCumulativeRxBytes();
+    uint32_t GetCumulativeRxBytes() const;
 
     /**
      * \brief Returns the count of packets received
      * \return the count of packets received
      */
-    uint32_t GetRxPkts();
+    uint32_t GetRxPkts() const;
 
     /**
      * \brief Returns the cumulative count of packets received
      * \return the cumulative count of packets received
      */
-    uint32_t GetCumulativeRxPkts();
+    uint32_t GetCumulativeRxPkts() const;
 
     /**
      * \brief Increments the number of (application-data)
@@ -192,25 +192,25 @@ class RoutingStats
      * \brief Returns the number of bytes transmitted
      * \return the number of bytes transmitted
      */
-    uint32_t GetTxBytes();
+    uint32_t GetTxBytes() const;
 
     /**
      * \brief Returns the cumulative number of bytes transmitted
      * \return the cumulative number of bytes transmitted
      */
-    uint32_t GetCumulativeTxBytes();
+    uint32_t GetCumulativeTxBytes() const;
 
     /**
      * \brief Returns the number of packets transmitted
      * \return the number of packets transmitted
      */
-    uint32_t GetTxPkts();
+    uint32_t GetTxPkts() const;
 
     /**
      * \brief Returns the cumulative number of packets transmitted
      * \return the cumulative number of packets transmitted
      */
-    uint32_t GetCumulativeTxPkts();
+    uint32_t GetCumulativeTxPkts() const;
 
     /**
      * \brief Increment the number of bytes transmitted
@@ -236,7 +236,7 @@ class RoutingStats
     void SetTxPkts(uint32_t txPkts);
 
   private:
-    uint32_t m_RxBytes;           ///< reeive bytes
+    uint32_t m_RxBytes;           ///< receive bytes
     uint32_t m_cumulativeRxBytes; ///< cumulative receive bytes
     uint32_t m_RxPkts;            ///< receive packets
     uint32_t m_cumulativeRxPkts;  ///< cumulative receive packets
@@ -259,25 +259,25 @@ RoutingStats::RoutingStats()
 }
 
 uint32_t
-RoutingStats::GetRxBytes()
+RoutingStats::GetRxBytes() const
 {
     return m_RxBytes;
 }
 
 uint32_t
-RoutingStats::GetCumulativeRxBytes()
+RoutingStats::GetCumulativeRxBytes() const
 {
     return m_cumulativeRxBytes;
 }
 
 uint32_t
-RoutingStats::GetRxPkts()
+RoutingStats::GetRxPkts() const
 {
     return m_RxPkts;
 }
 
 uint32_t
-RoutingStats::GetCumulativeRxPkts()
+RoutingStats::GetCumulativeRxPkts() const
 {
     return m_cumulativeRxPkts;
 }
@@ -309,25 +309,25 @@ RoutingStats::SetRxPkts(uint32_t rxPkts)
 }
 
 uint32_t
-RoutingStats::GetTxBytes()
+RoutingStats::GetTxBytes() const
 {
     return m_TxBytes;
 }
 
 uint32_t
-RoutingStats::GetCumulativeTxBytes()
+RoutingStats::GetCumulativeTxBytes() const
 {
     return m_cumulativeTxBytes;
 }
 
 uint32_t
-RoutingStats::GetTxPkts()
+RoutingStats::GetTxPkts() const
 {
     return m_TxPkts;
 }
 
 uint32_t
-RoutingStats::GetCumulativeTxPkts()
+RoutingStats::GetCumulativeTxPkts() const
 {
     return m_cumulativeTxPkts;
 }
@@ -448,7 +448,7 @@ class RoutingHelper : public Object
     void SetupRoutingMessages(NodeContainer& c, Ipv4InterfaceContainer& adhocTxInterfaces);
 
     /**
-     * \brief Sets up a routing packet for tranmission
+     * \brief Sets up a routing packet for transmission
      * \param addr destination address
      * \param node source node
      * \return Socket to be used for sending/receiving a routed data packet
@@ -728,10 +728,10 @@ class WifiPhyStats : public Object
      * (this includes MAC/PHY overhead)
      * \return the number of bytes transmitted
      */
-    uint32_t GetTxBytes();
+    uint32_t GetTxBytes() const;
 
     /**
-     * \brief Callback signiture for Phy/Tx trace
+     * \brief Callback signature for Phy/Tx trace
      * \param context this object
      * \param packet packet transmitted
      * \param mode wifi mode
@@ -745,14 +745,14 @@ class WifiPhyStats : public Object
                     uint8_t txPower);
 
     /**
-     * \brief Callback signiture for Phy/TxDrop
+     * \brief Callback signature for Phy/TxDrop
      * \param context this object
      * \param packet the tx packet being dropped
      */
     void PhyTxDrop(std::string context, Ptr<const Packet> packet);
 
     /**
-     * \brief Callback signiture for Phy/RxDrop
+     * \brief Callback signature for Phy/RxDrop
      * \param context this object
      * \param packet the rx packet being dropped
      * \param reason the reason for the drop
@@ -814,7 +814,7 @@ WifiPhyStats::PhyRxDrop(std::string context,
 }
 
 uint32_t
-WifiPhyStats::GetTxBytes()
+WifiPhyStats::GetTxBytes() const
 {
     return m_phyTxBytes;
 }
@@ -1033,7 +1033,7 @@ void
 ConfigStoreHelper::SaveConfig(std::string configFilename)
 {
     // only save if a non-empty filename has been specified
-    if (configFilename != "")
+    if (!configFilename.empty())
     {
         // Output config store to txt format
         Config::SetDefault("ns3::ConfigStore::Filename", StringValue(configFilename));
@@ -2255,7 +2255,7 @@ VanetRoutingExperiment::SetupAdhocDevices()
     wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
     if (m_lossModel == 3)
     {
-        // two-ray requires antenna height (else defaults to Friss)
+        // two-ray requires antenna height (else defaults to Friis)
         wifiChannel.AddPropagationLoss(m_lossModelName,
                                        "Frequency",
                                        DoubleValue(freq),

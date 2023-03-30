@@ -444,9 +444,11 @@ WifiDefaultAckManager::GetAckInfoIfBarBaSequence(Ptr<const WifiMpdu> mpdu,
     }
 
     // we get here if this is the first MPDU for this receiver
-    if (edca->GetBaManager()->GetBar(true, tid, receiver) ||
-        (acknowledgment && (!acknowledgment->stationsReplyingWithNormalAck.empty() ||
-                            !acknowledgment->stationsReplyingWithBlockAck.empty())))
+    auto htFem = DynamicCast<HtFrameExchangeManager>(m_mac->GetFrameExchangeManager(m_linkId));
+    NS_ASSERT(htFem);
+    if (auto bar = htFem->GetBar(QosUtilsMapTidToAc(tid), tid, receiver);
+        bar || (acknowledgment && (!acknowledgment->stationsReplyingWithNormalAck.empty() ||
+                                   !acknowledgment->stationsReplyingWithBlockAck.empty())))
     {
         // there is a pending BlockAckReq for this receiver or another receiver
         // was selected for immediate response.
@@ -568,7 +570,9 @@ WifiDefaultAckManager::GetAckInfoIfTfMuBar(Ptr<const WifiMpdu> mpdu,
         Ptr<QosTxop> edca = m_mac->GetQosTxop(QosUtilsMapTidToAc(tid));
         acknowledgment->stationsReplyingWithBlockAck.emplace(
             receiver,
-            WifiDlMuTfMuBar::BlockAckInfo{edca->GetBaManager()->GetBlockAckReqHeader(receiver, tid),
+            WifiDlMuTfMuBar::BlockAckInfo{edca->GetBaManager()->GetBlockAckReqHeader(
+                                              mpdu->GetOriginal()->GetHeader().GetAddr1(),
+                                              tid),
                                           blockAckTxVector,
                                           m_mac->GetBaTypeAsOriginator(receiver, tid)});
 
@@ -655,7 +659,9 @@ WifiDefaultAckManager::GetAckInfoIfAggregatedMuBar(Ptr<const WifiMpdu> mpdu,
             receiver,
             WifiDlMuAggregateTf::BlockAckInfo{
                 GetMuBarSize({m_mac->GetBarTypeAsOriginator(receiver, tid)}),
-                edca->GetBaManager()->GetBlockAckReqHeader(receiver, tid),
+                edca->GetBaManager()->GetBlockAckReqHeader(
+                    mpdu->GetOriginal()->GetHeader().GetAddr1(),
+                    tid),
                 blockAckTxVector,
                 m_mac->GetBaTypeAsOriginator(receiver, tid)});
 
@@ -705,8 +711,8 @@ WifiDefaultAckManager::TryUlMuTransmission(Ptr<const WifiMpdu> mpdu,
             }
             NS_ABORT_MSG_IF(aid12 == 0 || aid12 > 2007, "Allocation of RA-RUs is not supported");
 
-            NS_ASSERT(apMac->GetStaList().find(aid12) != apMac->GetStaList().end());
-            Mac48Address staAddress = apMac->GetStaList().find(aid12)->second;
+            NS_ASSERT(apMac->GetStaList(m_linkId).find(aid12) != apMac->GetStaList(m_linkId).end());
+            Mac48Address staAddress = apMac->GetStaList(m_linkId).find(aid12)->second;
 
             // find a TID for which a BA agreement exists with the given originator
             uint8_t tid = 0;
@@ -730,7 +736,7 @@ WifiDefaultAckManager::TryUlMuTransmission(Ptr<const WifiMpdu> mpdu,
         uint16_t staId = trigger.begin()->GetAid12();
         acknowledgment->tbPpduTxVector = trigger.GetHeTbTxVector(staId);
         acknowledgment->multiStaBaTxVector = GetWifiRemoteStationManager()->GetBlockAckTxVector(
-            apMac->GetStaList().find(staId)->second,
+            apMac->GetStaList(m_linkId).find(staId)->second,
             acknowledgment->tbPpduTxVector);
         return std::unique_ptr<WifiUlMuMultiStaBa>(acknowledgment);
     }

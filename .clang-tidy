@@ -29,8 +29,10 @@ Checks: >
   performance-inefficient-vector-operation,
   performance-trivially-destructible,
   readability-braces-around-statements,
+  readability-container-size-empty,
   readability-duplicate-include,
   readability-isolate-declaration,
+  readability-make-member-function-const,
   readability-misleading-indentation,
   readability-misplaced-array-index,
   readability-redundant-control-flow,
@@ -44,5 +46,5 @@ Checks: >
   readability-uppercase-literal-suffix,
 
 FormatStyle: "file"
-HeaderFilterRegex: "(contrib|examples|src|scratch|utils)/*/.*h"
+HeaderFilterRegex: ".*(ns|NS).*/(contrib|examples|src|scratch|utils)/*/.*h"
 UseColor: true

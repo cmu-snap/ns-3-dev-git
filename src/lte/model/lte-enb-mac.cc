@@ -261,8 +261,8 @@ class EnbMacMemberLteEnbPhySapUser : public LteEnbPhySapUser
     void ReceiveLteControlMessage(Ptr<LteControlMessage> msg) override;
     void ReceiveRachPreamble(uint32_t prachId) override;
     void UlCqiReport(FfMacSchedSapProvider::SchedUlCqiInfoReqParameters ulcqi) override;
-    void UlInfoListElementHarqFeeback(UlInfoListElement_s params) override;
-    void DlInfoListElementHarqFeeback(DlInfoListElement_s params) override;
+    void UlInfoListElementHarqFeedback(UlInfoListElement_s params) override;
+    void DlInfoListElementHarqFeedback(DlInfoListElement_s params) override;
 
   private:
     LteEnbMac* m_mac; ///< the MAC
@@ -304,15 +304,15 @@ EnbMacMemberLteEnbPhySapUser::UlCqiReport(FfMacSchedSapProvider::SchedUlCqiInfoR
 }
 
 void
-EnbMacMemberLteEnbPhySapUser::UlInfoListElementHarqFeeback(UlInfoListElement_s params)
+EnbMacMemberLteEnbPhySapUser::UlInfoListElementHarqFeedback(UlInfoListElement_s params)
 {
-    m_mac->DoUlInfoListElementHarqFeeback(params);
+    m_mac->DoUlInfoListElementHarqFeedback(params);
 }
 
 void
-EnbMacMemberLteEnbPhySapUser::DlInfoListElementHarqFeeback(DlInfoListElement_s params)
+EnbMacMemberLteEnbPhySapUser::DlInfoListElementHarqFeedback(DlInfoListElement_s params)
 {
-    m_mac->DoDlInfoListElementHarqFeeback(params);
+    m_mac->DoDlInfoListElementHarqFeedback(params);
 }
 
 // //////////////////////////////////////
@@ -490,7 +490,7 @@ LteEnbMac::DoSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
 
     // --- DOWNLINK ---
     // Send Dl-CQI info to the scheduler
-    if (m_dlCqiReceived.size() > 0)
+    if (!m_dlCqiReceived.empty())
     {
         FfMacSchedSapProvider::SchedDlCqiInfoReqParameters dlcqiInfoReq;
         dlcqiInfoReq.m_sfnSf = ((0x3FF & frameNo) << 4) | (0xF & subframeNo);
@@ -563,8 +563,8 @@ LteEnbMac::DoSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
     FfMacSchedSapProvider::SchedDlTriggerReqParameters dlparams;
     dlparams.m_sfnSf = ((0x3FF & dlSchedFrameNo) << 4) | (0xF & dlSchedSubframeNo);
 
-    // Forward DL HARQ feebacks collected during last TTI
-    if (m_dlInfoListReceived.size() > 0)
+    // Forward DL HARQ Feedbacks collected during last TTI
+    if (!m_dlInfoListReceived.empty())
     {
         dlparams.m_dlInfoList = m_dlInfoListReceived;
         // empty local buffer
@@ -590,7 +590,7 @@ LteEnbMac::DoSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
     m_ulCqiReceived.clear();
 
     // Send BSR reports to the scheduler
-    if (m_ulCeReceived.size() > 0)
+    if (!m_ulCeReceived.empty())
     {
         FfMacSchedSapProvider::SchedUlMacCtrlInfoReqParameters ulMacReq;
         ulMacReq.m_sfnSf = ((0x3FF & frameNo) << 4) | (0xF & subframeNo);
@@ -617,8 +617,8 @@ LteEnbMac::DoSubframeIndication(uint32_t frameNo, uint32_t subframeNo)
     FfMacSchedSapProvider::SchedUlTriggerReqParameters ulparams;
     ulparams.m_sfnSf = ((0x3FF & ulSchedFrameNo) << 4) | (0xF & ulSchedSubframeNo);
 
-    // Forward DL HARQ feebacks collected during last TTI
-    if (m_ulInfoListReceived.size() > 0)
+    // Forward DL HARQ Feedbacks collected during last TTI
+    if (!m_ulInfoListReceived.empty())
     {
         ulparams.m_ulInfoList = m_ulInfoListReceived;
         // empty local buffer
@@ -646,7 +646,7 @@ LteEnbMac::DoReceiveLteControlMessage(Ptr<LteControlMessage> msg)
     {
         Ptr<DlHarqFeedbackLteControlMessage> dlharq =
             DynamicCast<DlHarqFeedbackLteControlMessage>(msg);
-        DoDlInfoListElementHarqFeeback(dlharq->GetDlHarqFeedback());
+        DoDlInfoListElementHarqFeedback(dlharq->GetDlHarqFeedback());
     }
     else
     {
@@ -950,7 +950,7 @@ LteEnbMac::DoUeUpdateConfigurationReq(LteEnbCmacSapProvider::UeConfig params)
 }
 
 LteEnbCmacSapProvider::RachConfig
-LteEnbMac::DoGetRachConfig()
+LteEnbMac::DoGetRachConfig() const
 {
     struct LteEnbCmacSapProvider::RachConfig rc;
     rc.numberOfRaPreambles = m_numberOfRaPreambles;
@@ -1209,7 +1209,7 @@ LteEnbMac::DoSchedDlConfigInd(FfMacSchedSapUser::SchedDlConfigIndParameters ind)
         NS_LOG_INFO(this << " Send RAR message to RNTI " << ind.m_buildRarList.at(i).m_rnti
                          << " rapId " << itRapId->second);
     }
-    if (ind.m_buildRarList.size() > 0)
+    if (!ind.m_buildRarList.empty())
     {
         m_enbPhySapProvider->SendLteControlMessage(rarMsg);
     }
@@ -1296,14 +1296,14 @@ LteEnbMac::DoCschedCellConfigUpdateInd(
 }
 
 void
-LteEnbMac::DoUlInfoListElementHarqFeeback(UlInfoListElement_s params)
+LteEnbMac::DoUlInfoListElementHarqFeedback(UlInfoListElement_s params)
 {
     NS_LOG_FUNCTION(this);
     m_ulInfoListReceived.push_back(params);
 }
 
 void
-LteEnbMac::DoDlInfoListElementHarqFeeback(DlInfoListElement_s params)
+LteEnbMac::DoDlInfoListElementHarqFeedback(DlInfoListElement_s params)
 {
     NS_LOG_FUNCTION(this);
     // Update HARQ buffer

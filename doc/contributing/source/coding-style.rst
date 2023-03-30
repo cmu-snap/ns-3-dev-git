@@ -97,8 +97,7 @@ Disable formatting in specific files or lines
 =============================================
 
 To disable formatting in specific lines, surround them with the following
-C++ comments [example adopted from
-`official clang-format documentation <https://clang.llvm.org/docs/ClangFormat.html>`_]:
+C++ comments:
 
 .. sourcecode:: cpp
 
@@ -799,7 +798,7 @@ that usage is consistent within a file.
   };
 
 All the functions and variables must be documented, with the exception of
-member functions inherited from parent classes (the documentaion is copied
+member functions inherited from parent classes (the documentation is copied
 automatically from the parent class), and default constructor/destructor.
 
 It is strongly suggested to use grouping to bind together logically related
@@ -917,17 +916,21 @@ to print the numeric value of any variable, such as:
 
 Avoid unnecessary casts if minor changes to variable declarations can solve
 the issue. In the following example, ``x`` can be declared as ``float`` instead of
-``int`` to avoid the cast:
+``int`` to avoid the cast, or write numbers in decimal format:
 
 .. sourcecode:: cpp
 
   // Do not declare x as int, to avoid casting it to float
   int x = 3;
-  return 1 / static_cast<float>(x);
+  float y = 1 / static_cast<float>(x);
 
   // Prefer to declare x as float
   float x = 3.0;
-  return 1 / x;
+  float y = 1 / x;
+
+  // Or use 1.0 instead of just 1
+  int x = 3;
+  float y = 1.0 / x;
 
 Namespaces
 ==========
@@ -1087,7 +1090,7 @@ can be rewritten as:
 
   if (n < 0)
   {
-      return n;
+      return false;
   }
 
   n += 3;
@@ -1298,6 +1301,10 @@ of rules that should be observed while developing code.
     myVector.emplace_back(1);
     myVector.emplace_back(2);
     myVector.emplace_back(3);
+
+- Prefer to use the ``empty()`` function of STL containers (e.g., ``std::vector``),
+  instead of the condition ``size() > 0``, to avoid unnecessarily calculating the
+  size of the container.
 
 - Avoid unnecessary calls to the functions ``.c_str()`` and ``.data()`` of
   ``std::string``.
