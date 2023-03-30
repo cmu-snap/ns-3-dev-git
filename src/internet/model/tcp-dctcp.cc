@@ -24,6 +24,9 @@
 #include "ns3/log.h"
 #include "ns3/tcp-socket-state.h"
 
+#include <algorithm>
+
+
 namespace ns3
 {
 
@@ -130,7 +133,10 @@ uint32_t
 TcpDctcp::GetSsThresh(Ptr<const TcpSocketState> tcb, uint32_t bytesInFlight)
 {
     NS_LOG_FUNCTION(this << tcb << bytesInFlight);
-    return static_cast<uint32_t>((1 - m_alpha / 2.0) * tcb->m_cWnd);
+    // Do not allow SsThresh to drop below 1 MSS.
+    return std::max(
+        static_cast<uint32_t>((1 - m_alpha / 2.0) * tcb->m_cWnd),
+        tcb->m_segmentSize);
 }
 
 void

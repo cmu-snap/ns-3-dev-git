@@ -11,35 +11,33 @@ mkdir -p "$out_dir/$dir_name/"{log,pcap}
 
 burstDurationMs=15
 lineRateGbps=12.5
-numSenders=200
+numSenders=500
 metaQueueSizeBytes=1800000
 metaQueueThresholdBytes=120000
 bytesPerPacket=1500
+queueSizePackets="$(python -c "import math; print(math.ceil($metaQueueSizeBytes / $bytesPerPacket))")"
+thresholdPackets="$(python -c "import math; print(math.ceil($metaQueueThresholdBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
 bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($lineRateGbps * 1e9 / 8) / $numSenders))")"
 
-queueSizePackets="$(python -c "import math; print(math.ceil($metaQueueSizeBytes / $bytesPerPacket))")"
-thresholdPackets="$(python -c "import math; print(math.ceil($metaQueueThresholdBytes / $bytesPerPacket))")"
-
 ns3_dir="$(realpath "$(dirname "$0")/..")"
 
-"$ns3_dir/ns3" run "scratch/incast \
-    --outputDirectory=$out_dir \
-    --traceDirectory=$dir_name \
+"$ns3_dir/ns3" build "scratch/incast"
+
+"$ns3_dir"/build/scratch/ns3-dev-incast-default \
+    --outputDirectory="$out_dir" \
+    --traceDirectory="$dir_name" \
     --numSenders=$numSenders \
-    --bytesPerSender=$bytesPerSender \
+    --bytesPerSender="$bytesPerSender" \
     --numBursts=3 \
     --delayPerLinkUs=5 \
     --jitterUs=20 \
     --smallLinkBandwidthMbps=12500 \
     --largeLinkBandwidthMbps=100000 \
     --cca=TcpDctcp \
-    --smallQueueSizePackets=$queueSizePackets \
-    --largeQueueSizePackets=$queueSizePackets \
-    --smallQueueMinThresholdPackets=$thresholdPackets \
-    --smallQueueMaxThresholdPackets=$thresholdPackets \
-    --largeQueueMinThresholdPackets=$thresholdPackets \
-    --largeQueueMaxThresholdPackets=$thresholdPackets \
-    --rwndStrategy=static \
-    --staticRwndBytes=5000 \
-    "
+    --smallQueueSizePackets="$queueSizePackets" \
+    --largeQueueSizePackets="$queueSizePackets" \
+    --smallQueueMinThresholdPackets="$thresholdPackets" \
+    --smallQueueMaxThresholdPackets="$thresholdPackets" \
+    --largeQueueMinThresholdPackets="$thresholdPackets" \
+    --largeQueueMaxThresholdPackets="$thresholdPackets"

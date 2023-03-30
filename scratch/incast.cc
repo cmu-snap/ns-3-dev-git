@@ -131,11 +131,15 @@ LogUplinkQueueDropAfterDequeue(Ptr<const QueueDiscItem>, const char *) {
 int
 main(int argc, char *argv[]) {
   // Define log configurations
-  LogLevel logConfig =
+  LogLevel logConfigInfo =
       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE | LOG_LEVEL_INFO);
-  LogComponentEnable("IncastSim", logConfig);
-  LogComponentEnable("IncastAggregator", logConfig);
-  LogComponentEnable("IncastSender", logConfig);
+  LogComponentEnable("IncastSim", logConfigInfo);
+  LogComponentEnable("IncastAggregator", logConfigInfo);
+  LogComponentEnable("IncastSender", logConfigInfo);
+  //   LogLevel logConfigWarn =
+  //       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE |
+  //       LOG_LEVEL_WARN);
+  //   LogComponentEnable("TcpSocketBase", logConfigWarn);
 
   // Parameters for the simulation
   std::string tcpTypeId = "TcpCubic";
@@ -345,10 +349,10 @@ main(int argc, char *argv[]) {
   Config::SetDefault(
       "ns3::TcpSocketBase::MinRto", TimeValue(MilliSeconds(200)));
   Config::SetDefault("ns3::TcpSocketBase::Timestamp", BooleanValue(true));
-  
+  Config::SetDefault("ns3::TcpSocketBase::WindowScaling", BooleanValue(true));
+
   if (tcpTypeId == "TcpDctcp") {
     // TODO: For non-DCTCP, try with and without
-    Config::SetDefault("ns3::TcpSocketBase::WindowScaling", BooleanValue(false));
     Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
   }
 

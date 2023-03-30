@@ -171,7 +171,7 @@ IncastSender::StartApplication() {
       Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
       tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
     }
-    
+
     // Enable TCP timestamp option
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
   }
@@ -247,20 +247,7 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
   while (sentBytes < totalBytes && socket->GetTxAvailable()) {
     int toSend = totalBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
-
-    // if (GetNode()->GetId() == 128) {
-    //   NS_LOG_INFO(
-    //       m_logPrefix << "Available to send: " << socket->GetTxAvailable());
-    //   NS_LOG_INFO(m_logPrefix << "Sending " << toSend << " bytes");
-    // }
-
     int newSentBytes = socket->Send(packet);
-
-    // if (GetNode()->GetId() == 128) {
-    //   NS_LOG_INFO("Available to send: " << socket->GetTxAvailable());
-    //   NS_LOG_INFO(m_logPrefix << "Sent " << newSentBytes << " bytes");
-    // }
-
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;
     } else {
