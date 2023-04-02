@@ -623,6 +623,7 @@ main(int argc, char *argv[]) {
       ip.Print(ipStr);
 
       burstJson[ipStr.str()] = {
+          {"id", flow.first},
           {"start", flow.second.first.GetSeconds()},
           {"end", flow.second.second.GetSeconds()}};
     }
