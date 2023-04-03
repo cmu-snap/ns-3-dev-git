@@ -336,13 +336,10 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
-  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
   Config::SetDefault("ns3::TcpSocket::TcpNoDelay", BooleanValue(true));
-  //   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(2));
+  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
   Config::SetDefault(
       "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(0)));
-  //   Config::SetDefault(
-  //       "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(5)));
   // TODO: Try 9k
   Config::SetDefault(
       "ns3::TcpSocket::SegmentSize", UintegerValue(segmentSizeBytes));
