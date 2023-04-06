@@ -88,6 +88,8 @@ class Params:
         self,
         bytesPerSender: int,
         cca: str,
+        delAckCount: int,
+        delAckTimeoutMs: int,
         jitterUs: int,
         largeLinkBandwidthMbps: int,
         largeQueueThresholdPackets: int,
@@ -103,6 +105,8 @@ class Params:
         self.time = int(time.time())
         self.bytesPerSender = bytesPerSender
         self.cca = cca
+        self.delAckCount = delAckCount
+        self.delAckTimeoutMs = delAckTimeoutMs
         self.jitterUs = jitterUs
         self.largeLinkBandwidthMbps = largeLinkBandwidthMbps
         self.largeQueueThresholdPackets = largeQueueThresholdPackets
@@ -118,6 +122,8 @@ class Params:
         self.commandLineOptions = {
             "bytesPerSender": self.bytesPerSender,
             "cca": self.cca,
+            "delAckCount": self.delAckCount,
+            "delAckTimeoutMs": self.delAckTimeoutMs,
             "jitterUs": self.jitterUs,
             "largeLinkBandwidthMbps": self.largeLinkBandwidthMbps,
             "largeQueueMaxThresholdPackets": self.largeQueueThresholdPackets,
@@ -146,6 +152,8 @@ class Params:
             str(self.time),
             str(self.bytesPerSender),
             str(self.cca),
+            str(self.delAckCount),
+            str(self.delAckTimeoutMs),
             str(self.jitterUs),
             str(self.largeLinkBandwidthMbps),
             str(self.largeQueueThresholdPackets),
@@ -233,6 +241,14 @@ def main():
         experiment_config,
         "DELAY_PER_LINK_US",
     )
+    delAckCount_set: set[int] = getLinearSet(
+        experiment_config,
+        "DEL_ACK_COUNT",
+    )
+    delAckTimeoutMs_set: set[int] = getLinearSet(
+        experiment_config,
+        "DEL_ACK_TIMEOUT_MS",
+    )
     largeLinkBandwidthMbps_set: set[int] = getLinearSet(
         experiment_config,
         "LARGE_LINK_BANDWIDTH_MBPS",
@@ -258,6 +274,8 @@ def main():
     params_tuples = list(
         itertools.product(
             burstDurationMs_set,
+            delAckCount_set,
+            delAckTimeoutMs_set,
             delayPerLinkUs_set,
             largeLinkBandwidthMbps_set,
             numSenders_set,
@@ -273,6 +291,8 @@ def main():
 
     for (
         burstDurationMs,
+        delAckCount,
+        delAckTimeoutMs,
         delayPerLinkUs,
         largeLinkBandwidthMbps,
         numSenders,
@@ -309,6 +329,8 @@ def main():
                 Params(
                     bytesPerSender,
                     cca,
+                    delAckCount,
+                    delAckTimeoutMs,
                     jitterUs,
                     largeLinkBandwidthMbps,
                     largeQueueThresholdPackets,

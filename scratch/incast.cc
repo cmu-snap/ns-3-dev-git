@@ -148,7 +148,11 @@ main(int argc, char *argv[]) {
   uint32_t bytesPerSender = 500000;
   float delayPerLinkUs = 5;
   uint32_t jitterUs = 100;
+
+  // Parameters for TCP
   uint32_t segmentSizeBytes = 1448;
+  uint32_t delAckCount = 1;
+  uint32_t delAckTimeoutMs = 0;
 
   // Parameters for the small links (ToR to node)
   uint32_t smallLinkBandwidthMbps = 12500;
@@ -166,7 +170,7 @@ main(int argc, char *argv[]) {
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
 
-  // Configurations for tracing
+  // Parameters for tracing
   std::string outputDirectory = "scratch/traces/";
   std::string traceDirectory = "trace_directory/";
   bool enableSenderPcap = false;
@@ -197,6 +201,14 @@ main(int argc, char *argv[]) {
       jitterUs);
   cmd.AddValue(
       "segmentSizeBytes", "TCP segment size (in bytes)", segmentSizeBytes);
+  cmd.AddValue(
+      "delAckCount",
+      "Number of packets to wait before sending a TCP ack",
+      delAckCount);
+  cmd.AddValue(
+      "delAckTimeoutMs",
+      "Timeout value for TCP delayed acks",
+      delAckTimeoutMs);
   cmd.AddValue(
       "smallLinkBandwidthMbps",
       "Small link bandwidth (in Mbps)",
@@ -337,9 +349,9 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
   Config::SetDefault("ns3::TcpSocket::TcpNoDelay", BooleanValue(true));
-  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(1));
+  Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(delAckCount));
   Config::SetDefault(
-      "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(0)));
+      "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(delAckTimeoutMs)));
   // TODO: Try 9k
   Config::SetDefault(
       "ns3::TcpSocket::SegmentSize", UintegerValue(segmentSizeBytes));
