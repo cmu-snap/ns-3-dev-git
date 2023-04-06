@@ -150,6 +150,7 @@ main(int argc, char *argv[]) {
   uint32_t segmentSizeBytes = 1448;
   uint32_t delAckCount = 1;
   uint32_t delAckTimeoutMs = 0;
+  uint32_t initialCwndSegments = 10;
 
   // Parameters for the small links (ToR to node)
   uint32_t smallLinkBandwidthMbps = 12500;
@@ -203,9 +204,11 @@ main(int argc, char *argv[]) {
       "Number of packets to wait before sending a TCP ack",
       delAckCount);
   cmd.AddValue(
-      "delAckTimeoutMs",
-      "Timeout value for TCP delayed acks",
-      delAckTimeoutMs);
+      "delAckTimeoutMs", "Timeout value for TCP delayed acks", delAckTimeoutMs);
+  cmd.AddValue(
+      "initialCwnd",
+      "The initial congestion window size (in segments)",
+      initialCwndSegments);
   cmd.AddValue(
       "smallLinkBandwidthMbps",
       "Small link bandwidth (in Mbps)",
@@ -344,11 +347,13 @@ main(int argc, char *argv[]) {
   // Set global TCP parameters
   Config::SetDefault("ns3::TcpSocket::SndBufSize", UintegerValue(pow(10, 9)));
   Config::SetDefault("ns3::TcpSocket::RcvBufSize", UintegerValue(pow(10, 9)));
-  Config::SetDefault("ns3::TcpSocket::InitialCwnd", UintegerValue(10));
+  Config::SetDefault(
+      "ns3::TcpSocket::InitialCwnd", UintegerValue(initialCwndSegments));
   Config::SetDefault("ns3::TcpSocket::TcpNoDelay", BooleanValue(true));
   Config::SetDefault("ns3::TcpSocket::DelAckCount", UintegerValue(delAckCount));
   Config::SetDefault(
-      "ns3::TcpSocket::DelAckTimeout", TimeValue(MilliSeconds(delAckTimeoutMs)));
+      "ns3::TcpSocket::DelAckTimeout",
+      TimeValue(MilliSeconds(delAckTimeoutMs)));
   // TODO: Try 9k
   Config::SetDefault(
       "ns3::TcpSocket::SegmentSize", UintegerValue(segmentSizeBytes));
