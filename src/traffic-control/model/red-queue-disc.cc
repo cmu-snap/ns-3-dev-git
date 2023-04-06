@@ -143,7 +143,7 @@ RedQueueDisc::GetTypeId()
                           MakeDoubleChecker<double>())
             .AddAttribute("LInterm",
                           "The maximum probability of dropping a packet",
-                          DoubleValue(50),
+                          DoubleValue(0.5),
                           MakeDoubleAccessor(&RedQueueDisc::m_lInterm),
                           MakeDoubleChecker<double>())
             .AddAttribute("TargetDelay",

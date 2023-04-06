@@ -62,8 +62,7 @@ std::ofstream uplinkQueueDropOut;
 
 void
 LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
-  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
-         << " " << newDepth << std::endl;
+  (*out) << Simulator::Now().GetSeconds() << " " << newDepth << std::endl;
 }
 
 void
@@ -78,8 +77,7 @@ LogUplinkQueueDepth(uint32_t oldDepth, uint32_t newDepth) {
 
 void
 LogQueueMark(std::ofstream *out) {
-  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
-         << std::endl;
+  (*out) << Simulator::Now().GetSeconds() << std::endl;
 }
 
 void
@@ -94,8 +92,7 @@ LogUplinkQueueMark(Ptr<const QueueDiscItem>, const char *) {
 
 void
 LogQueueDrop(std::ofstream *out, int type) {
-  (*out) << std::fixed << std::setprecision(9) << Simulator::Now().GetSeconds()
-         << " " << type << std::endl;
+  (*out) << Simulator::Now().GetSeconds() << " " << type << std::endl;
 }
 
 void
@@ -378,7 +375,7 @@ main(int argc, char *argv[]) {
       "MaxTh",
       DoubleValue(smallQueueMaxThresholdPackets),
       "LInterm",
-      DoubleValue(100));
+      DoubleValue(1));
 
   TrafficControlHelper largeLinkQueueHelper;
   largeLinkQueueHelper.SetRootQueueDisc(
@@ -394,7 +391,7 @@ main(int argc, char *argv[]) {
       "MaxTh",
       DoubleValue(largeQueueMaxThresholdPackets),
       "LInterm",
-      DoubleValue(100));
+      DoubleValue(1));
 
   // Install small queues on all the NetDevices connected to small links.
   QueueDiscContainer leftQueues =
@@ -524,33 +521,38 @@ main(int argc, char *argv[]) {
   incastQueueDepthOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_depth.log",
       std::ios::out);
-  incastQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
+  incastQueueDepthOut << std::fixed << std::setprecision(12)
+                      << "# Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
   uplinkQueueDepthOut.open(
       outputDirectory + traceDirectory + "/log/uplink_queue_depth.log",
       std::ios::out);
-  uplinkQueueDepthOut << "# Time (s) qlen (pkts)" << std::endl;
+  uplinkQueueDepthOut << std::fixed << std::setprecision(12)
+                      << "# Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
   // Marks
   incastQueueMarkOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_mark.log",
       std::ios::out);
-  incastQueueMarkOut << "# Time (s)" << std::endl;
+  incastQueueMarkOut << std::fixed << std::setprecision(12) << "# Time (s)"
+                     << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogIncastQueueMark));
   uplinkQueueMarkOut.open(
       outputDirectory + traceDirectory + "/log/uplink_queue_mark.log",
       std::ios::out);
-  uplinkQueueMarkOut << "# Time (s)" << std::endl;
+  uplinkQueueMarkOut << std::fixed << std::setprecision(12) << "# Time (s)"
+                     << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogUplinkQueueMark));
   // Drops
   incastQueueDropOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_drop.log",
       std::ios::out);
-  incastQueueDropOut << "# Time (s) Drop type" << std::endl;
+  incastQueueDropOut << std::fixed << std::setprecision(12)
+                     << "# Time (s) Drop type" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "Drop", MakeCallback(&LogIncastQueueDrop));
   incastQueue->TraceConnectWithoutContext(
@@ -560,7 +562,8 @@ main(int argc, char *argv[]) {
   uplinkQueueDropOut.open(
       outputDirectory + traceDirectory + "/log/uplink_queue_drop.log",
       std::ios::out);
-  uplinkQueueDropOut << "# Time (s) Drop type" << std::endl;
+  uplinkQueueDropOut << std::fixed << std::setprecision(12)
+                     << "# Time (s) Drop type" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "Drop", MakeCallback(&LogUplinkQueueDrop));
   uplinkQueue->TraceConnectWithoutContext(
@@ -630,7 +633,8 @@ main(int argc, char *argv[]) {
   burstTimesOut.open(
       outputDirectory + "/" + traceDirectory + "/log/flow_times.json",
       std::ios::out);
-  burstTimesOut << std::setw(4) << flowTimesJson << std::endl;
+  burstTimesOut << std::fixed << std::setprecision(12) << std::setw(4)
+                << flowTimesJson << std::endl;
   burstTimesOut.close();
 
   return 0;

@@ -305,7 +305,8 @@ IncastSender::WriteLogs() {
       m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
           std::to_string(GetNode()->GetId()) + "_cwnd.log",
       std::ios::out);
-  cwndOut << "# Time (s) CWND (bytes)" << std::endl;
+  cwndOut << std::fixed << std::setprecision(12) << "# Time (s) CWND (bytes)"
+          << std::endl;
   for (const auto &p : m_cwndLog) {
     cwndOut << p.first.GetSeconds() << " " << p.second << std::endl;
   }
@@ -316,7 +317,8 @@ IncastSender::WriteLogs() {
       m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
           std::to_string(GetNode()->GetId()) + "_rtt.log",
       std::ios::out);
-  rttOut << "# Time (s) RTT (us)" << std::endl;
+  rttOut << std::fixed << std::setprecision(12) << "# Time (s) RTT (us)"
+         << std::endl;
   for (const auto &p : m_rttLog) {
     rttOut << p.first.GetSeconds() << " " << p.second.GetMicroSeconds()
            << std::endl;
@@ -328,11 +330,11 @@ IncastSender::WriteLogs() {
       m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
           std::to_string(GetNode()->GetId()) + "_congest.log",
       std::ios::out);
-  congEstOut << "Time (s) BytesMarked BytesAcked Alpha" << std::endl;
+  congEstOut << std::fixed << std::setprecision(12)
+             << "Time (s) BytesMarked BytesAcked Alpha" << std::endl;
   for (const auto &entry : m_congEstLog) {
-    congEstOut << std::fixed << std::setprecision(9) << entry.time.GetSeconds()
-               << " " << entry.bytesMarked << " " << entry.bytesAcked << " "
-               << entry.alpha << std::endl;
+    congEstOut << entry.time.GetSeconds() << " " << entry.bytesMarked << " "
+               << entry.bytesAcked << " " << entry.alpha << std::endl;
   }
   congEstOut.close();
 }

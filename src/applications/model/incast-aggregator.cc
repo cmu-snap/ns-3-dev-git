@@ -29,6 +29,7 @@
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
 
+#include <iomanip>
 #include <unistd.h>
 
 NS_LOG_COMPONENT_DEFINE("IncastAggregator");
@@ -481,8 +482,8 @@ IncastAggregator::WriteLogs() {
       std::ios::out);
   burstTimesOut << "# Start time (s) End time (s)" << std::endl;
   for (const auto &p : m_burstTimesLog) {
-    burstTimesOut << p.first.GetSeconds() << " " << p.second.GetSeconds()
-                  << std::endl;
+    burstTimesOut << std::fixed << std::setprecision(12) << p.first.GetSeconds()
+                  << " " << p.second.GetSeconds() << std::endl;
   }
   burstTimesOut.close();
 
@@ -492,7 +493,8 @@ IncastAggregator::WriteLogs() {
       std::ios::out);
   cwndOut << "# Time (s) CWND (bytes)" << std::endl;
   for (const auto &p : m_cwndLog) {
-    cwndOut << p.first.GetSeconds() << " " << p.second << std::endl;
+    cwndOut << std::fixed << std::setprecision(12) << p.first.GetSeconds()
+            << " " << p.second << std::endl;
   }
   cwndOut.close();
 
@@ -502,8 +504,8 @@ IncastAggregator::WriteLogs() {
       std::ios::out);
   rttOut << "# Time (s) RTT (us)" << std::endl;
   for (const auto &p : m_rttLog) {
-    rttOut << p.first.GetSeconds() << " " << p.second.GetMicroSeconds()
-           << std::endl;
+    rttOut << std::fixed << std::setprecision(12) << p.first.GetSeconds() << " "
+           << p.second.GetMicroSeconds() << std::endl;
   }
   rttOut.close();
 }
