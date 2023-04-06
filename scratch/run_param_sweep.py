@@ -11,6 +11,14 @@ import threading
 import time
 
 
+# Global variables for tracking progress
+num_experiments: int = 0
+num_successes: int = 0
+num_failures: int = 0
+failures_path: str = ""
+progress_path: str = ""
+
+
 # Constants for calculations
 BASE_TO_MICRO: int = pow(10, 6)
 BASE_TO_MILLI: int = pow(10, 3)
@@ -80,6 +88,8 @@ class Params:
         self,
         bytesPerSender: int,
         cca: str,
+        delAckCount: int,
+        delAckTimeoutMs: int,
         jitterUs: int,
         largeLinkBandwidthMbps: int,
         largeQueueThresholdPackets: int,
@@ -95,6 +105,8 @@ class Params:
         self.time = int(time.time())
         self.bytesPerSender = bytesPerSender
         self.cca = cca
+        self.delAckCount = delAckCount
+        self.delAckTimeoutMs = delAckTimeoutMs
         self.jitterUs = jitterUs
         self.largeLinkBandwidthMbps = largeLinkBandwidthMbps
         self.largeQueueThresholdPackets = largeQueueThresholdPackets
@@ -106,9 +118,12 @@ class Params:
         self.smallQueueSizePackets = smallQueueSizePackets
         self.trial = trial
         self.outputDirectory = outputDirectory
+
         self.commandLineOptions = {
             "bytesPerSender": self.bytesPerSender,
             "cca": self.cca,
+            "delAckCount": self.delAckCount,
+            "delAckTimeoutMs": self.delAckTimeoutMs,
             "jitterUs": self.jitterUs,
             "largeLinkBandwidthMbps": self.largeLinkBandwidthMbps,
             "largeQueueMaxThresholdPackets": self.largeQueueThresholdPackets,
@@ -124,12 +139,21 @@ class Params:
             "outputDirectory": self.outputDirectory,
         }
 
+        self.cwd_path: str = os.getcwd()
+        self.trace_path: str = os.path.join(
+            self.cwd_path, self.outputDirectory, self.getTraceDirectory()
+        )
+        self.log_path: str = os.path.join(self.trace_path, "log")
+        self.pcap_path: str = os.path.join(self.trace_path, "pcap")
+
     def getTraceDirectory(self) -> str:
         elems: list[str] = [
             "traces",
             str(self.time),
             str(self.bytesPerSender),
             str(self.cca),
+            str(self.delAckCount),
+            str(self.delAckTimeoutMs),
             str(self.jitterUs),
             str(self.largeLinkBandwidthMbps),
             str(self.largeQueueThresholdPackets),
@@ -147,19 +171,12 @@ class Params:
         return "_".join(elems) + "/"
 
     def createDirectories(self):
-        cwd_path: str = os.getcwd()
-
-        self.trace_path: str = os.path.join(
-            cwd_path, self.outputDirectory, self.getTraceDirectory()
-        )
         if not os.path.exists(self.trace_path):
             os.makedirs(self.trace_path)
 
-        self.log_path: str = os.path.join(self.trace_path, "log")
         if not os.path.exists(self.log_path):
             os.makedirs(self.log_path)
 
-        self.pcap_path: str = os.path.join(self.trace_path, "pcap")
         if not os.path.exists(self.pcap_path):
             os.makedirs(self.pcap_path)
 
@@ -168,14 +185,16 @@ class Params:
             shutil.rmtree(self.trace_path)
 
     def writeConfig(self):
-        with open(self.trace_path + "config.json", "w") as f:
-            configDict = {}
+        with open(
+            file=self.trace_path + "config.json", mode="w", encoding="ascii"
+        ) as config_file:
+            config_dict = {}
 
             for k, v in self.commandLineOptions.items():
                 if "Directory" not in k:
-                    configDict[k] = v
+                    config_dict[k] = v
 
-            f.write(json.dumps(configDict, indent=4))
+            config_file.write(json.dumps(config_dict, indent=4))
 
     def getCommandLineOption(self, option: str) -> str:
         return f"--{option}={self.commandLineOptions[option]}"
@@ -189,24 +208,29 @@ class Params:
         return " ".join(run_command_args)
 
     def run(self) -> int:
-        with open(self.trace_path + "stderr.txt", "w") as stderr_file:
-            with open(self.trace_path + "stdout.txt", "w") as stdout_file:
+        with open(
+            file=self.trace_path + "stderr.txt", mode="w", encoding="ascii"
+        ) as stderr_file:
+            with open(
+                file=self.trace_path + "stdout.txt", mode="w", encoding="ascii"
+            ) as stdout_file:
                 return subprocess.run(
-                    self.getRunCommand(),
+                    args=self.getRunCommand(),
                     stdout=stdout_file,
                     stderr=stderr_file,
                     shell=True,
+                    check=False,
                 ).returncode
 
 
-if __name__ == "__main__":
+def main():
     # Read the parameter configurations from a file
     if len(sys.argv) != 2:
         print("Usage: python scratch/run_param_sweep.py <experiment_config_file>")
         exit(1)
 
-    with open(sys.argv[1], "r") as f:
-        experiment_config = json.load(f)
+    with open(file=sys.argv[1], mode="r", encoding="ascii") as experiment_config_file:
+        experiment_config = json.load(experiment_config_file)
 
     # Create sets for all parameter values
     burstDurationMs_set: set[int] = getLinearSet(
@@ -216,6 +240,14 @@ if __name__ == "__main__":
     delayPerLinkUs_set: set[int] = getLinearSet(
         experiment_config,
         "DELAY_PER_LINK_US",
+    )
+    delAckCount_set: set[int] = getLinearSet(
+        experiment_config,
+        "DEL_ACK_COUNT",
+    )
+    delAckTimeoutMs_set: set[int] = getLinearSet(
+        experiment_config,
+        "DEL_ACK_TIMEOUT_MS",
     )
     largeLinkBandwidthMbps_set: set[int] = getLinearSet(
         experiment_config,
@@ -242,6 +274,8 @@ if __name__ == "__main__":
     params_tuples = list(
         itertools.product(
             burstDurationMs_set,
+            delAckCount_set,
+            delAckTimeoutMs_set,
             delayPerLinkUs_set,
             largeLinkBandwidthMbps_set,
             numSenders_set,
@@ -257,6 +291,8 @@ if __name__ == "__main__":
 
     for (
         burstDurationMs,
+        delAckCount,
+        delAckTimeoutMs,
         delayPerLinkUs,
         largeLinkBandwidthMbps,
         numSenders,
@@ -293,6 +329,8 @@ if __name__ == "__main__":
                 Params(
                     bytesPerSender,
                     cca,
+                    delAckCount,
+                    delAckTimeoutMs,
                     jitterUs,
                     largeLinkBandwidthMbps,
                     largeQueueThresholdPackets,
@@ -312,18 +350,20 @@ if __name__ == "__main__":
     subprocess.call("./ns3 configure", shell=True)
     subprocess.call("./ns3 build scratch/incast.cc", shell=True)
 
+    # Track progress
     run_lock = threading.RLock()
-    num_experiments = len(params_set)
-    num_successes = 0
-    num_failures = 0
-
     cwd_path: str = os.getcwd()
-    failures_path: str = os.path.join(
+
+    global num_experiments, num_successes, num_failures
+    num_experiments = len(params_set)
+
+    global failures_path, progress_path
+    failures_path = os.path.join(
         cwd_path,
         experiment_config["OUTPUT_DIRECTORY"],
         "failures.txt",
     )
-    progress_path: str = os.path.join(
+    progress_path = os.path.join(
         cwd_path,
         experiment_config["OUTPUT_DIRECTORY"],
         "progress.txt",
@@ -331,7 +371,12 @@ if __name__ == "__main__":
 
     # Run an experiment
     def run(params: Params):
-        global failures_path, progress_path, num_experiments, num_successes, num_failures
+        global failures_path
+        global progress_path
+        global num_experiments
+        global num_successes
+        global num_failures
+
         params.createDirectories()
         params.writeConfig()
         returncode: int = params.run()
@@ -339,17 +384,23 @@ if __name__ == "__main__":
         with run_lock:
             if returncode != 0:
                 num_failures += 1
-                with open(failures_path, "w") as f:
-                    f.write(params.getRunCommand())
-                    f.write("\n")
+                with open(
+                    file=failures_path, mode="w", encoding="ascii"
+                ) as failures_file:
+                    failures_file.write(params.getRunCommand())
+                    failures_file.write("\n")
             else:
                 num_successes += 1
 
-            with open(progress_path, "w") as f:
-                f.write(f"num_successes: {num_successes}\n")
-                f.write(f"num_failures: {num_failures}\n")
-                f.write(f"num_experiments: {num_experiments}")
+            with open(file=progress_path, mode="w", encoding="ascii") as progress_file:
+                progress_file.write(f"num_successes: {num_successes}\n")
+                progress_file.write(f"num_failures: {num_failures}\n")
+                progress_file.write(f"num_experiments: {num_experiments}")
 
     # Run all experiments in parallel
     with ThreadPoolExecutor(experiment_config["NUM_PROCESSES"]) as executor:
         executor.map(run, params_set)
+
+
+if __name__ == "__main__":
+    main()
