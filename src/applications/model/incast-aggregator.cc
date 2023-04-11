@@ -402,7 +402,7 @@ IncastAggregator::SendRequest(Ptr<Socket> socket, bool createNewConn) {
 
   StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
 
-  NS_LOG_INFO(
+  NS_LOG_LOGIC(
       "Sending request to sender " << (*m_senders)[m_sockets[socket]].second);
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
