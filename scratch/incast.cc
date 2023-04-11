@@ -173,6 +173,9 @@ main(int argc, char *argv[]) {
   std::string traceDirectory = "trace_directory/";
   bool enableSenderPcap = false;
 
+  // Time to delay the request for the first sender in each burst.
+  uint32_t firstFlowOffsetMs = 0;
+
   // Define command line arguments
   CommandLine cmd;
   cmd.AddValue(
@@ -257,6 +260,13 @@ main(int argc, char *argv[]) {
       "enableSenderPcap",
       "Enable pcap traces for the senders",
       enableSenderPcap);
+  cmd.AddValue(
+      "firstFlowOffsetMs",
+      "Time to delay the request for the first sender in each burst (in "
+      "milliseconds). Overrides any jitter at the aggregator node. 0 means no "
+      "delay, and use jitter instead.",
+      firstFlowOffsetMs);
+
   cmd.Parse(argc, argv);
 
   // Check if the large link will be overwhelmed
@@ -475,6 +485,8 @@ main(int argc, char *argv[]) {
       "BandwidthMbps", UintegerValue(smallLinkBandwidthMbps));
   aggregatorApp->SetAttribute(
       "PhysicalRTT", TimeValue(MicroSeconds(6 * delayPerLinkUs)));
+  aggregatorApp->SetAttribute(
+      "FirstFlowOffset", TimeValue(MilliSeconds(firstFlowOffsetMs)));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications

@@ -122,7 +122,7 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SendRequest(Ptr<Socket> socket);
+  void SendRequest(Ptr<Socket> socket, bool createNewConn);
 
   /**
    * @brief TODO
@@ -166,7 +166,12 @@ class IncastAggregator : public Application {
 
   void CloseConnections();
 
-  void SetupConnection(Ipv4Address sender, bool isLast);
+  Ptr<Socket> SetupConnection(Ipv4Address sender, bool scheduleNextBurst);
+
+  /**
+   * @brief Look up the node ID of the first sender (lowest ID we know about).
+   */
+  uint32_t GetFirstSender();
 
   // Directory for all log and pcap traces
   std::string m_outputDirectory;
@@ -240,6 +245,11 @@ class IncastAggregator : public Application {
   // of SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
       *m_senders;
+
+  // Time to delay the request for the first sender in each burst (in
+  // milliseconds). Overrides any jitter at the aggregator node. 0 means no
+  // delay, and use jitter instead.
+  Time m_firstFlowOffset;
 };
 
 }  // namespace ns3

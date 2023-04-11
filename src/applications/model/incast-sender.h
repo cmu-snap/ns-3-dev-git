@@ -132,7 +132,7 @@ class IncastSender : public Application {
   // Address of the associated aggregator
   Ipv4Address m_aggregator;
 
-  // Socket for communication with the aggregator
+  // Socket for listening for connections from the aggregator
   Ptr<Socket> m_socket;
 
   // Max random jitter in microseconds

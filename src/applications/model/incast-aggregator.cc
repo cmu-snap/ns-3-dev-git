@@ -142,6 +142,12 @@ IncastAggregator::GetTypeId() {
               "Physical RTT",
               TimeValue(Seconds(0)),
               MakeTimeAccessor(&IncastAggregator::m_physicalRtt),
+              MakeTimeChecker())
+          .AddAttribute(
+              "FirstFlowOffset",
+              "Time to delay the request for the first sender in each burst.",
+              TimeValue(MilliSeconds(0)),
+              MakeTimeAccessor(&IncastAggregator::m_firstFlowOffset),
               MakeTimeChecker());
 
   return tid;
@@ -158,7 +164,8 @@ IncastAggregator::IncastAggregator()
       m_bandwidthMbps(0),
       m_physicalRtt(Seconds(0)),
       m_minRtt(Seconds(0)),
-      m_probingRtt(false) {
+      m_probingRtt(false),
+      m_firstFlowOffset(MilliSeconds(0)) {
   NS_LOG_FUNCTION(this);
 }
 
@@ -180,18 +187,16 @@ IncastAggregator::SetSenders(
   m_senders = senders;
 }
 
-void
-IncastAggregator::SetupConnection(Ipv4Address sender, bool isLast) {
-  NS_LOG_FUNCTION(this << " sender: " << sender << " isLast: " << isLast);
+Ptr<Socket>
+IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
+  NS_LOG_FUNCTION(
+      this << " sender: " << sender
+           << " scheduleNextBurst: " << scheduleNextBurst);
   NS_LOG_LOGIC("Aggregator: Setup connection to " << sender);
 
   Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
 
-  if (socket->GetSocketType() != Socket::NS3_SOCK_STREAM &&
-      socket->GetSocketType() != Socket::NS3_SOCK_SEQPACKET) {
-    NS_FATAL_ERROR(
-        "Only NS_SOCK_STREAM or NS_SOCK_SEQPACKET sockets are allowed.");
-  }
+  NS_ASSERT(socket->GetSocketType() == Socket::NS3_SOCK_STREAM);
 
   if (socket->Bind() == -1) {
     NS_FATAL_ERROR("Aggregator bind failed");
@@ -219,32 +224,30 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool isLast) {
   NS_ASSERT(nid != 0);
   m_sockets[socket] = nid;
 
-  if (socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
-    // Set the congestion control algorithm
-    Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-    ObjectFactory ccaFactory;
-    ccaFactory.SetTypeId(m_cca);
-    Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
-    tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
+  // Set the congestion control algorithm
+  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+  ObjectFactory ccaFactory;
+  ccaFactory.SetTypeId(m_cca);
+  Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
+  tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
-    // Enable tracing for the CWND
-    socket->TraceConnectWithoutContext(
-        "CongestionWindow", MakeCallback(&IncastAggregator::LogCwnd, this));
+  // Enable tracing for the CWND
+  socket->TraceConnectWithoutContext(
+      "CongestionWindow", MakeCallback(&IncastAggregator::LogCwnd, this));
 
-    // Enable tracing for the RTT
-    socket->TraceConnectWithoutContext(
-        "RTT", MakeCallback(&IncastAggregator::LogRtt, this));
+  // Enable tracing for the RTT
+  socket->TraceConnectWithoutContext(
+      "RTT", MakeCallback(&IncastAggregator::LogRtt, this));
 
-    // Enable TCP timestamp option
-    tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
-  } else {
-    NS_FATAL_ERROR("Only NS3_SOCK_STREAM sockets are supported");
-  }
+  // Enable TCP timestamp option
+  tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
 
-  if (isLast) {
+  if (scheduleNextBurst) {
     // Schedule the first burst
     ScheduleNextBurst();
   }
+
+  return socket;
 }
 
 void
@@ -345,23 +348,62 @@ IncastAggregator::StartBurst() {
   NS_LOG_INFO("Burst " << *m_currentBurstCount << " of " << m_numBursts);
 
   m_currentBurstStartTime = Simulator::Now();
+  uint32_t firstSender = GetFirstSender();
 
+  // Get a list of sockets so that we do not modify m_sockets while iterating
+  // over it.
+  std::vector<Ptr<Socket>> sockets;
   for (const auto &p : m_sockets) {
+    sockets.push_back(p.first);
+  }
+  NS_ASSERT(sockets.size() == m_senders->size());
+
+  // Send a request to each socket.
+  for (const auto &socket : sockets) {
+    // Whether this the sender gets offset.
+    bool offsetThisSender = m_sockets[socket] == firstSender &&
+                            m_firstFlowOffset.GetMilliSeconds() > 0;
+
     // Add jitter to each request
-    Time jitter;
-    if (m_requestJitterUs > 0) {
+    Time jitter = Seconds(0);
+    if (offsetThisSender) {
+      // Optionally delay the first sender. Allow 1ms for connection setup.
+      jitter = MilliSeconds(m_firstFlowOffset.GetMilliSeconds() - 1);
+    } else if (m_requestJitterUs > 0) {
       jitter = MicroSeconds(rand() % m_requestJitterUs);
     }
-    Simulator::Schedule(jitter, &IncastAggregator::SendRequest, this, p.first);
+
+    Simulator::Schedule(
+        jitter, &IncastAggregator::SendRequest, this, socket, offsetThisSender);
   }
 }
 
 void
-IncastAggregator::SendRequest(Ptr<Socket> socket) {
+IncastAggregator::SendRequest(Ptr<Socket> socket, bool createNewConn) {
   NS_LOG_FUNCTION(this << socket);
+
+  if (createNewConn) {
+    // Remove old socket from m_bytesReceived.
+    m_bytesReceived.erase(socket);
+    // Close old socket.
+    socket->Close();
+    Ptr<Socket> old_socket = socket;
+    // Create a new socket and add it to m_sockets.
+    socket = SetupConnection((*m_senders)[m_sockets[socket]].second, false);
+    // Remove the old socket from m_sockets.
+    m_sockets.erase(old_socket);
+    // Add the new socket to m_bytesReceived.
+    m_bytesReceived[socket] = 0;
+    // Give the socket time to do the handshake. Then call this function again.
+    Simulator::Schedule(
+        MilliSeconds(1), &IncastAggregator::SendRequest, this, socket, false);
+    return;
+  }
 
   StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
 
+  NS_LOG_INFO(
+      "Sending request to sender " << (*m_senders)[m_sockets[socket]].second);
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
   socket->Send(packet);
@@ -375,14 +417,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   // TODO: Write sender IP and port to config file
 
-  // TODO: Record start and end time for each sender
-
   // Maybe TODO: Plot CDF of CWND
-
-  // TODO: Add marks and drops to queue graphs
-
-  // TODO: Enable all logging, log to a file, and filter to find only the node
-  // we care about
 
   while ((packet = socket->Recv())) {
     auto size = packet->GetSize();
@@ -420,7 +455,8 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
     if (m_bytesReceived[socket] > m_bytesPerSender) {
       NS_LOG_ERROR(
-          "Aggregator: Received too many bytes from sender " << socket);
+          "Aggregator: Received too many bytes from sender "
+          << (*m_senders)[m_sockets[socket]].second);
     }
   }
 
@@ -602,6 +638,22 @@ IncastAggregator::SetFlowTimesRecord(
   NS_LOG_FUNCTION(this << flowTimes);
 
   m_flowTimes = flowTimes;
+}
+
+uint32_t
+IncastAggregator::GetFirstSender() {
+  NS_LOG_FUNCTION(this);
+  NS_ASSERT(m_senders != nullptr);
+  NS_ASSERT(m_senders->size() > 0);
+  // Create a list of node IDs.
+  std::vector<uint32_t> nids;
+  for (const auto &p : *m_senders) {
+    nids.push_back(p.first);
+  }
+  // Find the min node ID.
+  std::vector<uint32_t>::iterator result =
+      std::min_element(nids.begin(), nids.end());
+  return (*result);
 }
 
 }  // Namespace ns3
