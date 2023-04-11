@@ -36,9 +36,6 @@ NS_LOG_COMPONENT_DEFINE("IncastAggregator");
 
 namespace ns3 {
 
-const uint16_t MIN_RWND = 2000;
-const uint16_t MAX_RWND = 65535;
-
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
 /**
@@ -94,7 +91,7 @@ IncastAggregator::GetTypeId() {
           .AddAttribute(
               "BytesPerSender",
               "Number of bytes to request from each sender for each burst",
-              UintegerValue(1448),
+              UintegerValue(MSS),
               MakeUintegerAccessor(&IncastAggregator::m_bytesPerSender),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
@@ -158,7 +155,7 @@ IncastAggregator::GetTypeId() {
 
 IncastAggregator::IncastAggregator()
     : m_numBursts(10),
-      m_bytesPerSender(1448),
+      m_bytesPerSender(MSS),
       m_totalBytesSoFar(0),
       m_port(8888),
       m_requestJitterUs(0),

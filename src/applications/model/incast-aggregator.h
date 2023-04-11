@@ -36,6 +36,10 @@
 
 namespace ns3 {
 
+const uint16_t MSS = 1448;
+const uint16_t MIN_RWND = MSS;
+const uint16_t MAX_RWND = 65535;
+
 /**
  * @brief TODO
  */
