@@ -58,7 +58,15 @@
 			"ratio": "cpp",
 			"semaphore": "cpp",
 			"stop_token": "cpp",
-			"thread": "cpp"
+			"thread": "cpp",
+			"any": "cpp",
+			"codecvt": "cpp",
+			"cstddef": "cpp",
+			"forward_list": "cpp",
+			"numeric": "cpp",
+			"optional": "cpp",
+			"ranges": "cpp",
+			"valarray": "cpp"
 		}
 	}
 }
