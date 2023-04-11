@@ -160,7 +160,7 @@ IncastSender::StartApplication() {
   m_logPrefix = logPrefix.str();
 
   m_socket = Socket::CreateSocket(GetNode(), m_tid);
-  // Enable TCP timestamp option.
+
   if (m_socket->GetSocketType() == Socket::NS3_SOCK_STREAM) {
     Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(m_socket);
 
@@ -178,6 +178,7 @@ IncastSender::StartApplication() {
 
   InetSocketAddress local_address =
       InetSocketAddress(Ipv4Address::GetAny(), m_port);
+
   if (m_socket->Bind(local_address) == -1) {
     NS_FATAL_ERROR("Worker bind failed");
   }
@@ -205,9 +206,11 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
 
       // Add jitter to the first packet of the response
       Time jitter;
+
       if (m_responseJitterUs > 0) {
         jitter = MicroSeconds(rand() % m_responseJitterUs);
       }
+
       Simulator::Schedule(
           jitter, &IncastSender::SendBurst, this, socket, requestedBytes);
     } else if (size == 1) {
@@ -230,6 +233,7 @@ IncastSender::ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe) {
   packet->CopyData(buffer, packet->GetSize());
   uint32_t requestedBytes = *(uint32_t *)(buffer + containsRttProbe);
   delete[] buffer;
+
   return requestedBytes;
 }
 
@@ -307,9 +311,11 @@ IncastSender::WriteLogs() {
       std::ios::out);
   cwndOut << std::fixed << std::setprecision(12) << "# Time (s) CWND (bytes)"
           << std::endl;
+
   for (const auto &p : m_cwndLog) {
     cwndOut << p.first.GetSeconds() << " " << p.second << std::endl;
   }
+  
   cwndOut.close();
 
   std::ofstream rttOut;
@@ -319,10 +325,12 @@ IncastSender::WriteLogs() {
       std::ios::out);
   rttOut << std::fixed << std::setprecision(12) << "# Time (s) RTT (us)"
          << std::endl;
+
   for (const auto &p : m_rttLog) {
     rttOut << p.first.GetSeconds() << " " << p.second.GetMicroSeconds()
            << std::endl;
   }
+
   rttOut.close();
 
   std::ofstream congEstOut;
@@ -332,10 +340,12 @@ IncastSender::WriteLogs() {
       std::ios::out);
   congEstOut << std::fixed << std::setprecision(12)
              << "Time (s) BytesMarked BytesAcked Alpha" << std::endl;
+
   for (const auto &entry : m_congEstLog) {
     congEstOut << entry.time.GetSeconds() << " " << entry.bytesMarked << " "
                << entry.bytesAcked << " " << entry.alpha << std::endl;
   }
+
   congEstOut.close();
 }
 

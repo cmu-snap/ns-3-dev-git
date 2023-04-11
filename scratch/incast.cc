@@ -310,13 +310,11 @@ main(int argc, char *argv[]) {
   // Create links
   PointToPointHelper smallLinkHelper;
   smallLinkHelper.SetDeviceAttribute(
-
       "DataRate", smallLinkBandwidthMbpsStringValue);
   smallLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
   PointToPointHelper largeLinkHelper;
   largeLinkHelper.SetDeviceAttribute(
-
       "DataRate", largeLinkBandwidthMbpsStringValue);
   largeLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
@@ -457,13 +455,12 @@ main(int argc, char *argv[]) {
 
   // Global record which burst is currently running.
   uint32_t currentBurstCount = 0;
-  // Global record of senders, which maps sender node ID to a pair of SenderApp
-  // and sender IP address.
+  // Global record of senders, which maps the sender node ID to a pair of 
+  // SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
       senders;
-  // Global record of flow start and end times, which is a vector of bursts,
-  // where each entry is a maps from sender node ID to (start time, end time)
-  // pair.
+  // Global record of flow start and end times, which is a vector of burst info,
+  // where each entry maps the sender node ID to a (start time, end time) pair.
   std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>> flowTimes;
 
   // Create the aggregator application
@@ -509,6 +506,7 @@ main(int argc, char *argv[]) {
 
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
+
   aggregatorApp->SetSenders(&senders);
 
   NS_LOG_INFO("Enabling tracing...");
@@ -544,9 +542,7 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Running simulation...");
 
-  // Trace the queues
-  //
-  // Depth
+  // Trace queue depths
   incastQueueDepthOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_depth.log",
       std::ios::out);
@@ -561,7 +557,8 @@ main(int argc, char *argv[]) {
                       << "# Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
-  // Marks
+  
+  // Trace queue marks
   incastQueueMarkOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_mark.log",
       std::ios::out);
@@ -576,7 +573,8 @@ main(int argc, char *argv[]) {
                      << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogUplinkQueueMark));
-  // Drops
+  
+  // Trace queue drops
   incastQueueDropOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_drop.log",
       std::ios::out);
@@ -658,6 +656,7 @@ main(int argc, char *argv[]) {
     }
     flowTimesJson[std::to_string(i)] = burstJson;
   }
+  
   std::ofstream burstTimesOut;
   burstTimesOut.open(
       outputDirectory + "/" + traceDirectory + "/log/flow_times.json",

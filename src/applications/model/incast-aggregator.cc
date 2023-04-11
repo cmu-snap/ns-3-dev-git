@@ -36,6 +36,9 @@ NS_LOG_COMPONENT_DEFINE("IncastAggregator");
 
 namespace ns3 {
 
+const uint16_t MIN_RWND = 2000;
+const uint16_t MAX_RWND = 65535;
+
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
 /**
@@ -127,7 +130,7 @@ IncastAggregator::GetTypeId() {
           .AddAttribute(
               "StaticRwndBytes",
               "If RwndStrategy=static, then use this static RWND value",
-              UintegerValue(65535),
+              UintegerValue(MAX_RWND),
               MakeUintegerAccessor(&IncastAggregator::m_staticRwndBytes),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
@@ -160,7 +163,7 @@ IncastAggregator::IncastAggregator()
       m_port(8888),
       m_requestJitterUs(0),
       m_rwndStrategy("none"),
-      m_staticRwndBytes(65535),
+      m_staticRwndBytes(MAX_RWND),
       m_bandwidthMbps(0),
       m_physicalRtt(Seconds(0)),
       m_minRtt(Seconds(0)),
@@ -201,26 +204,30 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
   if (socket->Bind() == -1) {
     NS_FATAL_ERROR("Aggregator bind failed");
   }
+
   socket->SetRecvCallback(MakeCallback(&IncastAggregator::HandleRead, this));
 
   // Connect to each sender
   NS_LOG_LOGIC("Aggregator: Connect to " << sender);
   int err = socket->Connect(InetSocketAddress(sender, m_port));
+
   if (err != 0) {
     NS_FATAL_ERROR(
         "Aggregator connect to " << sender
                                  << " failed: " << socket->GetErrno());
   }
 
-  // Store a mapping from socket to sender node ID
   // Look up the node ID for this sender
   uint32_t nid = 0;
+
   for (const auto &p : *m_senders) {
     if (p.second.second == sender) {
       nid = p.first;
       break;
     }
   }
+
+  // Map the socket to the sender node ID
   NS_ASSERT(nid != 0);
   m_sockets[socket] = nid;
 
@@ -262,6 +269,7 @@ IncastAggregator::StartApplication() {
 
   // Setup a connection with each sender.
   uint32_t i = 0;
+
   for (const auto &p : *m_senders) {
     Simulator::Schedule(
         MilliSeconds(1 + i),
@@ -298,15 +306,18 @@ IncastAggregator::ScheduleNextBurst() {
   ++(*m_currentBurstCount);
   m_totalBytesSoFar = 0;
   m_sendersFinished = 0;
+
   for (const auto &p : m_sockets) {
     m_bytesReceived[p.first] = 0;
   }
+
   // Create a new entry in the flow times map for the next burst
   std::unordered_map<uint32_t, std::pair<Time, Time>> newFlowTimesEntry;
   m_flowTimes->push_back(newFlowTimesEntry);
 
   // Schedule the next burst for 1 second later
   Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
+  
   // Start the RTT probes 10ms before the next burst
   // Simulator::Schedule(
   //     MilliSeconds(990), &IncastAggregator::StartRttProbes, this);
@@ -464,6 +475,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
       "Aggregator: Received " << m_totalBytesSoFar << "/"
                               << m_bytesPerSender * m_senders->size()
                               << " bytes");
+
   if (m_totalBytesSoFar > m_bytesPerSender * m_senders->size()) {
     NS_LOG_ERROR("Aggregator: Received too many bytes");
   }
@@ -517,10 +529,12 @@ IncastAggregator::WriteLogs() {
       m_outputDirectory + "/" + m_traceDirectory + "/log/burst_times.log",
       std::ios::out);
   burstTimesOut << "# Start time (s) End time (s)" << std::endl;
+
   for (const auto &p : m_burstTimesLog) {
     burstTimesOut << std::fixed << std::setprecision(12) << p.first.GetSeconds()
                   << " " << p.second.GetSeconds() << std::endl;
   }
+
   burstTimesOut.close();
 
   std::ofstream cwndOut;
@@ -528,10 +542,12 @@ IncastAggregator::WriteLogs() {
       m_outputDirectory + "/" + m_traceDirectory + "/log/aggregator_cwnd.log",
       std::ios::out);
   cwndOut << "# Time (s) CWND (bytes)" << std::endl;
+
   for (const auto &p : m_cwndLog) {
     cwndOut << std::fixed << std::setprecision(12) << p.first.GetSeconds()
             << " " << p.second << std::endl;
   }
+
   cwndOut.close();
 
   std::ofstream rttOut;
@@ -539,10 +555,12 @@ IncastAggregator::WriteLogs() {
       m_outputDirectory + "/" + m_traceDirectory + "/log/aggregator_rtt.log",
       std::ios::out);
   rttOut << "# Time (s) RTT (us)" << std::endl;
+
   for (const auto &p : m_rttLog) {
     rttOut << std::fixed << std::setprecision(12) << p.first.GetSeconds() << " "
            << p.second.GetMicroSeconds() << std::endl;
   }
+
   rttOut.close();
 }
 
@@ -554,14 +572,20 @@ IncastAggregator::StaticRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
     return;
   }
 
-  // Set the RWND to 64KB for all sockets
-  if (m_staticRwndBytes < 2000 || m_staticRwndBytes > 65535) {
+  if (m_staticRwndBytes < MIN_RWND) {
     NS_FATAL_ERROR(
         "RWND tuning is only supported for values in the range [2000, "
         "65535]");
   }
 
   uint32_t rwndToSet = m_staticRwndBytes >> tcpSocket->GetRcvWindShift();
+
+  if (rwndToSet > MAX_RWND) {
+    NS_FATAL_ERROR(
+        "RWND tuning is only supported for values in the range [2000, "
+        "65535]");
+  }
+  
   NS_LOG_LOGIC(
       "StaticRwndTuning for socket: "
       << tcpSocket << " - Base RWND: " << m_staticRwndBytes << " bytes, Shift: "
@@ -577,6 +601,7 @@ IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
   if (m_rwndStrategy == "bdp+connections") {
     // Set RWND based on the number of the BDP and number of connections.
     Time rtt = tcpSocket->GetRttEstimator()->GetEstimate();
+
     if (rtt < m_physicalRtt) {
       NS_LOG_LOGIC("Aggregator: Invalid RTT sample.");
     } else {
@@ -586,6 +611,7 @@ IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
         m_minRtt = Min(m_minRtt, rtt);
       }
     }
+
     if (m_minRtt < m_physicalRtt) {
       NS_LOG_LOGIC(
           "Aggregator: Invalid or no minRtt measurement. Skipping RWND "
@@ -604,21 +630,24 @@ IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
         << ", Bandwidth: " << m_bandwidthMbps
         << " Mbps, Connections: " << numConns << ", BDP: " << bdpBytes
         << " bytes, RWND: " << rwndBytes << " bytes");
-    if (rwndBytes < 2000) {
+
+    if (rwndBytes < MIN_RWND) {
       NS_LOG_WARN(
           "Aggregator: RWND tuning is only supported for values >= 2KB, but "
           "chosen RWND "
           "is: "
           << rwndBytes << " bytes");
-      rwndBytes = std::max(rwndBytes, (uint16_t)2000u);
+      rwndBytes = std::max(rwndBytes, (uint16_t)MIN_RWND);
     }
-    if (rwndBytes > 65535) {
+
+    if (rwndBytes > MAX_RWND) {
       NS_LOG_WARN(
-          "Aggregator: RWND tuning is only supported for values <= 64KB, "
+          "Aggregator: RWND tuning is only supported for values <= 65KB, "
           "but chosen RWND is: "
           << rwndBytes << " bytes");
-      rwndBytes = std::min(rwndBytes, (uint16_t)65535u);
+      rwndBytes = std::min(rwndBytes, (uint16_t)MAX_RWND);
     }
+    
     NS_LOG_LOGIC(rwndBytes);
     tcpSocket->SetOverrideWindowSize(rwndBytes >> tcpSocket->GetRcvWindShift());
   }
