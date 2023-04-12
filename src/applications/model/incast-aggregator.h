@@ -30,7 +30,9 @@
 #include "ns3/ipv4-interface-container.h"
 #include "ns3/ptr.h"
 
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -177,7 +179,8 @@ class IncastAggregator : public Application {
 
   /**
    * @brief Perform scheduled RWND tuning. Allow at most
-   * m_rwndScheduleMaxTokens concurrent senders.
+   * m_rwndScheduleMaxTokens concurrent senders. If tcpSocket is not null,
+   * reclaim its token. Assign available tokens across senders.
    */
   void ScheduledRwndTuning(Ptr<TcpSocketBase> tcpSocket, bool socketDone);
 
@@ -189,6 +192,12 @@ class IncastAggregator : public Application {
    * @brief Look up the node ID of the first sender (lowest ID we know about).
    */
   uint32_t GetFirstSender();
+
+  /**
+   * @brief Calculate the total number of bytes expected to be received by all
+   * senders during a single burst.
+   */
+  uint32_t GetTotalExpectedBytesPerBurst();
 
   // Directory for all log and pcap traces
   std::string m_outputDirectory;
@@ -226,18 +235,23 @@ class IncastAggregator : public Application {
   // RWND tuning strategy to use [none, static, bdp+connections]
   std::string m_rwndStrategy;
 
-  // If m_rwndStrategy=static, then use this static RWND value
+  // If m_rwndStrategy=static, then use this static RWND value.
   uint32_t m_staticRwndBytes;
 
-  // The max number of tokens that can be claimed at once. Used to reset
-  // m_rwndScheduleAvailableTokens.
+  // If m_rwndStrategy=bdp+connections, then this is the bottleneck bandwidth.
+  uint32_t m_bandwidthMbps;
+
+  // If m_rwndStrategy=static, then this is the max number of tokens that can be
+  // claimed at once. Used to reset m_rwndScheduleAvailableTokens.
   uint32_t m_rwndScheduleMaxTokens;
 
-  // The current number of tokens that can be claimed.
+  // If m_rwndStrategy=static, then this is the current number of tokens that
+  // can be claimed.
   uint32_t m_rwndScheduleAvailableTokens;
 
-  // TODO
-  uint32_t m_bandwidthMbps;
+  // If m_rwndStrategy=static, then this is the set of senders (node ID) that
+  // have claimed a token.
+  std::unordered_set<uint32_t> m_sendersWithAToken;
 
   // Assumes that all senders have the same RTT.
   Time m_physicalRtt;

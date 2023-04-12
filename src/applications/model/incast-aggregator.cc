@@ -29,7 +29,10 @@
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
 
+#include <algorithm>
+#include <fstream>
 #include <iomanip>
+#include <iostream>
 #include <unistd.h>
 
 NS_LOG_COMPONENT_DEFINE("IncastAggregator");
@@ -137,6 +140,13 @@ IncastAggregator::GetTypeId() {
               "bottleneck bandwidth",
               UintegerValue(0),
               MakeUintegerAccessor(&IncastAggregator::m_bandwidthMbps),
+              MakeUintegerChecker<uint32_t>())
+          .AddAttribute(
+              "RwndScheduleMaxTokens",
+              "If RwndStrategy==scheduled, then this is the max number of "
+              "senders that are allowed to transmit concurrently.",
+              UintegerValue(20),
+              MakeUintegerAccessor(&IncastAggregator::m_rwndScheduleMaxTokens),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "PhysicalRTT",
@@ -264,6 +274,8 @@ IncastAggregator::StartApplication() {
   // Make sure that the burst index pointer is defined and set to 0.
   NS_ASSERT(m_currentBurstCount != nullptr && *m_currentBurstCount == 0);
   NS_ASSERT(m_senders != nullptr);
+  // Make sure that we are not tracking any sockets.
+  m_sockets.clear();
 
   NS_LOG_LOGIC("Aggregator: num senders: " << m_senders->size());
 
@@ -279,6 +291,13 @@ IncastAggregator::StartApplication() {
         i == m_senders->size() - 1);
     ++i;
   }
+
+  // Fill the available tokens.
+  NS_LOG_LOGIC(
+      "Aggregator: Fill available tokens: " << m_rwndScheduleMaxTokens);
+  m_rwndScheduleAvailableTokens = m_rwndScheduleMaxTokens;
+  // Make sure that no tokens are assigned.
+  m_sendersWithAToken.clear();
 }
 
 void
@@ -361,6 +380,12 @@ IncastAggregator::StartBurst() {
   m_currentBurstStartTime = Simulator::Now();
   uint32_t firstSender = GetFirstSender();
 
+  // Make sure that at the start of a burst, all tokens are available.
+  NS_ASSERT(m_rwndScheduleAvailableTokens == m_rwndScheduleMaxTokens);
+  NS_ASSERT(m_sendersWithAToken.empty());
+  // If doing scheduled RWND tuning, then assign initial tokens.
+  ScheduledRwndTuning(nullptr, false);
+
   // Get a list of sockets so that we do not modify m_sockets while iterating
   // over it.
   std::vector<Ptr<Socket>> sockets;
@@ -391,7 +416,8 @@ IncastAggregator::StartBurst() {
 
 void
 IncastAggregator::SendRequest(Ptr<Socket> socket, bool createNewConn) {
-  NS_LOG_FUNCTION(this << socket);
+  NS_LOG_FUNCTION(
+      this << " socket: " << socket << " createNewConn: " << createNewConn);
 
   if (createNewConn) {
     // Remove old socket from m_bytesReceived.
@@ -411,7 +437,15 @@ IncastAggregator::SendRequest(Ptr<Socket> socket, bool createNewConn) {
     return;
   }
 
-  StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
+  // If we are doing scheduled RWND tuning and this sender has not been assigned
+  // a token, then we need to set the RWND to 0
+  if (m_rwndStrategy == "scheduled" &&
+      m_sendersWithAToken.find(m_sockets[socket]) ==
+          m_sendersWithAToken.end()) {
+    SafelySetRwnd(DynamicCast<TcpSocketBase>(socket), 0, true);
+  } else {
+    StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
+  }
 
   NS_LOG_LOGIC(
       "Sending request to sender " << (*m_senders)[m_sockets[socket]].second);
@@ -427,10 +461,6 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
   Ptr<Packet> packet;
 
   // TODO: Write sender IP and port to config file
-
-  // Maybe TODO: Plot CDF of CWND
-
-  // TODO: Assign initial tokens
 
   while ((packet = socket->Recv())) {
     auto size = packet->GetSize();
@@ -478,16 +508,19 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   NS_LOG_LOGIC(
       "Aggregator: Received " << m_totalBytesSoFar << "/"
-                              << m_bytesPerSender * m_senders->size()
-                              << " bytes");
+                              << GetTotalExpectedBytesPerBurst() << " bytes");
 
-  if (m_totalBytesSoFar > m_bytesPerSender * m_senders->size()) {
+  if (m_totalBytesSoFar > GetTotalExpectedBytesPerBurst()) {
     NS_LOG_ERROR("Aggregator: Received too many bytes");
   }
 
   if (m_sendersFinished == m_senders->size()) {
     NS_LOG_INFO("Burst done.");
     m_burstTimesLog.push_back({m_currentBurstStartTime, Simulator::Now()});
+
+    // Make sure that at the end of a burst, all tokens are available.
+    NS_ASSERT(m_rwndScheduleAvailableTokens == m_rwndScheduleMaxTokens);
+    NS_ASSERT(m_sendersWithAToken.empty());
 
     ScheduleNextBurst();
     Simulator::Schedule(
@@ -596,6 +629,11 @@ IncastAggregator::SafelySetRwnd(
   }
 
   tcpSocket->SetOverrideWindowSize(rwndScaled);
+  NS_LOG_LOGIC(
+      "Aggregator: Set RWND for sender "
+      << (*m_senders)[m_sockets[tcpSocket]].second << " ("
+      << m_sockets[tcpSocket] << ") "
+      << " to " << rwndBytes << " bytes (scaled=" << rwndScaled << ")");
 }
 
 void
@@ -661,31 +699,78 @@ IncastAggregator::ScheduledRwndTuning(
     return;
   }
 
-  // If the socket is done...
-  if (socketDone) {
-    // ...increment the available tokens.
+  // If the socket is done, then reclaim its token.
+  if (tcpSocket != nullptr && socketDone) {
+    // Make sure that this sender actually had a token.
+    NS_ASSERT_MSG(
+        m_sendersWithAToken.find(m_sockets[tcpSocket]) !=
+            m_sendersWithAToken.end(),
+        "Sender " << (*m_senders)[m_sockets[tcpSocket]].second << " ("
+                  << m_sockets[tcpSocket]
+                  << ") is attempting to release a token it does not own.");
+
+    // Increment the available tokens.
     m_rwndScheduleAvailableTokens++;
-    // ..set the connection's RWND to 0 to prevent it from sending at the
+    m_sendersWithAToken.erase(m_sockets[tcpSocket]);
+
+    // Set the connection's RWND to 0 to prevent it from sending at the
     // beginning of the next burst.
     SafelySetRwnd(tcpSocket, 0, true);
+
+    NS_LOG_LOGIC(
+        "Aggregator: Socket "
+        << tcpSocket << " is done. Reclaimed "
+        << "its token. Available tokens: " << m_rwndScheduleAvailableTokens);
   }
+
   // Make sure that the number of tokens is valid.
   NS_ASSERT(m_rwndScheduleAvailableTokens <= m_rwndScheduleMaxTokens);
+  NS_LOG_LOGIC(
+      "Aggregator: Available tokens: "
+      << m_rwndScheduleAvailableTokens
+      << " Max tokens: " << m_rwndScheduleMaxTokens
+      << " Senders with a token: " << m_sendersWithAToken.size());
+  NS_ASSERT(
+      m_sendersWithAToken.size() ==
+      m_rwndScheduleMaxTokens - m_rwndScheduleAvailableTokens);
 
-  // If we have tokens available...
-  while (m_rwndScheduleAvailableTokens > 0) {
-    // Look through the list of sockets and try to assign a token to one.
-    for (auto &p : m_sockets) {
-      // If this socket is not done yet, assign is a token...
-      if (m_bytesReceived[p.first] < m_bytesPerSender) {
-        // ...decrement the number of available tokens.
-        m_rwndScheduleAvailableTokens--;
-        // ...set the socket's RWND to the configured value.
-        SafelySetRwnd(
-            DynamicCast<TcpSocketBase>(p.first), m_staticRwndBytes, false);
-      }
+  // Look through the list of sockets and try to assign a token to one.
+  for (auto &p : m_sockets) {
+    // If no tokens are available, then abort.
+    if (m_rwndScheduleAvailableTokens == 0) {
+      break;
     }
+
+    // If this socket is done already, then skip it.
+    if (m_bytesReceived[p.first] >= m_bytesPerSender) {
+      continue;
+    }
+
+    // If this socket already has a token, then skip it.
+    if (m_sendersWithAToken.find(m_sockets[p.first]) !=
+        m_sendersWithAToken.end()) {
+      continue;
+    }
+
+    // Assign this sender a token.
+    // Decrement the available tokens.
+    m_rwndScheduleAvailableTokens--;
+    m_sendersWithAToken.insert(m_sockets[p.first]);
+    // Set the socket's RWND to the configured value.
+    SafelySetRwnd(
+        DynamicCast<TcpSocketBase>(p.first), m_staticRwndBytes, false);
+
+    NS_LOG_LOGIC(
+        "Aggregator: Assigned token to sender "
+        << (*m_senders)[m_sockets[p.first]].second << " (" << m_sockets[p.first]
+        << "). Available "
+           "tokens: "
+        << m_rwndScheduleAvailableTokens);
   }
+
+  NS_ASSERT(
+      m_sendersWithAToken.size() ==
+      m_rwndScheduleMaxTokens - m_rwndScheduleAvailableTokens);
 }
 
 void
@@ -718,6 +803,12 @@ IncastAggregator::GetFirstSender() {
   std::vector<uint32_t>::iterator result =
       std::min_element(nids.begin(), nids.end());
   return (*result);
+}
+
+uint32_t
+IncastAggregator::GetTotalExpectedBytesPerBurst() {
+  NS_LOG_FUNCTION(this);
+  return m_bytesPerSender * m_senders->size();
 }
 
 }  // Namespace ns3

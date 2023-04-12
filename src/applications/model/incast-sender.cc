@@ -242,6 +242,9 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(
       this << " socket: " << socket << " totalBytes: " << totalBytes);
 
+  // TODO: Update start time to be when the first packet is actually sent to
+  // make graphs meaningful for scheduled RWND strategy.
+
   // Record the start time for this flow in the current burst
   (*m_flowTimes)[*m_currentBurstCount - 1][GetNode()->GetId()] = {
       Simulator::Now(), Seconds(0)};
@@ -315,7 +318,7 @@ IncastSender::WriteLogs() {
   for (const auto &p : m_cwndLog) {
     cwndOut << p.first.GetSeconds() << " " << p.second << std::endl;
   }
-  
+
   cwndOut.close();
 
   std::ofstream rttOut;

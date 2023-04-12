@@ -1401,7 +1401,7 @@ class TcpSocketBase : public TcpSocket
         0}; //!< Sequence number of the last received Congestion Experienced
     TracedValue<SequenceNumber32> m_ecnCWRSeq{0}; //!< Sequence number of the last sent CWR
 
-    uint16_t m_overrideWindowSize{0}; //!< Override the receiver advertised window size (0 == do not override)
+    uint16_t m_overrideWindowSize{65535}; //!< Override the receiver advertised window size (65535 == do not override)
 };
 
 /**

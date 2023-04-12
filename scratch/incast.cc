@@ -167,6 +167,7 @@ main(int argc, char *argv[]) {
   // Parameters for RWND tuning
   std::string rwndStrategy = "none";
   uint32_t staticRwndBytes = 65535;
+  uint32_t rwndScheduleMaxConns = 20;
 
   // Parameters for tracing
   std::string outputDirectory = "scratch/traces/";
@@ -256,6 +257,11 @@ main(int argc, char *argv[]) {
       "staticRwndBytes",
       "If --rwndStrategy=static, then use this static RWND value",
       staticRwndBytes);
+  cmd.AddValue(
+      "rwndScheduleMaxConns",
+      "If RwndStrategy==scheduled, then this is the max number of senders that "
+      "are allowed to transmit concurrently.",
+      rwndScheduleMaxConns);
   cmd.AddValue(
       "enableSenderPcap",
       "Enable pcap traces for the senders",
@@ -480,6 +486,8 @@ main(int argc, char *argv[]) {
       "StaticRwndBytes", UintegerValue(staticRwndBytes));
   aggregatorApp->SetAttribute(
       "BandwidthMbps", UintegerValue(smallLinkBandwidthMbps));
+  aggregatorApp->SetAttribute(
+      "RwndScheduleMaxTokens", UintegerValue(rwndScheduleMaxConns));
   aggregatorApp->SetAttribute(
       "PhysicalRTT", TimeValue(MicroSeconds(6 * delayPerLinkUs)));
   aggregatorApp->SetAttribute(

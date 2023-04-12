@@ -26,6 +26,7 @@
 #include "ns3/inet-socket-address.h"
 #include "ns3/ipv4-interface-container.h"
 
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -119,9 +120,6 @@ class IncastSender : public Application {
 
   // Sub-directory for this experiment's log and pcap traces
   std::string m_traceDirectory;
-
-  // Node ID of the sender
-  uint32_t m_nid;
 
   // TCP port for all applications
   uint16_t m_port;

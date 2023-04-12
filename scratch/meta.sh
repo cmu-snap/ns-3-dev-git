@@ -11,8 +11,9 @@ if [ "$#" -ne 1 ]; then
 fi
 
 burstDurationMs=15
-numBursts=5
-numSenders=200 # $((5 + 1))
+numBursts=3
+# Retransmits during slow start begin at 214 connections.
+numSenders=2000 # $((5 + 1))
 cca="TcpDctcp"
 nicRateMbps=12500
 uplinkRateMbps=100000
@@ -27,21 +28,39 @@ thresholdPackets="$(python -c "import math; print(math.ceil($metaQueueThresholdB
 bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numSenders))")"
 icwnd=10
 firstFlowOffsetMs=0 # 10
-rwndStrategy="none"
-staticRwndBytes=100000
+rwndStrategy="scheduled"
+staticRwndBytes=1000000
+rwndScheduleMaxTokens=40
 
 out_dir="$1"
-dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B"
+dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxTokens}tokens"
+tmpfs="$out_dir"/tmpfs
+tmpfs_results_dir="$tmpfs/$dir_name"
 results_dir="$out_dir/$dir_name"
-rm -rfv "${results_dir:?}"
-mkdir -p "$results_dir/"{log,pcap}
 
+# If $tmpfs exists, then clean it up
+if [ -d "$tmpfs" ]; then
+    rm -rf "${tmpfs:?}"/*
+    # Check if $tmpfs is a mountpoint
+    if mountpoint -q "$tmpfs"; then
+        sudo umount -v "$tmpfs"
+    fi
+    rmdir -v "$tmpfs"
+fi
+
+# Prepare tmpfs
+rm -rf "$tmpfs"
+mkdir -pv "$tmpfs"
+sudo mount -v -t tmpfs none "$tmpfs" -o size=10G
+
+rm -rfv "${tmpfs_results_dir:?}" "${results_dir:?}"
+mkdir -p "$tmpfs_results_dir/"{log,pcap}
+
+# Run simulation
 ns3_dir="$(realpath "$(dirname "$0")/..")"
-
 "$ns3_dir/ns3" build "scratch/incast"
-
 "$ns3_dir"/build/scratch/ns3-dev-incast-default \
-    --outputDirectory="$out_dir/" \
+    --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
     --numSenders=$numSenders \
     --bytesPerSender="$bytesPerSender" \
@@ -60,6 +79,18 @@ ns3_dir="$(realpath "$(dirname "$0")/..")"
     --initialCwnd=$icwnd \
     --firstFlowOffsetMs=$firstFlowOffsetMs \
     --rwndStrategy=$rwndStrategy \
-    --staticRwndBytes=$staticRwndBytes
+    --staticRwndBytes=$staticRwndBytes \
+    --rwndScheduleMaxTokens=$rwndScheduleMaxTokens
+
+# Move results to out_dir
+mkdir -pv "$out_dir"
+mv -f "$tmpfs_results_dir" "$results_dir"
+
+# Clean up tmpfs
+rm -rf "${tmpfs:?}"/*
+# umount claims the mountpoint is busy, so sleep for a bit
+sleep 1
+sudo umount -v "$tmpfs"
+rmdir -v "$tmpfs"
 
 echo "Results in: $results_dir"
