@@ -250,7 +250,7 @@ main(int argc, char *argv[]) {
       largeQueueMaxThresholdPackets);
   cmd.AddValue(
       "rwndStrategy",
-      "RWND tuning strategy to use [none, static, bdp+connections]",
+      "RWND tuning strategy to use [none, static, bdp+connections, scheduled]",
       rwndStrategy);
   cmd.AddValue(
       "staticRwndBytes",
@@ -455,7 +455,7 @@ main(int argc, char *argv[]) {
 
   // Global record which burst is currently running.
   uint32_t currentBurstCount = 0;
-  // Global record of senders, which maps the sender node ID to a pair of 
+  // Global record of senders, which maps the sender node ID to a pair of
   // SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
       senders;
@@ -557,7 +557,7 @@ main(int argc, char *argv[]) {
                       << "# Time (s) qlen (pkts)" << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogUplinkQueueDepth));
-  
+
   // Trace queue marks
   incastQueueMarkOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_mark.log",
@@ -573,7 +573,7 @@ main(int argc, char *argv[]) {
                      << std::endl;
   uplinkQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogUplinkQueueMark));
-  
+
   // Trace queue drops
   incastQueueDropOut.open(
       outputDirectory + traceDirectory + "/log/incast_queue_drop.log",
@@ -656,7 +656,7 @@ main(int argc, char *argv[]) {
     }
     flowTimesJson[std::to_string(i)] = burstJson;
   }
-  
+
   std::ofstream burstTimesOut;
   burstTimesOut.open(
       outputDirectory + "/" + traceDirectory + "/log/flow_times.json",

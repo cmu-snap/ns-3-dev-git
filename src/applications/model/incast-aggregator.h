@@ -159,6 +159,13 @@ class IncastAggregator : public Application {
   void SendRttProbe();
 
   /**
+   * @brief Set a socket's advertised window, making sure it's in the valid
+   * range.
+   */
+  void SafelySetRwnd(
+      Ptr<TcpSocketBase> tcpSocket, uint32_t rwndBytes, bool allowBelowMinRwnd);
+
+  /**
    * @brief Perform static RWND tuning. To be used on connection setup.
    */
   void StaticRwndTuning(Ptr<TcpSocketBase> tcpSocket);
@@ -167,6 +174,12 @@ class IncastAggregator : public Application {
    * @brief Perform dynamic RWND tuning. To be used after every read.
    */
   void DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket);
+
+  /**
+   * @brief Perform scheduled RWND tuning. Allow at most
+   * m_rwndScheduleMaxTokens concurrent senders.
+   */
+  void ScheduledRwndTuning(Ptr<TcpSocketBase> tcpSocket, bool socketDone);
 
   void CloseConnections();
 
@@ -216,6 +229,13 @@ class IncastAggregator : public Application {
   // If m_rwndStrategy=static, then use this static RWND value
   uint32_t m_staticRwndBytes;
 
+  // The max number of tokens that can be claimed at once. Used to reset
+  // m_rwndScheduleAvailableTokens.
+  uint32_t m_rwndScheduleMaxTokens;
+
+  // The current number of tokens that can be claimed.
+  uint32_t m_rwndScheduleAvailableTokens;
+
   // TODO
   uint32_t m_bandwidthMbps;
 
@@ -240,13 +260,13 @@ class IncastAggregator : public Application {
   // Number of senders that have finished the current burst
   uint32_t m_sendersFinished;
 
-  // Pointer to the global record of flow start and end times, which is a vector
-  // of bursts, where each entry is a maps from sender node ID to (start time,
-  // end time) pair.
+  // Pointer to the global record of flow start and end times, which is a
+  // vector of bursts, where each entry is a maps from sender node ID to
+  // (start time, end time) pair.
   std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>> *m_flowTimes;
 
-  // Point to the global record of senders, which maps sender node ID to a pair
-  // of SenderApp and sender IP address.
+  // Point to the global record of senders, which maps sender node ID to a
+  // pair of SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
       *m_senders;
 

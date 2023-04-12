@@ -12,7 +12,7 @@ fi
 
 burstDurationMs=15
 numBursts=5
-numSenders=214 # $((5 + 1))
+numSenders=200 # $((5 + 1))
 cca="TcpDctcp"
 nicRateMbps=12500
 uplinkRateMbps=100000
@@ -27,9 +27,11 @@ thresholdPackets="$(python -c "import math; print(math.ceil($metaQueueThresholdB
 bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numSenders))")"
 icwnd=10
 firstFlowOffsetMs=0 # 10
+rwndStrategy="none"
+staticRwndBytes=100000
 
 out_dir="$1"
-dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset"
+dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B"
 results_dir="$out_dir/$dir_name"
 rm -rfv "${results_dir:?}"
 mkdir -p "$results_dir/"{log,pcap}
@@ -56,6 +58,8 @@ ns3_dir="$(realpath "$(dirname "$0")/..")"
     --largeQueueMinThresholdPackets="$thresholdPackets" \
     --largeQueueMaxThresholdPackets="$thresholdPackets" \
     --initialCwnd=$icwnd \
-    --firstFlowOffsetMs=$firstFlowOffsetMs
+    --firstFlowOffsetMs=$firstFlowOffsetMs \
+    --rwndStrategy=$rwndStrategy \
+    --staticRwndBytes=$staticRwndBytes
 
 echo "Results in: $results_dir"

@@ -120,7 +120,8 @@ IncastAggregator::GetTypeId() {
               MakeTypeIdChecker())
           .AddAttribute(
               "RwndStrategy",
-              "RWND tuning strategy to use [none, static, bdp+connections]",
+              "RWND tuning strategy to use [none, static, bdp+connections, "
+              "scheduled]",
               StringValue("none"),
               MakeStringAccessor(&IncastAggregator::m_rwndStrategy),
               MakeStringChecker())
@@ -149,6 +150,8 @@ IncastAggregator::GetTypeId() {
               TimeValue(MilliSeconds(0)),
               MakeTimeAccessor(&IncastAggregator::m_firstFlowOffset),
               MakeTimeChecker());
+
+  // TODO: Need to configure scheduled RWND tuning parameters.
 
   return tid;
 }
@@ -314,7 +317,7 @@ IncastAggregator::ScheduleNextBurst() {
 
   // Schedule the next burst for 1 second later
   Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
-  
+
   // Start the RTT probes 10ms before the next burst
   // Simulator::Schedule(
   //     MilliSeconds(990), &IncastAggregator::StartRttProbes, this);
@@ -427,6 +430,8 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   // Maybe TODO: Plot CDF of CWND
 
+  // TODO: Assign initial tokens
+
   while ((packet = socket->Recv())) {
     auto size = packet->GetSize();
     m_totalBytesSoFar += size;
@@ -435,7 +440,10 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     DynamicRwndTuning(DynamicCast<TcpSocketBase>(socket));
   }
 
-  if (m_bytesReceived[socket] >= m_bytesPerSender) {
+  bool socketDone = m_bytesReceived[socket] >= m_bytesPerSender;
+  ScheduledRwndTuning(DynamicCast<TcpSocketBase>(socket), socketDone);
+
+  if (socketDone) {
     ++m_sendersFinished;
 
     // Record when this flow finished.
@@ -562,6 +570,35 @@ IncastAggregator::WriteLogs() {
 }
 
 void
+IncastAggregator::SafelySetRwnd(
+    Ptr<TcpSocketBase> tcpSocket, uint32_t rwndBytes, bool allowBelowMinRwnd) {
+  NS_LOG_FUNCTION(
+      this << " tcpSocket: " << tcpSocket << " rwndBytes: " << rwndBytes
+           << " allowBelowMinRwnd: " << allowBelowMinRwnd);
+
+  if (!allowBelowMinRwnd && rwndBytes < MIN_RWND) {
+    NS_LOG_WARN(
+        "Aggregator: RWND tuning is only supported for values >= 2KB, but "
+        "chosen RWND "
+        "is: "
+        << rwndBytes << " bytes");
+    rwndBytes = std::max(rwndBytes, (uint32_t)MIN_RWND);
+  }
+
+  uint32_t rwndScaled = rwndBytes >> tcpSocket->GetRcvWindShift();
+
+  if (rwndScaled > MAX_RWND) {
+    NS_LOG_WARN(
+        "Aggregator: RWND tuning is only supported for values <= 65KB, "
+        "but chosen RWND is: "
+        << rwndScaled << " bytes");
+    rwndScaled = std::min(rwndScaled, (uint32_t)MAX_RWND);
+  }
+
+  tcpSocket->SetOverrideWindowSize(rwndScaled);
+}
+
+void
 IncastAggregator::StaticRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
   NS_LOG_FUNCTION(this << tcpSocket);
 
@@ -569,84 +606,85 @@ IncastAggregator::StaticRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
     return;
   }
 
-  if (m_staticRwndBytes < MIN_RWND) {
-    NS_FATAL_ERROR(
-        "RWND tuning is only supported for values in the range [2000, "
-        "65535]");
-  }
-
-  uint32_t rwndToSet = m_staticRwndBytes >> tcpSocket->GetRcvWindShift();
-
-  if (rwndToSet > MAX_RWND) {
-    NS_FATAL_ERROR(
-        "RWND tuning is only supported for values in the range [2000, "
-        "65535]");
-  }
-  
-  NS_LOG_LOGIC(
-      "StaticRwndTuning for socket: "
-      << tcpSocket << " - Base RWND: " << m_staticRwndBytes << " bytes, Shift: "
-      << tcpSocket->GetRcvWindShift() << " to set: " << rwndToSet);
-
-  tcpSocket->SetOverrideWindowSize(rwndToSet);
+  SafelySetRwnd(tcpSocket, m_staticRwndBytes, false);
 }
 
 void
 IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
   NS_LOG_FUNCTION(this << tcpSocket);
 
-  if (m_rwndStrategy == "bdp+connections") {
-    // Set RWND based on the number of the BDP and number of connections.
-    Time rtt = tcpSocket->GetRttEstimator()->GetEstimate();
+  if (m_rwndStrategy != "bdp+connections") {
+    return;
+  }
+  // Set RWND based on the number of the BDP and number of connections.
+  Time rtt = tcpSocket->GetRttEstimator()->GetEstimate();
 
-    if (rtt < m_physicalRtt) {
-      NS_LOG_LOGIC("Aggregator: Invalid RTT sample.");
+  if (rtt < m_physicalRtt) {
+    NS_LOG_LOGIC("Aggregator: Invalid RTT sample.");
+  } else {
+    if (m_minRtt == Seconds(0)) {
+      m_minRtt = rtt;
     } else {
-      if (m_minRtt == Seconds(0)) {
-        m_minRtt = rtt;
-      } else {
-        m_minRtt = Min(m_minRtt, rtt);
+      m_minRtt = Min(m_minRtt, rtt);
+    }
+  }
+
+  if (m_minRtt < m_physicalRtt) {
+    NS_LOG_LOGIC(
+        "Aggregator: Invalid or no minRtt measurement. Skipping RWND "
+        "tuning.");
+    return;
+  }
+
+  // auto rtt = tcpSocket->GetTcpSocketState()->m_minRtt;
+  auto bdpBytes = rtt.GetSeconds() * m_bandwidthMbps * pow(10, 6) / 8;
+  auto numConns = m_sockets.size();
+  uint16_t rwndBytes = (uint16_t)std::floor(bdpBytes / numConns);
+
+  NS_LOG_LOGIC(
+      "Aggregator: minRtt: "
+      << m_minRtt.As(Time::US) << ", srtt: " << rtt.As(Time::US)
+      << ", Bandwidth: " << m_bandwidthMbps
+      << " Mbps, Connections: " << numConns << ", BDP: " << bdpBytes
+      << " bytes, RWND: " << rwndBytes << " bytes");
+
+  SafelySetRwnd(tcpSocket, rwndBytes, false);
+}
+
+void
+IncastAggregator::ScheduledRwndTuning(
+    Ptr<TcpSocketBase> tcpSocket, bool socketDone) {
+  NS_LOG_FUNCTION(
+      this << " tcpSocket: " << tcpSocket << " socketDone: " << socketDone);
+
+  if (m_rwndStrategy != "scheduled") {
+    return;
+  }
+
+  // If the socket is done...
+  if (socketDone) {
+    // ...increment the available tokens.
+    m_rwndScheduleAvailableTokens++;
+    // ..set the connection's RWND to 0 to prevent it from sending at the
+    // beginning of the next burst.
+    SafelySetRwnd(tcpSocket, 0, true);
+  }
+  // Make sure that the number of tokens is valid.
+  NS_ASSERT(m_rwndScheduleAvailableTokens <= m_rwndScheduleMaxTokens);
+
+  // If we have tokens available...
+  while (m_rwndScheduleAvailableTokens > 0) {
+    // Look through the list of sockets and try to assign a token to one.
+    for (auto &p : m_sockets) {
+      // If this socket is not done yet, assign is a token...
+      if (m_bytesReceived[p.first] < m_bytesPerSender) {
+        // ...decrement the number of available tokens.
+        m_rwndScheduleAvailableTokens--;
+        // ...set the socket's RWND to the configured value.
+        SafelySetRwnd(
+            DynamicCast<TcpSocketBase>(p.first), m_staticRwndBytes, false);
       }
     }
-
-    if (m_minRtt < m_physicalRtt) {
-      NS_LOG_LOGIC(
-          "Aggregator: Invalid or no minRtt measurement. Skipping RWND "
-          "tuning.");
-      return;
-    }
-
-    // auto rtt = tcpSocket->GetTcpSocketState()->m_minRtt;
-    auto bdpBytes = rtt.GetSeconds() * m_bandwidthMbps * pow(10, 6) / 8;
-    auto numConns = m_sockets.size();
-    uint16_t rwndBytes = (uint16_t)std::floor(bdpBytes / numConns);
-
-    NS_LOG_LOGIC(
-        "Aggregator: minRtt: "
-        << m_minRtt.As(Time::US) << ", srtt: " << rtt.As(Time::US)
-        << ", Bandwidth: " << m_bandwidthMbps
-        << " Mbps, Connections: " << numConns << ", BDP: " << bdpBytes
-        << " bytes, RWND: " << rwndBytes << " bytes");
-
-    if (rwndBytes < MIN_RWND) {
-      NS_LOG_WARN(
-          "Aggregator: RWND tuning is only supported for values >= 2KB, but "
-          "chosen RWND "
-          "is: "
-          << rwndBytes << " bytes");
-      rwndBytes = std::max(rwndBytes, (uint16_t)MIN_RWND);
-    }
-
-    if (rwndBytes > MAX_RWND) {
-      NS_LOG_WARN(
-          "Aggregator: RWND tuning is only supported for values <= 65KB, "
-          "but chosen RWND is: "
-          << rwndBytes << " bytes");
-      rwndBytes = std::min(rwndBytes, (uint16_t)MAX_RWND);
-    }
-    
-    NS_LOG_LOGIC(rwndBytes);
-    tcpSocket->SetOverrideWindowSize(rwndBytes >> tcpSocket->GetRcvWindShift());
   }
 }
 
