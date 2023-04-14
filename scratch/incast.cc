@@ -467,7 +467,7 @@ main(int argc, char *argv[]) {
       senders;
   // Global record of flow start and end times, which is a vector of burst info,
   // where each entry maps the sender node ID to a (start time, end time) pair.
-  std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>> flowTimes;
+  std::vector<std::unordered_map<uint32_t, std::vector<Time>>> flowTimes;
 
   // Create the aggregator application
   Ptr<IncastAggregator> aggregatorApp = CreateObject<IncastAggregator>();
@@ -610,6 +610,8 @@ main(int argc, char *argv[]) {
 
   // Write application output files
   aggregatorApp->WriteLogs();
+  // This must take place before writing the flowTimes json below because this
+  // function fills in the firstPacket time in the flowTimes data structure.
   for (const auto &p : senders) {
     p.second.first->WriteLogs();
   }
@@ -648,7 +650,9 @@ main(int argc, char *argv[]) {
         << " (" << burstDuration.GetSeconds() / idealBurstDurationSec << "x)");
   }
 
-  // Serialize the flow times to a JSON file.
+  // Serialize the flow times to a JSON file. This must take place after writing
+  // the sender logs, above, because that function fills in the firstPacket time
+  // in the flowTimes data structure.
   nlohmann::json flowTimesJson;
   for (uint32_t i = 0; i < flowTimes.size(); ++i) {
     nlohmann::json burstJson;
@@ -659,8 +663,9 @@ main(int argc, char *argv[]) {
 
       burstJson[ipStr.str()] = {
           {"id", flow.first},
-          {"start", flow.second.first.GetSeconds()},
-          {"end", flow.second.second.GetSeconds()}};
+          {"start", flow.second[0].GetSeconds()},
+          {"firstPacket", flow.second[1].GetSeconds()},
+          {"end", flow.second[2].GetSeconds()}};
     }
     flowTimesJson[std::to_string(i)] = burstJson;
   }

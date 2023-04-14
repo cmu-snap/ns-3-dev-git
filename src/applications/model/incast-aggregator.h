@@ -79,8 +79,7 @@ class IncastAggregator : public Application {
   void SetCurrentBurstCount(uint32_t *currentBurstCount);
 
   void SetFlowTimesRecord(
-      std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
-          *flowTimes);
+      std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *flowTimes);
 
  protected:
   /**
@@ -276,8 +275,8 @@ class IncastAggregator : public Application {
 
   // Pointer to the global record of flow start and end times, which is a
   // vector of bursts, where each entry is a maps from sender node ID to
-  // (start time, end time) pair.
-  std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>> *m_flowTimes;
+  // (start time, time of first packet, end time).
+  std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *m_flowTimes;
 
   // Point to the global record of senders, which maps sender node ID to a
   // pair of SenderApp and sender IP address.

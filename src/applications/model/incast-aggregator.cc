@@ -331,7 +331,7 @@ IncastAggregator::ScheduleNextBurst() {
   }
 
   // Create a new entry in the flow times map for the next burst
-  std::unordered_map<uint32_t, std::pair<Time, Time>> newFlowTimesEntry;
+  std::unordered_map<uint32_t, std::vector<Time>> newFlowTimesEntry;
   m_flowTimes->push_back(newFlowTimesEntry);
 
   // Schedule the next burst for 1 second later
@@ -477,7 +477,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     ++m_sendersFinished;
 
     // Record when this flow finished.
-    (*m_flowTimes)[*m_currentBurstCount - 1][m_sockets[socket]].second =
+    (*m_flowTimes)[*m_currentBurstCount - 1][m_sockets[socket]][2] =
         Simulator::Now();
 
     NS_LOG_INFO(
@@ -782,8 +782,7 @@ IncastAggregator::SetCurrentBurstCount(uint32_t *currentBurstCount) {
 
 void
 IncastAggregator::SetFlowTimesRecord(
-    std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
-        *flowTimes) {
+    std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *flowTimes) {
   NS_LOG_FUNCTION(this << flowTimes);
 
   m_flowTimes = flowTimes;

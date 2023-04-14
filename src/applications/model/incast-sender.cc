@@ -80,6 +80,14 @@ IncastSender::LogCongEst(
   m_congEstLog.push_back(entry);
 }
 
+void
+IncastSender::LogTx(
+    Ptr<const Packet> packet,
+    const TcpHeader &tcpHeader,
+    Ptr<const TcpSocketBase> tcpSocket) {
+  m_txLog.push_back(Simulator::Now());
+}
+
 TypeId
 IncastSender::GetTypeId() {
   static TypeId tid =
@@ -247,7 +255,7 @@ IncastSender::SendBurst(Ptr<Socket> socket, uint32_t totalBytes) {
 
   // Record the start time for this flow in the current burst
   (*m_flowTimes)[*m_currentBurstCount - 1][GetNode()->GetId()] = {
-      Simulator::Now(), Seconds(0)};
+      Simulator::Now(), Seconds(0), Seconds(0)};
 
   size_t sentBytes = 0;
 
@@ -283,8 +291,12 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   socket->TraceConnectWithoutContext(
       "RTT", MakeCallback(&IncastSender::LogRtt, this));
 
+  // Enable tracing for packet transmit times.
+  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+  tcpSocket->TraceConnectWithoutContext(
+      "Tx", MakeCallback(&IncastSender::LogTx, this));
+
   if (m_cca.GetName() == "ns3::TcpDctcp") {
-    Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
     PointerValue congOpsValue;
     tcpSocket->GetAttribute("CongestionOps", congOpsValue);
     Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
@@ -350,6 +362,45 @@ IncastSender::WriteLogs() {
   }
 
   congEstOut.close();
+
+  std::ofstream txOut;
+  txOut.open(
+      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
+          std::to_string(GetNode()->GetId()) + "_tx.log",
+      std::ios::out);
+  txOut << std::fixed << std::setprecision(12) << "Time (s)" << std::endl;
+
+  for (const auto &time : m_txLog) {
+    txOut << time.GetSeconds() << std::endl;
+  }
+
+  txOut.close();
+
+  // // For each burst, look up the time of the first packet sent by this flow.
+  // for (int burst_idx = 0; burst_idx <
+  // (*m_flowTimes)[GetNode()->GetId()].size();
+  //      ++burst_idx) {
+  //   std::vector<Time> burst_times =
+  //       (*m_flowTimes)[GetNode()->GetId()][burst_idx];
+  //   NS_LOG_INFO(burst_times.size());
+  //   NS_ASSERT(burst_times.size() == 3);
+  //   Time target_start_time = burst_times[0];
+  //   bool found = false;
+  //   // Find the tx time of the first packet in this burst
+  //   for (const auto &tx_time : m_txLog) {
+  //     if (tx_time >= target_start_time) {
+  //       // Record the start time for this flow in the current burst
+  //       burst_times[1] = tx_time;
+  //       found = true;
+  //       break;
+  //     }
+  //   }
+  //   if (!found) {
+  //     NS_FATAL_ERROR(
+  //         "Could not find tx time for flow " << GetNode()->GetId()
+  //                                            << " in burst " << burst_idx);
+  //   }
+  // }
 }
 
 void
@@ -361,8 +412,7 @@ IncastSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
 
 void
 IncastSender::SetFlowTimesRecord(
-    std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
-        *flowTimes) {
+    std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *flowTimes) {
   NS_LOG_FUNCTION(this << flowTimes);
 
   m_flowTimes = flowTimes;

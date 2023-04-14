@@ -25,6 +25,8 @@
 #include "ns3/application.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/ipv4-interface-container.h"
+#include "ns3/tcp-header.h"
+#include "ns3/tcp-socket-base.h"
 
 #include <string>
 #include <unordered_map>
@@ -59,8 +61,7 @@ class IncastSender : public Application {
   void SetCurrentBurstCount(uint32_t *currentBurstCount);
 
   void SetFlowTimesRecord(
-      std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>>
-          *flowTimes);
+      std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *flowTimes);
 
  protected:
   void DoDispose() override;
@@ -83,6 +84,11 @@ class IncastSender : public Application {
   void LogRtt(Time oldRtt, Time newRtt);
 
   void LogCongEst(uint32_t bytesMarked, uint32_t bytesAcked, double alpha);
+
+  void LogTx(
+      Ptr<const Packet> packet,
+      const TcpHeader &tcpHeader,
+      Ptr<const TcpSocketBase> tcpSocket);
 
   /**
    * @brief TODO
@@ -151,6 +157,7 @@ class IncastSender : public Application {
 
   std::vector<std::pair<Time, Time>> m_rttLog;
   std::vector<struct congEstEntry> m_congEstLog;
+  std::vector<Time> m_txLog;
 
   // Prefix to prepend to all NS_LOG_* messages
   std::string m_logPrefix;
@@ -160,8 +167,8 @@ class IncastSender : public Application {
 
   // Pointer to the global record of flow start and end times, which is a vector
   // of bursts, where each entry is a maps from sender node ID to (start time,
-  // end time) pair.
-  std::vector<std::unordered_map<uint32_t, std::pair<Time, Time>>> *m_flowTimes;
+  // time of first packet, end time).
+  std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *m_flowTimes;
 };
 
 }  // namespace ns3
