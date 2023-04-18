@@ -346,8 +346,8 @@ def main():
             )
 
     # Build NS3
-    subprocess.call("./ns3 clean", shell=True)
-    subprocess.call("./ns3 configure", shell=True)
+    # subprocess.call("./ns3 clean", shell=True)
+    # subprocess.call("./ns3 configure", shell=True)
     subprocess.call("./ns3 build scratch/incast.cc", shell=True)
 
     # Track progress
@@ -391,6 +391,17 @@ def main():
                     failures_file.write("\n")
             else:
                 num_successes += 1
+
+            outputDirectory: str = experiment_config["OUTPUT_DIRECTORY"]
+            traceDirectory: str = params.getTraceDirectory()
+            outputTraceDirectory: str = f"{outputDirectory}{traceDirectory}"
+            outputTarName: str = outputTraceDirectory[:-1]
+
+            subprocess.run(
+                args=f"tar -czf {outputTarName}.tar.gz {outputTraceDirectory}",
+                shell=True
+            )
+            subprocess.run(args=f"rm -rf {outputTraceDirectory}", shell=True)
 
             with open(file=progress_path, mode="w", encoding="ascii") as progress_file:
                 progress_file.write(f"num_successes: {num_successes}\n")
