@@ -159,7 +159,13 @@ IncastAggregator::GetTypeId() {
               "Time to delay the request for the first sender in each burst.",
               TimeValue(MilliSeconds(0)),
               MakeTimeAccessor(&IncastAggregator::m_firstFlowOffset),
-              MakeTimeChecker());
+              MakeTimeChecker())
+          .AddAttribute(
+              "DctcpShiftG",
+              "Parameter G for updating dctcp_alpha",
+              DoubleValue(0.0625),
+              MakeDoubleAccessor(&IncastAggregator::m_dctcpShiftG),
+              MakeDoubleChecker<double>(0, 1));
 
   // TODO: Need to configure scheduled RWND tuning parameters.
 
@@ -178,7 +184,8 @@ IncastAggregator::IncastAggregator()
       m_physicalRtt(Seconds(0)),
       m_minRtt(Seconds(0)),
       m_probingRtt(false),
-      m_firstFlowOffset(MilliSeconds(0)) {
+      m_firstFlowOffset(MilliSeconds(0)),
+      m_dctcpShiftG(0.0625) {
   NS_LOG_FUNCTION(this);
 }
 
@@ -247,6 +254,15 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
   ccaFactory.SetTypeId(m_cca);
   Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
   tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
+
+  // Set DctcpShiftG.
+  if (m_cca.GetName() == "ns3::TcpDctcp") {
+    PointerValue congOpsValue;
+    tcpSocket->GetAttribute("CongestionOps", congOpsValue);
+    Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
+    Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
+    dctcp->SetAttribute("DctcpShiftG", DoubleValue(m_dctcpShiftG));
+  }
 
   // Enable tracing for the CWND
   socket->TraceConnectWithoutContext(
@@ -564,7 +580,7 @@ IncastAggregator::WriteLogs() {
 
   std::ofstream burstTimesOut;
   burstTimesOut.open(
-      m_outputDirectory + "/" + m_traceDirectory + "/log/burst_times.log",
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/burst_times.log",
       std::ios::out);
   burstTimesOut << "# Start time (s) End time (s)" << std::endl;
 
@@ -577,7 +593,7 @@ IncastAggregator::WriteLogs() {
 
   std::ofstream cwndOut;
   cwndOut.open(
-      m_outputDirectory + "/" + m_traceDirectory + "/log/aggregator_cwnd.log",
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/aggregator_cwnd.log",
       std::ios::out);
   cwndOut << "# Time (s) CWND (bytes)" << std::endl;
 
@@ -590,7 +606,7 @@ IncastAggregator::WriteLogs() {
 
   std::ofstream rttOut;
   rttOut.open(
-      m_outputDirectory + "/" + m_traceDirectory + "/log/aggregator_rtt.log",
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/aggregator_rtt.log",
       std::ios::out);
   rttOut << "# Time (s) RTT (us)" << std::endl;
 

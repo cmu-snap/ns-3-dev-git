@@ -287,6 +287,9 @@ class IncastAggregator : public Application {
   // milliseconds). Overrides any jitter at the aggregator node. 0 means no
   // delay, and use jitter instead.
   Time m_firstFlowOffset;
+
+  // Parameter G for updating dctcp_alpha.
+  double m_dctcpShiftG;
 };
 
 }  // namespace ns3

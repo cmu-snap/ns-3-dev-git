@@ -135,13 +135,20 @@ IncastSender::GetTypeId() {
               "Aggregator to send packets to",
               Ipv4AddressValue(),
               MakeIpv4AddressAccessor(&IncastSender::m_aggregator),
-              MakeIpv4AddressChecker());
+              MakeIpv4AddressChecker())
+          .AddAttribute(
+              "DctcpShiftG",
+              "Parameter G for updating dctcp_alpha",
+              DoubleValue(0.0625),
+              MakeDoubleAccessor(&IncastSender::m_dctcpShiftG),
+              MakeDoubleChecker<double>(0, 1));
 
   return tid;
 }
 
 IncastSender::IncastSender()
-    : m_socket(nullptr) {
+    : m_socket(nullptr),
+      m_dctcpShiftG(0.0625) {
   NS_LOG_FUNCTION(this);
 }
 
@@ -301,6 +308,11 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
     tcpSocket->GetAttribute("CongestionOps", congOpsValue);
     Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
     Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
+
+    // Set DctcpShiftG.
+    dctcp->SetAttribute("DctcpShiftG", DoubleValue(m_dctcpShiftG));
+
+    // Enable tracing for the congestion estimate.
     dctcp->TraceConnectWithoutContext(
         "CongestionEstimate", MakeCallback(&IncastSender::LogCongEst, this));
   }
@@ -321,7 +333,7 @@ IncastSender::WriteLogs() {
 
   std::ofstream cwndOut;
   cwndOut.open(
-      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/sender" +
           std::to_string(GetNode()->GetId()) + "_cwnd.log",
       std::ios::out);
   cwndOut << std::fixed << std::setprecision(12) << "# Time (s) CWND (bytes)"
@@ -335,7 +347,7 @@ IncastSender::WriteLogs() {
 
   std::ofstream rttOut;
   rttOut.open(
-      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/sender" +
           std::to_string(GetNode()->GetId()) + "_rtt.log",
       std::ios::out);
   rttOut << std::fixed << std::setprecision(12) << "# Time (s) RTT (us)"
@@ -350,11 +362,11 @@ IncastSender::WriteLogs() {
 
   std::ofstream congEstOut;
   congEstOut.open(
-      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/sender" +
           std::to_string(GetNode()->GetId()) + "_congest.log",
       std::ios::out);
   congEstOut << std::fixed << std::setprecision(12)
-             << "Time (s) BytesMarked BytesAcked Alpha" << std::endl;
+             << "# Time (s) BytesMarked BytesAcked Alpha" << std::endl;
 
   for (const auto &entry : m_congEstLog) {
     congEstOut << entry.time.GetSeconds() << " " << entry.bytesMarked << " "
@@ -365,10 +377,10 @@ IncastSender::WriteLogs() {
 
   std::ofstream txOut;
   txOut.open(
-      m_outputDirectory + "/" + m_traceDirectory + "/log/sender" +
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/sender" +
           std::to_string(GetNode()->GetId()) + "_tx.log",
       std::ios::out);
-  txOut << std::fixed << std::setprecision(12) << "Time (s)" << std::endl;
+  txOut << std::fixed << std::setprecision(12) << "# Time (s)" << std::endl;
 
   for (const auto &time : m_txLog) {
     txOut << time.GetSeconds() << std::endl;

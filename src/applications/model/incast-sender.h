@@ -169,6 +169,9 @@ class IncastSender : public Application {
   // of bursts, where each entry is a maps from sender node ID to (start time,
   // time of first packet, end time).
   std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *m_flowTimes;
+
+  // Parameter G for updating dctcp_alpha.
+  double m_dctcpShiftG;
 };
 
 }  // namespace ns3

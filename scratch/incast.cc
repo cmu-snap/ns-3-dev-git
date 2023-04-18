@@ -151,6 +151,7 @@ main(int argc, char *argv[]) {
   uint32_t delAckCount = 1;
   uint32_t delAckTimeoutMs = 0;
   uint32_t initialCwndSegments = 10;
+  double dctcpShiftG = 0.0625;
 
   // Parameters for the small links (ToR to node)
   uint32_t smallLinkBandwidthMbps = 12500;
@@ -213,6 +214,8 @@ main(int argc, char *argv[]) {
       "initialCwnd",
       "The initial congestion window size (in segments)",
       initialCwndSegments);
+  cmd.AddValue(
+      "dctcpShiftG", "Parameter G for updating dctcp_alpha", dctcpShiftG);
   cmd.AddValue(
       "smallLinkBandwidthMbps",
       "Small link bandwidth (in Mbps)",
@@ -492,6 +495,7 @@ main(int argc, char *argv[]) {
       "PhysicalRTT", TimeValue(MicroSeconds(6 * delayPerLinkUs)));
   aggregatorApp->SetAttribute(
       "FirstFlowOffset", TimeValue(MilliSeconds(firstFlowOffsetMs)));
+  aggregatorApp->SetAttribute("DctcpShiftG", DoubleValue(dctcpShiftG));
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
@@ -511,7 +515,7 @@ main(int argc, char *argv[]) {
     senderApp->SetAttribute(
         "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
     senderApp->SetStartTime(Seconds(1.0));
-
+    senderApp->SetAttribute("DctcpShiftG", DoubleValue(dctcpShiftG));
     dumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
 
@@ -548,18 +552,16 @@ main(int argc, char *argv[]) {
                          << " MB, Total data: " << totalBytes / megaToBase
                          << " MB");
 
-  NS_LOG_INFO("Running simulation...");
-
   // Trace queue depths
   incastQueueDepthOut.open(
-      outputDirectory + traceDirectory + "/log/incast_queue_depth.log",
+      outputDirectory + traceDirectory + "/logs/incast_queue_depth.log",
       std::ios::out);
   incastQueueDepthOut << std::fixed << std::setprecision(12)
                       << "# Time (s) qlen (pkts)" << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "PacketsInQueue", MakeCallback(&LogIncastQueueDepth));
   uplinkQueueDepthOut.open(
-      outputDirectory + traceDirectory + "/log/uplink_queue_depth.log",
+      outputDirectory + traceDirectory + "/logs/uplink_queue_depth.log",
       std::ios::out);
   uplinkQueueDepthOut << std::fixed << std::setprecision(12)
                       << "# Time (s) qlen (pkts)" << std::endl;
@@ -568,14 +570,14 @@ main(int argc, char *argv[]) {
 
   // Trace queue marks
   incastQueueMarkOut.open(
-      outputDirectory + traceDirectory + "/log/incast_queue_mark.log",
+      outputDirectory + traceDirectory + "/logs/incast_queue_mark.log",
       std::ios::out);
   incastQueueMarkOut << std::fixed << std::setprecision(12) << "# Time (s)"
                      << std::endl;
   incastQueue->TraceConnectWithoutContext(
       "Mark", MakeCallback(&LogIncastQueueMark));
   uplinkQueueMarkOut.open(
-      outputDirectory + traceDirectory + "/log/uplink_queue_mark.log",
+      outputDirectory + traceDirectory + "/logs/uplink_queue_mark.log",
       std::ios::out);
   uplinkQueueMarkOut << std::fixed << std::setprecision(12) << "# Time (s)"
                      << std::endl;
@@ -584,7 +586,7 @@ main(int argc, char *argv[]) {
 
   // Trace queue drops
   incastQueueDropOut.open(
-      outputDirectory + traceDirectory + "/log/incast_queue_drop.log",
+      outputDirectory + traceDirectory + "/logs/incast_queue_drop.log",
       std::ios::out);
   incastQueueDropOut << std::fixed << std::setprecision(12)
                      << "# Time (s) Drop type" << std::endl;
@@ -595,7 +597,7 @@ main(int argc, char *argv[]) {
   incastQueue->TraceConnectWithoutContext(
       "DropAfterDequeue", MakeCallback(&LogIncastQueueDropAfterDequeue));
   uplinkQueueDropOut.open(
-      outputDirectory + traceDirectory + "/log/uplink_queue_drop.log",
+      outputDirectory + traceDirectory + "/logs/uplink_queue_drop.log",
       std::ios::out);
   uplinkQueueDropOut << std::fixed << std::setprecision(12)
                      << "# Time (s) Drop type" << std::endl;
@@ -606,7 +608,47 @@ main(int argc, char *argv[]) {
   uplinkQueue->TraceConnectWithoutContext(
       "DropAfterDequeue", MakeCallback(&LogUplinkQueueDropAfterDequeue));
 
+  // Serialize all configuration parameters to a JSON file
+  nlohmann::json configJson;
+  configJson["outputDirectory"] = outputDirectory;
+  configJson["traceDirectory"] = traceDirectory;
+  configJson["cca"] = tcpTypeId;
+  configJson["numBursts"] = numBursts;
+  configJson["numSenders"] = numSenders;
+  configJson["bytesPerSender"] = bytesPerSender;
+  configJson["jitterUs"] = jitterUs;
+  configJson["segmentSizeBytes"] = segmentSizeBytes;
+  configJson["delAckCount"] = delAckCount;
+  configJson["delAckTimeoutMs"] = delAckTimeoutMs;
+  configJson["initialCwnd"] = initialCwndSegments;
+  configJson["dctcpShiftG"] = dctcpShiftG;
+  configJson["smallLinkBandwidthMbps"] = smallLinkBandwidthMbps;
+  configJson["largeLinkBandwidthMbps"] = largeLinkBandwidthMbps;
+  configJson["delayPerLinkUs"] = delayPerLinkUs;
+  configJson["smallQueueSizePackets"] = smallQueueSizePackets;
+  configJson["smallQueueMinThresholdPackets"] = smallQueueMinThresholdPackets;
+  configJson["smallQueueMaxThresholdPackets"] = smallQueueMaxThresholdPackets;
+  configJson["largeQueueSizePackets"] = largeQueueSizePackets;
+  configJson["largeQueueMinThresholdPackets"] = largeQueueMinThresholdPackets;
+  configJson["largeQueueMaxThresholdPackets"] = largeQueueMaxThresholdPackets;
+  configJson["rwndStrategy"] = rwndStrategy;
+  configJson["staticRwndBytes"] = staticRwndBytes;
+  configJson["rwndScheduleMaxConns"] = rwndScheduleMaxConns;
+  configJson["enableSenderPcap"] = enableSenderPcap;
+  configJson["firstFlowOffsetMs"] = firstFlowOffsetMs;
+
+  std::ofstream configOut;
+  configOut.open(
+      outputDirectory + "/" + traceDirectory + "/config.json", std::ios::out);
+  configOut << std::fixed << std::setprecision(12) << std::setw(4) << configJson
+            << std::endl;
+  configOut.close();
+
+  NS_LOG_INFO("Running simulation...");
+
   Simulator::Run();
+
+  NS_LOG_INFO("Finished simulation.");
 
   // Write application output files
   aggregatorApp->WriteLogs();
@@ -624,8 +666,6 @@ main(int argc, char *argv[]) {
   uplinkQueueMarkOut.close();
   incastQueueDropOut.close();
   uplinkQueueDropOut.close();
-
-  NS_LOG_INFO("Finished simulation.");
 
   // Compute the ideal and actual burst durations
   uint32_t numBitsPerByte = 8;
@@ -672,7 +712,7 @@ main(int argc, char *argv[]) {
 
   std::ofstream burstTimesOut;
   burstTimesOut.open(
-      outputDirectory + "/" + traceDirectory + "/log/flow_times.json",
+      outputDirectory + "/" + traceDirectory + "/logs/flow_times.json",
       std::ios::out);
   burstTimesOut << std::fixed << std::setprecision(12) << std::setw(4)
                 << flowTimesJson << std::endl;

@@ -20,20 +20,39 @@ uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
 metaQueueSizeBytes=1800000
-metaQueueThresholdBytes=120000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($metaQueueSizeBytes / $bytesPerPacket))")"
-thresholdPackets="$(python -c "import math; print(math.ceil($metaQueueThresholdBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
 bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numSenders))")"
 icwnd=10
 firstFlowOffsetMs=0
-rwndStrategy="scheduled"
+rwndStrategy="none"
 staticRwndBytes=1000000
 rwndScheduleMaxConns=20
+delAckCount=2
+delAckTimeoutMs=2
+
+# Pick the right ECN marking threshold.
+nicRatePps="$(python -c "print($nicRateMbps * 1e6 / 8 / $bytesPerPacket)")"
+rttSec="$(python -c "print($delayPerLinkUs * 6 / 1e6)")"
+# recommendedThresholdPackets="$(python -c "print($nicRatePps * $rttSec / 7)")"
+# thresholdPackets="$(python -c "import math; print(math.ceil($recommendedThresholdPackets))")"
+# Meta threshold:
+metaQueueThresholdBytes=120000
+thresholdPackets="$(python -c "import math; print(math.ceil($metaQueueThresholdBytes / $bytesPerPacket))")"
+
+# Pick the right DCTCP G parameter.
+recommendedG="$(python -c "import math; print(1.386 / math.sqrt(2 * ($nicRatePps * $rttSec + $thresholdPackets)))")"
+dctcpShiftGExpRaw="$(python -c "import math; print(math.log(1 / $recommendedG, 2))")"
+dctcpShiftGExp="$(python -c "import math; print(math.ceil($dctcpShiftGExpRaw))")"
+# Meta G:
+# dctcpShiftGExp=4
+# More reactive:
+# dctcpShiftGExp=2
+dctcpShiftG="$(python -c "print(1 / 2**$dctcpShiftGExp)")"
 
 out_dir="$1"
-dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens"
+dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
 # We will store in-progress results in a tmpfs and move them to the final
 # location later.
 tmpfs="$out_dir"/tmpfs
@@ -57,7 +76,7 @@ sudo mount -v -t tmpfs none "$tmpfs" -o size=10G
 
 # Clean up previous results.
 rm -rfv "${tmpfs_results_dir:?}" "${results_dir:?}"
-mkdir -p "$tmpfs_results_dir/"{log,pcap}
+mkdir -p "$tmpfs_results_dir/"{logs,pcap}
 
 # Run simulation.
 ns3_dir="$(realpath "$(dirname "$0")/..")"
@@ -83,7 +102,10 @@ ns3_dir="$(realpath "$(dirname "$0")/..")"
     --firstFlowOffsetMs=$firstFlowOffsetMs \
     --rwndStrategy=$rwndStrategy \
     --staticRwndBytes=$staticRwndBytes \
-    --rwndScheduleMaxConns=$rwndScheduleMaxConns
+    --rwndScheduleMaxConns=$rwndScheduleMaxConns \
+    --dctcpShiftG="$dctcpShiftG" \
+    --delAckCount=$delAckCount \
+    --delAckTimeoutMs=$delAckTimeoutMs
 
 # Move results to out_dir.
 mkdir -pv "$out_dir"
