@@ -140,7 +140,7 @@ main(int argc, char *argv[]) {
 
   // Parameters for the simulation
   std::string tcpTypeId = "TcpCubic";
-  uint32_t numBursts = 5;
+  uint32_t numBursts = 20;
   uint32_t numSenders = 10;
   uint32_t bytesPerSender = 500000;
   float delayPerLinkUs = 5;
@@ -155,15 +155,15 @@ main(int argc, char *argv[]) {
 
   // Parameters for the small links (ToR to node)
   uint32_t smallLinkBandwidthMbps = 12500;
-  uint32_t smallQueueSizePackets = 2666;
-  uint32_t smallQueueMinThresholdPackets = 60;
-  uint32_t smallQueueMaxThresholdPackets = 60;
+  uint32_t smallQueueSizePackets = 1800;
+  uint32_t smallQueueMinThresholdPackets = 80;
+  uint32_t smallQueueMaxThresholdPackets = 80;
 
   // Parameters for the large links (ToR to ToR)
   uint32_t largeLinkBandwidthMbps = 100000;
-  uint32_t largeQueueSizePackets = 2666;
-  uint32_t largeQueueMinThresholdPackets = 150;
-  uint32_t largeQueueMaxThresholdPackets = 150;
+  uint32_t largeQueueSizePackets = 1200;
+  uint32_t largeQueueMinThresholdPackets = 80;
+  uint32_t largeQueueMaxThresholdPackets = 80;
 
   // Parameters for RWND tuning
   std::string rwndStrategy = "none";

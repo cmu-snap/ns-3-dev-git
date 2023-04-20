@@ -3,7 +3,7 @@
   "NUM_PROCESSES": 35,
   "NUM_SAMPLES": 100,
   "NUM_TRIALS": 1,
-  "OUTPUT_DIRECTORY": "/data_ssd/incast/out/sweeps/",
+  "OUTPUT_DIRECTORY": "/data_ssd/incast/out/sweeps/test/",
 
   "MIN_BURST_DURATION_MS": 15,
   "MAX_BURST_DURATION_MS": 15,
