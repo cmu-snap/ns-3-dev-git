@@ -27,29 +27,43 @@ NUM_BITS_PER_BYTE: int = 8
 NUM_HOPS: int = 3
 
 
+def getAllSet(experiment_config: dict[str, int], param: str) -> set[int]:
+    all_key: str = f"ALL_{param}"
+
+    if all_key in experiment_config:
+        return set(experiment_config[all_key])
+
+    return set()
+
+
 def getSetParams(experiment_config: dict[str, int], param: str) -> list[int]:
     min_key: str = f"MIN_{param}"
     max_key: str = f"MAX_{param}"
     num_key: str = f"NUM_{param}"
 
-    if not (
+    if (
         min_key in experiment_config
         and max_key in experiment_config
         and num_key in experiment_config
     ):
-        return []
+        return [
+            experiment_config[min_key],
+            experiment_config[max_key],
+            experiment_config[num_key],
+        ]
 
-    return [
-        experiment_config[min_key],
-        experiment_config[max_key],
-        experiment_config[num_key],
-    ]
+    return []
 
 
 def getLinearSet(experiment_config: dict[str, int], param: str) -> set[int]:
+    all_set: set[int] = getAllSet(experiment_config, param)
+
+    if len(all_set) > 0:
+        return all_set
+
     set_params: list[int] = getSetParams(experiment_config, param)
 
-    if len(set_params) != 3:
+    if len(set_params) == 0:
         return {None}
 
     start, end, num = set_params
@@ -59,9 +73,14 @@ def getLinearSet(experiment_config: dict[str, int], param: str) -> set[int]:
 
 
 def getExponentialSet(experiment_config: dict[str, int], param: str) -> set[int]:
+    all_set: set[int] = getAllSet(experiment_config, param)
+
+    if len(all_set) > 0:
+        return all_set
+    
     set_params: list[int] = getSetParams(experiment_config, param)
 
-    if len(set_params) != 3:
+    if len(set_params) == 0:
         return {None}
 
     start, end, num = set_params
