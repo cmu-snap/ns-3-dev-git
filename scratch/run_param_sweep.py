@@ -28,22 +28,43 @@ NUM_HOPS: int = 3
 
 
 def getSetParams(experiment_config: dict[str, int], param: str) -> list[int]:
+    min_key: str = f"MIN_{param}"
+    max_key: str = f"MAX_{param}"
+    num_key: str = f"NUM_{param}"
+
+    if not (
+        min_key in experiment_config
+        and max_key in experiment_config
+        and num_key in experiment_config
+    ):
+        return []
+
     return [
-        experiment_config[f"MIN_{param}"],
-        experiment_config[f"MAX_{param}"],
-        experiment_config[f"NUM_{param}"],
+        experiment_config[min_key],
+        experiment_config[max_key],
+        experiment_config[num_key],
     ]
 
 
 def getLinearSet(experiment_config: dict[str, int], param: str) -> set[int]:
-    start, end, num = getSetParams(experiment_config, param)
+    set_params: list[int] = getSetParams(experiment_config, param)
+
+    if len(set_params) != 3:
+        return {None}
+
+    start, end, num = set_params
     step: int = math.ceil((end + 1 - start) / num)
 
     return set(range(start, end + 1, step))
 
 
 def getExponentialSet(experiment_config: dict[str, int], param: str) -> set[int]:
-    start, end, num = getSetParams(experiment_config, param)
+    set_params: list[int] = getSetParams(experiment_config, param)
+
+    if len(set_params) != 3:
+        return {None}
+
+    start, end, num = set_params
     curr: float = 1.0 * start
     factor: float = math.log(math.ceil(end / curr)) / math.log(num)
     output: set[int] = {int(curr)}
@@ -88,6 +109,7 @@ class Params:
         self,
         bytesPerSender: int,
         cca: str,
+        dctcpShiftG: int,
         delAckCount: int,
         delAckTimeoutMs: int,
         jitterUs: int,
@@ -105,6 +127,7 @@ class Params:
         self.time = int(time.time())
         self.bytesPerSender = bytesPerSender
         self.cca = cca
+        self.dctcpShiftG = dctcpShiftG
         self.delAckCount = delAckCount
         self.delAckTimeoutMs = delAckTimeoutMs
         self.jitterUs = jitterUs
@@ -122,6 +145,7 @@ class Params:
         self.commandLineOptions = {
             "bytesPerSender": self.bytesPerSender,
             "cca": self.cca,
+            "dctcpShiftG": self.dctcpShiftG,
             "delAckCount": self.delAckCount,
             "delAckTimeoutMs": self.delAckTimeoutMs,
             "jitterUs": self.jitterUs,
@@ -152,6 +176,7 @@ class Params:
             str(self.time),
             str(self.bytesPerSender),
             str(self.cca),
+            str(self.dctcpShiftG),
             str(self.delAckCount),
             str(self.delAckTimeoutMs),
             str(self.jitterUs),
@@ -184,17 +209,17 @@ class Params:
         if os.path.exists(self.trace_path):
             shutil.rmtree(self.trace_path)
 
-    def writeConfig(self):
-        with open(
-            file=self.trace_path + "config.json", mode="w", encoding="ascii"
-        ) as config_file:
-            config_dict = {}
+    # def writeConfig(self):
+    #     with open(
+    #         file=self.trace_path + "config.json", mode="w", encoding="ascii"
+    #     ) as config_file:
+    #         config_dict = {}
 
-            for k, v in self.commandLineOptions.items():
-                if "Directory" not in k:
-                    config_dict[k] = v
+    #         for k, v in self.commandLineOptions.items():
+    #             if "Directory" not in k:
+    #                 config_dict[k] = v
 
-            config_file.write(json.dumps(config_dict, indent=4))
+    #         config_file.write(json.dumps(config_dict, indent=4))
 
     def getCommandLineOption(self, option: str) -> str:
         return f"--{option}={self.commandLineOptions[option]}"
@@ -237,6 +262,10 @@ def main():
         experiment_config,
         "BURST_DURATION_MS",
     )
+    dctcpShiftGExp_set: set[int] = getLinearSet(
+        experiment_config,
+        "DCTCP_SHIFT_G_EXP",
+    )
     delayPerLinkUs_set: set[int] = getLinearSet(
         experiment_config,
         "DELAY_PER_LINK_US",
@@ -261,6 +290,14 @@ def main():
         experiment_config,
         "QUEUE_SIZE_FACTOR",
     )
+    queueSizePackets_set: set[int] = getLinearSet(
+        experiment_config,
+        "QUEUE_SIZE_PACKETS",
+    )
+    queueThresholdPackets_set: set[int] = getLinearSet(
+        experiment_config,
+        "QUEUE_THRESHOLD_PACKETS",
+    )
     segmentSizeBytes_set: set[int] = getLinearSet(
         experiment_config,
         "SEGMENT_SIZE_BYTES",
@@ -274,12 +311,15 @@ def main():
     params_tuples = list(
         itertools.product(
             burstDurationMs_set,
+            dctcpShiftGExp_set,
             delAckCount_set,
             delAckTimeoutMs_set,
             delayPerLinkUs_set,
             largeLinkBandwidthMbps_set,
             numSenders_set,
             queueSizeFactor_set,
+            queueSizePackets_set,
+            queueThresholdPackets_set,
             segmentSizeBytes_set,
             smallLinkBandwidthMbps_set,
         )
@@ -291,16 +331,20 @@ def main():
 
     for (
         burstDurationMs,
+        dctcpShiftGExp,
         delAckCount,
         delAckTimeoutMs,
         delayPerLinkUs,
         largeLinkBandwidthMbps,
         numSenders,
         queueSizeFactor,
+        queueSizePackets,
+        queueThresholdPackets,
         segmentSizeBytes,
         smallLinkBandwidthMbps,
     ) in params_sample:
         cca: str = experiment_config["CCA"]
+        dctcpShiftG: int = 1.0 / (2.0**dctcpShiftGExp)
         jitterUs: int = getJitterUs(delayPerLinkUs)
         bytesPerSender: int = getBytesPerSender(
             burstDurationMs,
@@ -308,27 +352,46 @@ def main():
             smallLinkBandwidthMbps,
         )
 
-        largeLinkCapacityPps: int = getLinkCapacityPps(
-            largeLinkBandwidthMbps,
-            segmentSizeBytes,
-        )
-        smallLinkCapacityPps: int = getLinkCapacityPps(
-            smallLinkBandwidthMbps,
-            segmentSizeBytes,
-        )
-        rttS: float = getRttS(delayPerLinkUs)
+        if smallLinkBandwidthMbps >= largeLinkBandwidthMbps:
+            continue
 
-        largeQueueThresholdPackets: int = math.ceil(largeLinkCapacityPps * rttS / 7)
-        largeQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
+        if queueSizeFactor is None:
+            largeQueueThresholdPackets: int = queueThresholdPackets
+            largeQueueSizePackets: int = queueSizePackets
 
-        smallQueueThresholdPackets: int = math.ceil(smallLinkCapacityPps * rttS / 7)
-        smallQueueSizePackets: int = int(queueSizeFactor * smallLinkCapacityPps * rttS)
+            smallQueueThresholdPackets: int = queueThresholdPackets
+            smallQueueSizePackets: int = queueSizePackets
+        else:
+            largeLinkCapacityPps: int = getLinkCapacityPps(
+                largeLinkBandwidthMbps,
+                segmentSizeBytes,
+            )
+            smallLinkCapacityPps: int = getLinkCapacityPps(
+                smallLinkBandwidthMbps,
+                segmentSizeBytes,
+            )
+            rttS: float = getRttS(delayPerLinkUs)
+
+            largeQueueThresholdPackets: int = math.ceil(
+                largeLinkCapacityPps * rttS / 7.0
+            )
+            largeQueueSizePackets: int = int(
+                queueSizeFactor * smallLinkCapacityPps * rttS
+            )
+
+            smallQueueThresholdPackets: int = math.ceil(
+                smallLinkCapacityPps * rttS / 7.0
+            )
+            smallQueueSizePackets: int = int(
+                queueSizeFactor * smallLinkCapacityPps * rttS
+            )
 
         for trial in range(1, experiment_config["NUM_TRIALS"] + 1):
             params_set.add(
                 Params(
                     bytesPerSender,
                     cca,
+                    dctcpShiftG,
                     delAckCount,
                     delAckTimeoutMs,
                     jitterUs,
@@ -378,7 +441,7 @@ def main():
         global num_failures
 
         params.createDirectories()
-        params.writeConfig()
+        # params.writeConfig()
         returncode: int = params.run()
 
         with run_lock:
@@ -399,7 +462,7 @@ def main():
 
             subprocess.run(
                 args=f"tar -czf {outputTarName}.tar.gz {outputTraceDirectory}",
-                shell=True
+                shell=True,
             )
             subprocess.run(args=f"rm -rf {outputTraceDirectory}", shell=True)
 
