@@ -313,6 +313,10 @@ def main():
         experiment_config,
         "QUEUE_SIZE_PACKETS",
     )
+    queueThresholdFactor_set: set[int] = getExponentialSet(
+        experiment_config,
+        "QUEUE_THRESHOLD_FACTOR",
+    )
     queueThresholdPackets_set: set[int] = getLinearSet(
         experiment_config,
         "QUEUE_THRESHOLD_PACKETS",
@@ -338,6 +342,7 @@ def main():
             numSenders_set,
             queueSizeFactor_set,
             queueSizePackets_set,
+            queueThresholdFactor_set,
             queueThresholdPackets_set,
             segmentSizeBytes_set,
             smallLinkBandwidthMbps_set,
@@ -358,6 +363,7 @@ def main():
         numSenders,
         queueSizeFactor,
         queueSizePackets,
+        queueThresholdFactor,
         queueThresholdPackets,
         segmentSizeBytes,
         smallLinkBandwidthMbps,
@@ -403,6 +409,14 @@ def main():
             )
             smallQueueSizePackets: int = int(
                 queueSizeFactor * smallLinkCapacityPps * rttS
+            )
+
+        if queueThresholdFactor is not None:
+            largeQueueThresholdPackets: int = math.ceil(
+                float(largeQueueSizePackets) / queueThresholdFactor
+            )
+            smallQueueThresholdPackets: int = math.ceil(
+                float(smallQueueSizePackets) / queueThresholdFactor
             )
 
         for trial in range(1, experiment_config["NUM_TRIALS"] + 1):
