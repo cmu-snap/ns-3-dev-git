@@ -77,7 +77,7 @@ def getExponentialSet(experiment_config: dict[str, int], param: str) -> set[int]
 
     if len(all_set) > 0:
         return all_set
-    
+
     set_params: list[int] = getSetParams(experiment_config, param)
 
     if len(set_params) == 0:
