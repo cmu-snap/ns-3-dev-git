@@ -9,6 +9,7 @@ build_lib(
     helper/udp-echo-helper.cc
     model/application-packet-probe.cc
     model/bulk-send-application.cc
+    model/burst-sender.cc
     model/incast-aggregator.cc
     model/incast-sender.cc
     model/onoff-application.cc
@@ -35,6 +36,7 @@ build_lib(
     helper/udp-echo-helper.h
     model/application-packet-probe.h
     model/bulk-send-application.h
+    model/burst-sender.h
     model/incast-aggregator.h
     model/incast-sender.h
     model/onoff-application.h

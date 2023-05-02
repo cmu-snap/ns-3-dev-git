@@ -262,6 +262,8 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
     Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
     Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
     dctcp->SetAttribute("DctcpShiftG", DoubleValue(m_dctcpShiftG));
+    // TODO: Set UseECN 
+    // TODO: Delete UseECN from global configurations
   }
 
   // Enable tracing for the CWND

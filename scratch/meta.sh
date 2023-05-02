@@ -13,7 +13,7 @@ fi
 burstDurationMs=15
 numBursts=3
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numSenders=200 # $((200 + 1))
+numBurstSenders=200 # $((200 + 1))
 cca="TcpDctcp"
 nicRateMbps=12500
 uplinkRateMbps=100000
@@ -23,7 +23,7 @@ metaQueueSizeBytes=1800000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($metaQueueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
-bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numSenders))")"
+bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numBurstSenders))")"
 icwnd=10
 firstFlowOffsetMs=0
 rwndStrategy="none"
@@ -52,7 +52,7 @@ dctcpShiftGExp="$(python -c "import math; print(math.ceil($dctcpShiftGExpRaw))")
 dctcpShiftG="$(python -c "print(1 / 2**$dctcpShiftGExp)")"
 
 out_dir="$1"
-dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
+dir_name="${burstDurationMs}ms-$numBurstSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
 # We will store in-progress results in a tmpfs and move them to the final
 # location later.
 tmpfs="$out_dir"/tmpfs
@@ -84,20 +84,20 @@ ns3_dir="$(realpath "$(dirname "$0")/..")"
 "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
-    --numSenders=$numSenders \
+    --numBurstSenders=$numBurstSenders \
     --bytesPerSender="$bytesPerSender" \
     --numBursts=$numBursts \
     --delayPerLinkUs=$delayPerLinkUs \
     --jitterUs=$jitterUs \
     --smallLinkBandwidthMbps=$nicRateMbps \
-    --largeLinkBandwidthMbps=$uplinkRateMbps \
+    --largeBurstLinkBandwidthMbps=$uplinkRateMbps \
     --cca=$cca \
     --smallQueueSizePackets="$queueSizePackets" \
-    --largeQueueSizePackets="$queueSizePackets" \
+    --largeBurstQueueSizePackets="$queueSizePackets" \
     --smallQueueMinThresholdPackets="$thresholdPackets" \
     --smallQueueMaxThresholdPackets="$thresholdPackets" \
-    --largeQueueMinThresholdPackets="$thresholdPackets" \
-    --largeQueueMaxThresholdPackets="$thresholdPackets" \
+    --largeBurstQueueMinThresholdPackets="$thresholdPackets" \
+    --largeBurstQueueMaxThresholdPackets="$thresholdPackets" \
     --initialCwnd=$icwnd \
     --firstFlowOffsetMs=$firstFlowOffsetMs \
     --rwndStrategy=$rwndStrategy \
