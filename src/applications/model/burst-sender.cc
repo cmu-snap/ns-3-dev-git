@@ -50,13 +50,6 @@ BurstSender::GetTypeId() {
 }
 
 void
-BurstSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
-  NS_LOG_FUNCTION(this << currentBurstCount);
-
-  m_currentBurstCount = currentBurstCount;
-}
-
-void
 BurstSender::SetFlowTimesRecord(
     std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *flowTimes) {
   NS_LOG_FUNCTION(this << flowTimes);
@@ -81,6 +74,7 @@ BurstSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   while (sentBytes < totalBytes && socket->GetTxAvailable()) {
     int toSend = totalBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
+    
     int newSentBytes = socket->Send(packet);
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;

@@ -27,6 +27,7 @@
 #include "ns3/ipv4-interface-container.h"
 #include "ns3/tcp-header.h"
 #include "ns3/tcp-socket-base.h"
+#include "ns3/pointer.h"
 
 #include <string>
 #include <unordered_map>
@@ -54,12 +55,25 @@ class IncastSender : public Application {
   /**
    * @brief TODO
    */
-  ~IncastSender() override;
+  ~IncastSender();
 
+  /**
+   * @brief TODO
+   */
   void WriteLogs();
 
+  /**
+   * @brief TODO
+   */
+  void SetCurrentBurstCount(uint32_t *currentBurstCount);
+
+  /**
+   * @brief TODO
+   */
+  void SetNumBursts(uint32_t *numBursts);
+
  protected:
-  void DoDispose() override;
+  void DoDispose();
 
   /**
    * @brief TODO
@@ -82,6 +96,12 @@ class IncastSender : public Application {
 
   // Max random jitter in microseconds
   uint32_t m_responseJitterUs;
+
+  // Pointer to the global record which burst is currently running.
+  uint32_t *m_currentBurstCount;
+
+  // Number of bursts to simulate
+  uint32_t m_numBursts;
 
  private:
   /**
@@ -121,12 +141,12 @@ class IncastSender : public Application {
   /**
    * @brief TODO
    */
-  void StartApplication() override;
+  void StartApplication();
 
   /**
    * @brief TODO
    */
-  void StopApplication() override;
+  void StopApplication();
 
   // Directory for all log and pcap traces
   std::string m_outputDirectory;

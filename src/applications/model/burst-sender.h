@@ -37,11 +37,6 @@ class BurstSender : public IncastSender {
   /**
    * @brief TODO
    */
-  void SetCurrentBurstCount(uint32_t *currentBurstCount);
-
-  /**
-   * @brief TODO
-   */
   void SetFlowTimesRecord(
       std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *flowTimes);
 
@@ -50,9 +45,6 @@ class BurstSender : public IncastSender {
    * @brief TODO
    */
   void SendData(Ptr<Socket> socket, uint32_t burstBytes) override;
-
-  // Pointer to the global record which burst is currently running.
-  uint32_t *m_currentBurstCount;
 
   // Pointer to the global record of flow start and end times, which is a vector
   // of bursts, where each entry is a maps from sender node ID to (start time,

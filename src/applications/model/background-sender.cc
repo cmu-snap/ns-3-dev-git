@@ -19,75 +19,49 @@
 
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 
-#include "burst-sender.h"
+#include "background-sender.h"
 
 // #include "ns3/boolean.h"
 #include "ns3/internet-module.h"
 // #include "ns3/log.h"
-// #include "ns3/pointer.h"
+#include "ns3/pointer.h"
 #include "ns3/string.h"
 // #include "ns3/tcp-congestion-ops.h"
 // #include "ns3/uinteger.h"
+#include "type-id.h"
 
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 
-NS_LOG_COMPONENT_DEFINE("BurstSender");
+NS_LOG_COMPONENT_DEFINE("BackgroundSender");
 
 namespace ns3 {
 
-NS_OBJECT_ENSURE_REGISTERED(BurstSender);
+NS_OBJECT_ENSURE_REGISTERED(BackgroundSender);
 
 TypeId
-BurstSender::GetTypeId() {
+BackgroundSender::GetTypeId() {
   static TypeId tid =
-      TypeId("ns3::BurstSender")
+      TypeId("ns3::BackgroundSender")
           .SetParent<IncastSender>()
-          .AddConstructor<BurstSender>();
-          
+          .AddConstructor<BackgroundSender>();
+
   return tid;
 }
 
 void
-BurstSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
-  NS_LOG_FUNCTION(this << currentBurstCount);
-
-  m_currentBurstCount = currentBurstCount;
-}
-
-void
-BurstSender::SetFlowTimesRecord(
-    std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *flowTimes) {
-  NS_LOG_FUNCTION(this << flowTimes);
-
-  m_flowTimes = flowTimes;
-}
-
-void
-BurstSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
+BackgroundSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(
       this << " socket: " << socket << " totalBytes: " << totalBytes);
 
-  // TODO: Update start time to be when the first packet is actually sent to
-  // make graphs meaningful for scheduled RWND strategy.
-
-  // Record the start time for this flow in the current burst
-  (*m_flowTimes)[*m_currentBurstCount - 1][GetNode()->GetId()] = {
-      Simulator::Now(), Seconds(0), Seconds(0)};
-
-  size_t sentBytes = 0;
-
-  while (sentBytes < totalBytes && socket->GetTxAvailable()) {
-    int toSend = totalBytes - sentBytes;
-    Ptr<Packet> packet = Create<Packet>(toSend);
+  while (*m_currentBurstCount <= m_numBursts) {
+    Ptr<Packet> packet = Create<Packet>(totalBytes);
     int newSentBytes = socket->Send(packet);
-    if (newSentBytes > 0) {
-      sentBytes += newSentBytes;
-    } else {
+
+    if (newSentBytes <= 0) {
       NS_FATAL_ERROR(
-          m_logPrefix << "Error: could not send " << toSend
-                      << " bytes. Check your SndBufSize.");
+          m_logPrefix << "Error: could not send data from the background sender.");
     }
   }
 }

@@ -27,13 +27,8 @@ namespace ns3 {
  * @brief
  *
  */
-class BurstSender : public IncastSender {
+class BackgroundSender : public IncastSender {
  protected:
-  /**
-   * @brief TODO
-   */
-  void HandleRead(Ptr<Socket> socket) override;
-
   /**
    * @brief TODO
    */

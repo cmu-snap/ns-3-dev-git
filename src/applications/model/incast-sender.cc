@@ -58,6 +58,12 @@ IncastSender::GetTypeId() {
               MakeStringAccessor(&IncastSender::m_traceDirectory),
               MakeStringChecker())
           .AddAttribute(
+              "NumBursts",
+              "Number of bursts to simulate",
+              UintegerValue(10),
+              MakeUintegerAccessor(&IncastSender::m_numBursts),
+              MakeUintegerChecker<uint32_t>())
+          .AddAttribute(
               "ResponseJitterUs",
               "Max random jitter in sending responses, in microseconds",
               UintegerValue(0),
@@ -185,12 +191,13 @@ IncastSender::WriteLogs() {
   // }
 }
 
-/**
- * Callback to log congestion window changes
- *
- * \param oldCwndBytes old congestion window
- * \param newCwndBytes new congestion window
- */
+void
+IncastSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
+  NS_LOG_FUNCTION(this << currentBurstCount);
+
+  m_currentBurstCount = currentBurstCount;
+}
+
 void
 IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
   NS_LOG_FUNCTION(this << " old: " << oldCwndBytes << " new: " << newCwndBytes);
@@ -198,12 +205,6 @@ IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
   m_cwndLog.push_back({Simulator::Now(), newCwndBytes});
 }
 
-/**
- * Callback to log round-trip time changes
- *
- * \param oldRtt old round-trip time
- * \param newRtt new round-trip time
- */
 void
 IncastSender::LogRtt(Time oldRtt, Time newRtt) {
   NS_LOG_FUNCTION(this << " old: " << oldRtt << " new: " << newRtt);
@@ -233,64 +234,6 @@ IncastSender::LogTx(
     Ptr<const TcpSocketBase> tcpSocket) {
   m_txLog.push_back(Simulator::Now());
 }
-
-// TypeId
-// IncastSender::GetTypeId() {
-//   static TypeId tid =
-//       TypeId("ns3::IncastSender")
-//           .SetParent<Application>()
-//           .AddConstructor<IncastSender>()
-//           .AddAttribute(
-//               "OutputDirectory",
-//               "Directory for all log and pcap traces",
-//               StringValue("output_directory/"),
-//               MakeStringAccessor(&IncastSender::m_outputDirectory),
-//               MakeStringChecker())
-//           .AddAttribute(
-//               "TraceDirectory",
-//               "Sub-directory for this experiment's log and pcap traces",
-//               StringValue("trace_directory/"),
-//               MakeStringAccessor(&IncastSender::m_traceDirectory),
-//               MakeStringChecker())
-//           .AddAttribute(
-//               "ResponseJitterUs",
-//               "Max random jitter in sending responses, in microseconds",
-//               UintegerValue(0),
-//               MakeUintegerAccessor(&IncastSender::m_responseJitterUs),
-//               MakeUintegerChecker<uint32_t>())
-//           .AddAttribute(
-//               "Port",
-//               "TCP port for all applications",
-//               UintegerValue(8888),
-//               MakeUintegerAccessor(&IncastSender::m_port),
-//               MakeUintegerChecker<uint16_t>())
-//           .AddAttribute(
-//               "Protocol",
-//               "TypeId of the protocol used",
-//               TypeIdValue(TcpSocketFactory::GetTypeId()),
-//               MakeTypeIdAccessor(&IncastSender::m_tid),
-//               MakeTypeIdChecker())
-//           .AddAttribute(
-//               "CCA",
-//               "TypeId of the CCA",
-//               TypeIdValue(TcpSocketFactory::GetTypeId()),
-//               MakeTypeIdAccessor(&IncastSender::m_cca),
-//               MakeTypeIdChecker())
-//           .AddAttribute(
-//               "Aggregator",
-//               "Aggregator to send packets to",
-//               Ipv4AddressValue(),
-//               MakeIpv4AddressAccessor(&IncastSender::m_aggregator),
-//               MakeIpv4AddressChecker())
-//           .AddAttribute(
-//               "DctcpShiftG",
-//               "Parameter G for updating dctcp_alpha",
-//               DoubleValue(0.0625),
-//               MakeDoubleAccessor(&IncastSender::m_dctcpShiftG),
-//               MakeDoubleChecker<double>(0, 1));
-
-//   return tid;
-// }
 
 IncastSender::IncastSender()
     : m_socket(nullptr),

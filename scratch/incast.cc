@@ -516,7 +516,6 @@ main(int argc, char *argv[]) {
   dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the sender applications
-
   for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
     Ptr<BurstSender> senderApp = CreateObject<BurstSender>();
     senders[dumbbellHelper.GetRight(i)->GetId()] = {
@@ -526,6 +525,7 @@ main(int argc, char *argv[]) {
     senderApp->SetFlowTimesRecord(&flowTimes);
     senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
+    senderApp->SetAttribute("NumBursts", UintegerValue(numBursts));
     senderApp->SetAttribute(
         "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
