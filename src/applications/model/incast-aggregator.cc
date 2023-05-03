@@ -262,8 +262,6 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
     Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
     Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
     dctcp->SetAttribute("DctcpShiftG", DoubleValue(m_dctcpShiftG));
-    // TODO: Set UseECN 
-    // TODO: Delete UseECN from global configurations
   }
 
   // Enable tracing for the CWND
@@ -289,10 +287,8 @@ void
 IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
-  // Make sure that the burst index pointer is defined and set to 0.
   NS_ASSERT(m_currentBurstCount != nullptr && *m_currentBurstCount == 0);
   NS_ASSERT(m_senders != nullptr);
-  // Make sure that we are not tracking any sockets.
   m_sockets.clear();
 
   NS_LOG_LOGIC("Aggregator: num senders: " << m_senders->size());

@@ -28,7 +28,6 @@
 #include "ns3/string.h"
 // #include "ns3/tcp-congestion-ops.h"
 // #include "ns3/uinteger.h"
-#include "type-id.h"
 
 #include <fstream>
 #include <iomanip>

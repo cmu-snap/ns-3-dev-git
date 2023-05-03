@@ -28,6 +28,12 @@ namespace ns3 {
  *
  */
 class BackgroundSender : public IncastSender {
+ public:
+  /**
+   * @brief TODO
+   */
+  static TypeId GetTypeId();
+
  protected:
   /**
    * @brief TODO
