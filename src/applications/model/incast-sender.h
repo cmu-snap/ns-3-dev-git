@@ -25,9 +25,9 @@
 #include "ns3/application.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/ipv4-interface-container.h"
+#include "ns3/pointer.h"
 #include "ns3/tcp-header.h"
 #include "ns3/tcp-socket-base.h"
-#include "ns3/pointer.h"
 
 #include <string>
 #include <unordered_map>
@@ -78,18 +78,7 @@ class IncastSender : public Application {
   /**
    * @brief TODO
    */
-  void HandleRead(Ptr<Socket> socket);
-
-  /**
-   * @brief TODO
-   */
   virtual void SendData(Ptr<Socket> socket, uint32_t burstBytes);
-
-  /**
-   * @brief TODO
-   */
-  static uint32_t ParseRequestedBytes(
-      Ptr<Packet> packet, bool containsRttProbe);
 
   // Prefix to prepend to all NS_LOG_* messages
   std::string m_logPrefix;
@@ -137,6 +126,17 @@ class IncastSender : public Application {
    * @brief TODO
    */
   void HandleAccept(Ptr<Socket> socket, const Address &from);
+
+  /**
+   * @brief TODO
+   */
+  static uint32_t ParseRequestedBytes(
+      Ptr<Packet> packet, bool containsRttProbe);
+
+  /**
+   * @brief TODO
+   */
+  void HandleRead(Ptr<Socket> socket);
 
   /**
    * @brief TODO

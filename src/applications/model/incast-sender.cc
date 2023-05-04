@@ -103,6 +103,14 @@ IncastSender::GetTypeId() {
   return tid;
 }
 
+IncastSender::IncastSender()
+    : m_socket(nullptr),
+      m_dctcpShiftG(0.0625) {
+  NS_LOG_FUNCTION(this);
+}
+
+IncastSender::~IncastSender() { NS_LOG_FUNCTION(this); }
+
 void
 IncastSender::WriteLogs() {
   NS_LOG_FUNCTION(this);
@@ -199,6 +207,26 @@ IncastSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
 }
 
 void
+IncastSender::SetNumBursts(uint32_t *numBursts) {
+  NS_LOG_FUNCTION(this << numBursts);
+
+  m_numBursts = numBursts;
+}
+
+void
+IncastSender::DoDispose() {
+  NS_LOG_FUNCTION(this);
+
+  m_socket = nullptr;
+  Application::DoDispose();
+}
+
+void
+IncastSender::SendData(Ptr<Socket> socket, uint32_t burstBytes) {
+  NS_LOG_FUNCTION(this);
+}
+
+void
 IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
   NS_LOG_FUNCTION(this << " old: " << oldCwndBytes << " new: " << newCwndBytes);
 
@@ -234,58 +262,6 @@ IncastSender::LogTx(
     Ptr<const TcpSocketBase> tcpSocket) {
   m_txLog.push_back(Simulator::Now());
 }
-
-IncastSender::IncastSender()
-    : m_socket(nullptr),
-      m_dctcpShiftG(0.0625) {
-  NS_LOG_FUNCTION(this);
-}
-
-IncastSender::~IncastSender() { NS_LOG_FUNCTION(this); }
-
-void
-IncastSender::DoDispose() {
-  NS_LOG_FUNCTION(this);
-
-  m_socket = nullptr;
-  Application::DoDispose();
-}
-
-// void
-// IncastSender::HandleRead(Ptr<Socket> socket) {
-//   NS_LOG_FUNCTION(this << socket);
-
-//   Ptr<Packet> packet;
-
-//   while ((packet = socket->Recv())) {
-//     size_t size = packet->GetSize();
-
-//     if (size == sizeof(uint32_t) || size == 1 + sizeof(uint32_t)) {
-//       bool containsRttProbe = (size == 1 + sizeof(uint32_t));
-//       uint32_t requestedBytes = ParseRequestedBytes(packet,
-//       containsRttProbe); NS_LOG_LOGIC(
-//           m_logPrefix << "Received request for " << requestedBytes << "
-//           bytes");
-
-//       // Add jitter to the first packet of the response
-//       Time jitter;
-
-//       if (m_responseJitterUs > 0) {
-//         jitter = MicroSeconds(rand() % m_responseJitterUs);
-//       }
-
-//       Simulator::Schedule(
-//           jitter, &IncastSender::SendData, this, socket, requestedBytes);
-//     } else if (size == 1) {
-//       // This is an RTT probe. Do nothing.
-//       NS_LOG_LOGIC(m_logPrefix << "Received RTT probe");
-//     } else {
-//       // Could be coalesced RTT probes: If multiple RTT probes are lost, they
-//       // may accumulate before being retransmited.
-//       NS_LOG_WARN(m_logPrefix << "Strange size received: " << size);
-//     }
-//   }
-// }
 
 void
 IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
@@ -325,6 +301,19 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   }
 }
 
+uint32_t
+IncastSender::ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe) {
+  NS_LOG_FUNCTION(
+      " packet: " << packet << " containsRttProbe: " << containsRttProbe);
+
+  uint8_t *buffer = new uint8_t[packet->GetSize()];
+  packet->CopyData(buffer, packet->GetSize());
+  uint32_t requestedBytes = *(uint32_t *)(buffer + containsRttProbe);
+  delete[] buffer;
+
+  return requestedBytes;
+}
+
 void
 IncastSender::HandleRead(Ptr<Socket> socket) {
   NS_LOG_FUNCTION(this << socket);
@@ -358,24 +347,6 @@ IncastSender::HandleRead(Ptr<Socket> socket) {
       NS_LOG_WARN(m_logPrefix << "Strange size received: " << size);
     }
   }
-}
-
-void
-IncastSender::SendData(Ptr<Socket> socket, uint32_t burstBytes) {
-  NS_LOG_FUNCTION(this);
-}
-
-uint32_t
-IncastSender::ParseRequestedBytes(Ptr<Packet> packet, bool containsRttProbe) {
-  NS_LOG_FUNCTION(
-      " packet: " << packet << " containsRttProbe: " << containsRttProbe);
-
-  uint8_t *buffer = new uint8_t[packet->GetSize()];
-  packet->CopyData(buffer, packet->GetSize());
-  uint32_t requestedBytes = *(uint32_t *)(buffer + containsRttProbe);
-  delete[] buffer;
-
-  return requestedBytes;
 }
 
 void
