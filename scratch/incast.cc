@@ -394,10 +394,8 @@ main(int argc, char *argv[]) {
 
   // Print global node IDs
   std::ostringstream leftNodeIds;
-  leftNodeIds << "Left nodes (aggregator): ";
-  for (uint32_t i = 0; i < burstDumbbellHelper.LeftCount(); ++i) {
-    leftNodeIds << burstDumbbellHelper.GetLeft(i)->GetId() << " ";
-  }
+  leftNodeIds << "Left node (aggregator): ";
+  leftNodeIds << burstDumbbellHelper.GetLeft(0)->GetId() << " ";
 
   std::ostringstream rightBurstNodeIds;
   rightBurstNodeIds << "Right nodes (burst senders): ";
@@ -564,10 +562,10 @@ main(int argc, char *argv[]) {
 
   // Global record which burst is currently running.
   uint32_t currentBurstCount = 0;
-  // Global record of senders, which maps the sender node ID to a pair of
+  // Global record of burst senders, which maps the sender node ID to a pair of
   // SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
-      senders;
+      burstSenders;
   // Global record of flow start and end times, which is a vector of burst info,
   // where each entry maps the sender node ID to a (start time, end time) pair.
   std::vector<std::unordered_map<uint32_t, std::vector<Time>>> flowTimes;
@@ -601,7 +599,7 @@ main(int argc, char *argv[]) {
   // Create the burst sender applications
   for (size_t i = 0; i < burstDumbbellHelper.RightCount(); ++i) {
     Ptr<BurstSender> senderApp = CreateObject<BurstSender>();
-    senders[burstDumbbellHelper.GetRight(i)->GetId()] = {
+    burstSenders[burstDumbbellHelper.GetRight(i)->GetId()] = {
         senderApp, burstDumbbellHelper.GetRightIpv4Address(i)};
 
     senderApp->SetCurrentBurstCount(&currentBurstCount);
@@ -620,13 +618,25 @@ main(int argc, char *argv[]) {
     burstDumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
 
+  // TODO: add bg senders
+  aggregatorApp->SetBurstSenders(&burstSenders);
+
   // Create the background sender applications
   for (size_t i = 0; i < backgroundDumbbellHelper.RightCount(); ++i) {
     Ptr<BackgroundSender> senderApp = CreateObject<BackgroundSender>();
-    // TODO
-  }
+    // TODO: add bg senders 
 
-  aggregatorApp->SetSenders(&senders);
+    senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
+    senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
+    senderApp->SetAttribute("NumBursts", UintegerValue(numBursts));
+    senderApp->SetAttribute(
+        "Aggregator",
+        Ipv4AddressValue(burstDumbbellHelper.GetLeftIpv4Address(0)));
+    senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
+    senderApp->SetAttribute("CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpCubic")));
+    senderApp->SetStartTime(Seconds(0.0));
+    backgroundDumbbellHelper.GetRight(i)->AddApplication(senderApp);
+  }
 
   NS_LOG_INFO("Enabling tracing...");
 
@@ -780,8 +790,8 @@ main(int argc, char *argv[]) {
   aggregatorApp->WriteLogs();
   // This must take place before writing the flowTimes json below because this
   // function fills in the firstPacket time in the flowTimes data structure.
-  for (const auto &p : senders) {
-    p.second.first->WriteLogs();
+  for (const auto &[id, pair] : burstSenders) {
+    pair.first->WriteLogs();
   }
 
   Simulator::Destroy();
@@ -817,13 +827,15 @@ main(int argc, char *argv[]) {
   }
 
   // Serialize the flow times to a JSON file. This must take place after writing
-  // the sender logs, above, because that function fills in the firstPacket time
+  // the sender logs above, because that function fills in the firstPacket time
   // in the flowTimes data structure.
   nlohmann::json flowTimesJson;
+
   for (uint32_t i = 0; i < flowTimes.size(); ++i) {
     nlohmann::json burstJson;
+
     for (const auto &flow : flowTimes[i]) {
-      Ipv4Address ip = senders[flow.first].second;
+      Ipv4Address ip = burstSenders[flow.first].second;
       std::ostringstream ipStr;
       ip.Print(ipStr);
 
@@ -833,6 +845,7 @@ main(int argc, char *argv[]) {
           {"firstPacket", flow.second[1].GetSeconds()},
           {"end", flow.second[2].GetSeconds()}};
     }
+    
     flowTimesJson[std::to_string(i)] = burstJson;
   }
 

@@ -65,9 +65,9 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SetSenders(
+  void SetBurstSenders(
       std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
-          *senders);
+          *burstSenders);
 
   /**
    * @brief TODO
@@ -250,7 +250,7 @@ class IncastAggregator : public Application {
 
   // If m_rwndStrategy=static, then this is the set of senders (node ID) that
   // have claimed a token.
-  std::unordered_set<uint32_t> m_sendersWithAToken;
+  std::unordered_set<uint32_t> m_burstSendersWithAToken;
 
   // Assumes that all senders have the same RTT.
   Time m_physicalRtt;
@@ -271,17 +271,17 @@ class IncastAggregator : public Application {
   std::unordered_map<Ptr<Socket>, uint32_t> m_bytesReceived;
 
   // Number of senders that have finished the current burst
-  uint32_t m_sendersFinished;
+  uint32_t m_burstSendersFinished;
 
   // Pointer to the global record of flow start and end times, which is a
   // vector of bursts, where each entry is a maps from sender node ID to
   // (start time, time of first packet, end time).
   std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *m_flowTimes;
 
-  // Point to the global record of senders, which maps sender node ID to a
-  // pair of SenderApp and sender IP address.
+  // Global record of burst senders, which maps the sender node ID to a pair of
+  // SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
-      *m_senders;
+      *m_burstSenders;
 
   // Time to delay the request for the first sender in each burst (in
   // milliseconds). Overrides any jitter at the aggregator node. 0 means no
