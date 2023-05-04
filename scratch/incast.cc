@@ -392,6 +392,12 @@ main(int argc, char *argv[]) {
       smallLinkHelper,
       largeBackgroundLinkHelper);
 
+  // Connect the background senders with the aggregator
+  NodeContainer crossSwitchNodes;
+  crossSwitchNodes.Add(burstDumbbellHelper.GetLeft());
+  crossSwitchNodes.Add(backgroundDumbbellHelper.GetRight());
+  largeBackgroundLinkHelper.Install(crossSwitchNodes);
+
   // Print global node IDs
   std::ostringstream leftNodeIds;
   leftNodeIds << "Left node (aggregator): ";
@@ -574,7 +580,8 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
   aggregatorApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
-  aggregatorApp->SetAttribute("BytesPerBurstSender", UintegerValue(bytesPerBurstSender));
+  aggregatorApp->SetAttribute(
+      "BytesPerBurstSender", UintegerValue(bytesPerBurstSender));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   aggregatorApp->SetAttribute(
       "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
@@ -638,7 +645,7 @@ main(int argc, char *argv[]) {
     backgroundDumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
 
-  // Store burst and background senders 
+  // Store burst and background senders
   aggregatorApp->SetBurstSenders(&burstSenders);
   aggregatorApp->SetBackgroundSenders(&backgroundSenders);
 

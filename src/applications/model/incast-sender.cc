@@ -256,6 +256,7 @@ IncastSender::LogTx(
 
 void
 IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
+  std::cout << "HandleAccept for " << socket->GetNode()->GetId() << std::endl;
   NS_LOG_FUNCTION(this << " socket: " << socket << " from: " << from);
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
