@@ -30,7 +30,6 @@
 #include "ns3/tcp-socket-base.h"
 
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 

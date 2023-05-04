@@ -21,18 +21,6 @@
 
 #include "background-sender.h"
 
-// #include "ns3/boolean.h"
-#include "ns3/internet-module.h"
-// #include "ns3/log.h"
-#include "ns3/pointer.h"
-#include "ns3/string.h"
-// #include "ns3/tcp-congestion-ops.h"
-// #include "ns3/uinteger.h"
-
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-
 NS_LOG_COMPONENT_DEFINE("BackgroundSender");
 
 namespace ns3 {
@@ -52,7 +40,7 @@ void
 BackgroundSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(
       this << " socket: " << socket << " totalBytes: " << totalBytes);
-  NS_LOG_INFO("BackgroundSender::SendData() " << totalBytes);
+  // NS_LOG_INFO("BackgroundSender::SendData() " << totalBytes);
 
   if (*m_currentBurstCount >= m_numBursts) {
     return;

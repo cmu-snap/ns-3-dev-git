@@ -21,18 +21,6 @@
 
 #include "burst-sender.h"
 
-// #include "ns3/boolean.h"
-#include "ns3/internet-module.h"
-// #include "ns3/log.h"
-// #include "ns3/pointer.h"
-#include "ns3/string.h"
-// #include "ns3/tcp-congestion-ops.h"
-// #include "ns3/uinteger.h"
-
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-
 NS_LOG_COMPONENT_DEFINE("BurstSender");
 
 namespace ns3 {
