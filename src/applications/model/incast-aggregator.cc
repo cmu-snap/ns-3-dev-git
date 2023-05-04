@@ -418,9 +418,9 @@ IncastAggregator::ScheduleBackground() {
     return;
   }
 
-  // Schedule the background flows immediately
+  // Start the background flows after the burst senders get connected
   if (!m_startedBackground) {
-    Simulator::Schedule(MilliSeconds(50), &IncastAggregator::StartBackground, this);
+    Simulator::Schedule(MilliSeconds(m_burstSenders->size() + 10), &IncastAggregator::StartBackground, this);
   }
 }
 
@@ -514,8 +514,6 @@ IncastAggregator::StartBackground() {
     sockets.push_back(socket);
   }
 
-  // std::cout << "Number of background sockets: " << sockets.size() <<
-  // std::endl;
   NS_ASSERT(sockets.size() == m_backgroundSenders->size());
 
   // Send a request to each socket.
