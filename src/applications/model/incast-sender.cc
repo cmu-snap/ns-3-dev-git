@@ -103,9 +103,7 @@ IncastSender::GetTypeId() {
   return tid;
 }
 
-IncastSender::IncastSender()
-    : m_socket(nullptr),
-      m_dctcpShiftG(0.0625) {
+IncastSender::IncastSender() {
   NS_LOG_FUNCTION(this);
 }
 
@@ -204,13 +202,6 @@ IncastSender::SetCurrentBurstCount(uint32_t *currentBurstCount) {
   NS_LOG_FUNCTION(this << currentBurstCount);
 
   m_currentBurstCount = currentBurstCount;
-}
-
-void
-IncastSender::SetNumBursts(uint32_t *numBursts) {
-  NS_LOG_FUNCTION(this << numBursts);
-
-  m_numBursts = numBursts;
 }
 
 void

@@ -67,11 +67,6 @@ class IncastSender : public Application {
    */
   void SetCurrentBurstCount(uint32_t *currentBurstCount);
 
-  /**
-   * @brief TODO
-   */
-  void SetNumBursts(uint32_t *numBursts);
-
  protected:
   void DoDispose();
 
@@ -164,7 +159,7 @@ class IncastSender : public Application {
   Ipv4Address m_aggregator;
 
   // Socket for listening for connections from the aggregator
-  Ptr<Socket> m_socket;
+  Ptr<Socket> m_socket{nullptr};
 
   // TCP congestion control algorithm
   TypeId m_cca;
@@ -184,7 +179,7 @@ class IncastSender : public Application {
   std::vector<Time> m_txLog;
 
   // Parameter G for updating dctcp_alpha.
-  double m_dctcpShiftG;
+  double m_dctcpShiftG{0.0625};
 };
 
 }  // namespace ns3
