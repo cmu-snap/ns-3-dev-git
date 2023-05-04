@@ -103,9 +103,7 @@ IncastSender::GetTypeId() {
   return tid;
 }
 
-IncastSender::IncastSender() {
-  NS_LOG_FUNCTION(this);
-}
+IncastSender::IncastSender() { NS_LOG_FUNCTION(this); }
 
 IncastSender::~IncastSender() { NS_LOG_FUNCTION(this); }
 
@@ -359,12 +357,10 @@ IncastSender::StartApplication() {
     Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(m_socket);
 
     // Set the congestion control algorithm
-    if (m_cca.GetName() == "ns3::TcpDctcp") {
-      ObjectFactory ccaFactory;
-      ccaFactory.SetTypeId(m_cca);
-      Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
-      tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
-    }
+    ObjectFactory ccaFactory;
+    ccaFactory.SetTypeId(m_cca);
+    Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
+    tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
 
     // Enable TCP timestamp option
     tcpSocket->SetAttribute("Timestamp", BooleanValue(true));

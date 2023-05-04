@@ -52,18 +52,21 @@ void
 BackgroundSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(
       this << " socket: " << socket << " totalBytes: " << totalBytes);
-  std::cout << "BackgroundSender::SendData()" << std::endl;
+  NS_LOG_INFO("BackgroundSender::SendData() " << totalBytes);
 
-  while (*m_currentBurstCount < m_numBursts) {
-    std::cout << "Loop in BackgroundSender::SendData()" << std::endl;
+  if (*m_currentBurstCount >= m_numBursts) {
+    return;
+  }
+
+  if (socket->GetTxAvailable() > totalBytes) {
     Ptr<Packet> packet = Create<Packet>(totalBytes);
-    int newSentBytes = socket->Send(packet);
-
-    if (newSentBytes <= 0) {
+    if (socket->Send(packet) <= 0) {
       NS_FATAL_ERROR(
           m_logPrefix
           << "Error: could not send data from the background sender.");
     }
   }
+  Simulator::Schedule(
+      MicroSeconds(1), &BackgroundSender::SendData, this, socket, totalBytes);
 }
 }  // namespace ns3

@@ -137,6 +137,7 @@ main(int argc, char *argv[]) {
   LogComponentEnable("IncastSim", logConfigInfo);
   LogComponentEnable("IncastAggregator", logConfigInfo);
   LogComponentEnable("BurstSender", logConfigInfo);
+  LogComponentEnable("BackgroundSender", logConfigInfo);
   //   LogLevel logConfigWarn =
   //       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE |
   //       LOG_LEVEL_WARN);
@@ -146,7 +147,7 @@ main(int argc, char *argv[]) {
   std::string tcpTypeId = "TcpCubic";
   uint32_t numBursts = 5;
   uint32_t numBurstSenders = 10;
-  uint32_t numBackgroundSenders = 5;
+  uint32_t numBackgroundSenders = 1;
   uint32_t bytesPerBurstSender = 500000;
   float delayPerLinkUs = 5;
   uint32_t jitterUs = 100;
@@ -393,10 +394,8 @@ main(int argc, char *argv[]) {
       largeBackgroundLinkHelper);
 
   // Connect the background senders with the aggregator
-  NodeContainer crossSwitchNodes;
-  crossSwitchNodes.Add(burstDumbbellHelper.GetLeft());
-  crossSwitchNodes.Add(backgroundDumbbellHelper.GetRight());
-  largeBackgroundLinkHelper.Install(crossSwitchNodes);
+  NetDeviceContainer crossSwitchNetDevices = largeBackgroundLinkHelper.Install(
+      burstDumbbellHelper.GetLeft(), backgroundDumbbellHelper.GetRight());
 
   // Print global node IDs
   std::ostringstream leftNodeIds;
@@ -464,10 +463,7 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
 
   // Use ECN for DCTCP
-  if (tcpTypeId == "TcpDctcp") {
-    Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
-    Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
-  }
+  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
 
   // Configure different queues for the small and large links
   TrafficControlHelper smallLinkQueueHelper;
@@ -545,15 +541,20 @@ main(int argc, char *argv[]) {
   NS_LOG_INFO("Assigning IP addresses...");
 
   // Assign IP Addresses
+  Ipv4AddressHelper leftRouterIpHelper("12.0.0.0", "255.255.255.0");
   burstDumbbellHelper.AssignIpv4Addresses(
       Ipv4AddressHelper("10.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
-      Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
+      leftRouterIpHelper);
 
   backgroundDumbbellHelper.AssignIpv4Addresses(
       Ipv4AddressHelper("20.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("21.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("22.0.0.0", "255.255.255.0"));
+
+  // Assign IP addresses to the cross-link interfaces.
+  leftRouterIpHelper.NewNetwork();
+  Ipv4InterfaceContainer ifc = leftRouterIpHelper.Assign(crossSwitchNetDevices);
 
   NS_LOG_INFO("Configuring static global routing...");
 
@@ -632,6 +633,7 @@ main(int argc, char *argv[]) {
     backgroundSenders[backgroundDumbbellHelper.GetRight(i)->GetId()] = {
         senderApp, backgroundDumbbellHelper.GetRightIpv4Address(i)};
 
+    senderApp->SetCurrentBurstCount(&currentBurstCount);
     senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
     senderApp->SetAttribute("NumBursts", UintegerValue(numBursts));
@@ -640,7 +642,8 @@ main(int argc, char *argv[]) {
         Ipv4AddressValue(burstDumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
     senderApp->SetAttribute(
-        "CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpCubic")));
+        "CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpDctcp")));
+    // "CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpCubic")));
     senderApp->SetStartTime(Seconds(0.0));
     backgroundDumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }

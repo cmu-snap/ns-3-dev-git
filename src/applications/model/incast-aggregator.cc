@@ -401,7 +401,7 @@ IncastAggregator::ScheduleNextBurst() {
   m_flowTimes->push_back(newFlowTimesEntry);
 
   // Schedule the next burst for 1 second later
-  Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
+  Simulator::Schedule(MilliSeconds(100), &IncastAggregator::StartBurst, this);
 
   // Start the RTT probes 10ms before the next burst
   // Simulator::Schedule(
@@ -420,7 +420,7 @@ IncastAggregator::ScheduleBackground() {
 
   // Schedule the background flows immediately
   if (!m_startedBackground) {
-    Simulator::Schedule(Seconds(0), &IncastAggregator::StartBackground, this);
+    Simulator::Schedule(MilliSeconds(50), &IncastAggregator::StartBackground, this);
   }
 }
 
@@ -514,7 +514,8 @@ IncastAggregator::StartBackground() {
     sockets.push_back(socket);
   }
 
-  // std::cout << "Number of background sockets: " << sockets.size() << std::endl;
+  // std::cout << "Number of background sockets: " << sockets.size() <<
+  // std::endl;
   NS_ASSERT(sockets.size() == m_backgroundSenders->size());
 
   // Send a request to each socket.
@@ -576,7 +577,7 @@ IncastAggregator::SendRequest(
         "Sending request to sender "
         << (*m_burstSenders)[m_burstSockets[socket]].second);
   } else {
-    packetSize = 421;
+    packetSize = 10000;
     std::cout << "Sending packet to a background sender " << std::endl;
   }
 
@@ -594,6 +595,11 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   while ((packet = socket->Recv())) {
     auto size = packet->GetSize();
+
+    if (m_backgroundSockets.find(socket) != m_backgroundSockets.end()) {
+      return;
+    }
+
     m_totalBytesSoFar += size;
     m_bytesReceived[socket] += size;
 
