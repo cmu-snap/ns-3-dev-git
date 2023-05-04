@@ -41,11 +41,10 @@ NS_OBJECT_ENSURE_REGISTERED(BurstSender);
 
 TypeId
 BurstSender::GetTypeId() {
-  static TypeId tid =
-      TypeId("ns3::BurstSender")
-          .SetParent<IncastSender>()
-          .AddConstructor<BurstSender>();
-          
+  static TypeId tid = TypeId("ns3::BurstSender")
+                          .SetParent<IncastSender>()
+                          .AddConstructor<BurstSender>();
+
   return tid;
 }
 
@@ -74,7 +73,7 @@ BurstSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   while (sentBytes < totalBytes && socket->GetTxAvailable()) {
     int toSend = totalBytes - sentBytes;
     Ptr<Packet> packet = Create<Packet>(toSend);
-    
+
     int newSentBytes = socket->Send(packet);
     if (newSentBytes > 0) {
       sentBytes += newSentBytes;

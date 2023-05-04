@@ -41,10 +41,9 @@ NS_OBJECT_ENSURE_REGISTERED(BackgroundSender);
 
 TypeId
 BackgroundSender::GetTypeId() {
-  static TypeId tid =
-      TypeId("ns3::BackgroundSender")
-          .SetParent<IncastSender>()
-          .AddConstructor<BackgroundSender>();
+  static TypeId tid = TypeId("ns3::BackgroundSender")
+                          .SetParent<IncastSender>()
+                          .AddConstructor<BackgroundSender>();
 
   return tid;
 }
@@ -60,7 +59,8 @@ BackgroundSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
 
     if (newSentBytes <= 0) {
       NS_FATAL_ERROR(
-          m_logPrefix << "Error: could not send data from the background sender.");
+          m_logPrefix
+          << "Error: could not send data from the background sender.");
     }
   }
 }
