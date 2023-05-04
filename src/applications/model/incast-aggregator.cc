@@ -440,7 +440,8 @@ IncastAggregator::SendRequest(Ptr<Socket> socket, bool createNewConn) {
     socket->Close();
     Ptr<Socket> old_socket = socket;
     // Create a new socket and add it to m_sockets.
-    socket = SetupConnection((*m_burstSenders)[m_sockets[socket]].second, false);
+    socket =
+        SetupConnection((*m_burstSenders)[m_sockets[socket]].second, false);
     // Remove the old socket from m_sockets.
     m_sockets.erase(old_socket);
     // Add the new socket to m_bytesReceived.
@@ -462,7 +463,8 @@ IncastAggregator::SendRequest(Ptr<Socket> socket, bool createNewConn) {
   }
 
   NS_LOG_LOGIC(
-      "Sending request to sender " << (*m_burstSenders)[m_sockets[socket]].second);
+      "Sending request to sender "
+      << (*m_burstSenders)[m_sockets[socket]].second);
   Ptr<Packet> packet =
       Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
   socket->Send(packet);
@@ -495,8 +497,8 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
         Simulator::Now();
 
     NS_LOG_INFO(
-        "Aggregator: " << m_burstSendersFinished << "/" << m_burstSenders->size()
-                       << " senders finished");
+        "Aggregator: " << m_burstSendersFinished << "/"
+                       << m_burstSenders->size() << " senders finished");
 
     // if (m_burstSendersFinished == m_burstSenders->size() - 1) {
     //   Ptr<Socket> remainingSocket = nullptr;
@@ -571,8 +573,9 @@ IncastAggregator::WriteLogs() {
     if (p.second < m_bytesPerSender) {
       uint32_t nid = m_sockets[p.first];
       NS_LOG_ERROR(
-          "Sender " << nid << " (" << (*m_burstSenders)[nid].second << ") only sent "
-                    << p.second << "/" << m_bytesPerSender << " bytes");
+          "Sender " << nid << " (" << (*m_burstSenders)[nid].second
+                    << ") only sent " << p.second << "/" << m_bytesPerSender
+                    << " bytes");
     }
   }
 
@@ -776,7 +779,8 @@ IncastAggregator::ScheduledRwndTuning(
 
     NS_LOG_LOGIC(
         "Aggregator: Assigned token to sender "
-        << (*m_burstSenders)[m_sockets[p.first]].second << " (" << m_sockets[p.first]
+        << (*m_burstSenders)[m_sockets[p.first]].second << " ("
+        << m_sockets[p.first]
         << "). Available "
            "tokens: "
         << m_rwndScheduleAvailableTokens);

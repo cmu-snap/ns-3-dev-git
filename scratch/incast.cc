@@ -523,8 +523,8 @@ main(int argc, char *argv[]) {
       smallLinkQueueHelper.Install(burstDumbbellHelper.GetRightRouterDevices());
   QueueDiscContainer rightBackgroundQueues =
       smallLinkQueueHelper.Install(backgroundDumbbellHelper.GetRightDevices());
-  QueueDiscContainer rightBackgroundRouterQueues =
-      smallLinkQueueHelper.Install(backgroundDumbbellHelper.GetRightRouterDevices());
+  QueueDiscContainer rightBackgroundRouterQueues = smallLinkQueueHelper.Install(
+      backgroundDumbbellHelper.GetRightRouterDevices());
 
   // Get the queue from the left switch to the aggregator.
   Ptr<QueueDisc> incastQueue = leftRouterQueues.Get(0);
@@ -624,7 +624,7 @@ main(int argc, char *argv[]) {
   // Create the background sender applications
   for (size_t i = 0; i < backgroundDumbbellHelper.RightCount(); ++i) {
     Ptr<BackgroundSender> senderApp = CreateObject<BackgroundSender>();
-    // TODO: add bg senders 
+    // TODO: add bg senders
 
     senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
@@ -633,7 +633,8 @@ main(int argc, char *argv[]) {
         "Aggregator",
         Ipv4AddressValue(burstDumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
-    senderApp->SetAttribute("CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpCubic")));
+    senderApp->SetAttribute(
+        "CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpCubic")));
     senderApp->SetStartTime(Seconds(0.0));
     backgroundDumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
@@ -752,7 +753,8 @@ main(int argc, char *argv[]) {
   configJson["dctcpShiftG"] = dctcpShiftG;
   configJson["smallLinkBandwidthMbps"] = smallLinkBandwidthMbps;
   configJson["largeBurstLinkBandwidthMbps"] = largeBurstLinkBandwidthMbps;
-  configJson["largeBackgroundLinkBandwidthMbps"] = largeBackgroundLinkBandwidthMbps;
+  configJson["largeBackgroundLinkBandwidthMbps"] =
+      largeBackgroundLinkBandwidthMbps;
   configJson["delayPerLinkUs"] = delayPerLinkUs;
   configJson["smallQueueSizePackets"] = smallQueueSizePackets;
   configJson["smallQueueMinThresholdPackets"] = smallQueueMinThresholdPackets;
@@ -762,7 +764,8 @@ main(int argc, char *argv[]) {
       largeBurstQueueMinThresholdPackets;
   configJson["largeBurstQueueMaxThresholdPackets"] =
       largeBurstQueueMaxThresholdPackets;
-  configJson["largeBackgroundQueueSizePackets"] = largeBackgroundQueueSizePackets;
+  configJson["largeBackgroundQueueSizePackets"] =
+      largeBackgroundQueueSizePackets;
   configJson["largeBackgroundQueueMinThresholdPackets"] =
       largeBackgroundQueueMinThresholdPackets;
   configJson["largeBackgroundQueueMaxThresholdPackets"] =
@@ -814,11 +817,11 @@ main(int argc, char *argv[]) {
                                 ((double)smallLinkBandwidthMbps * megaToBase);
   double firstRttSec = numHops * 2 * delayPerLinkUs / baseToMicro;
   double idealBurstDurationSec = burstTransmissionSec + firstRttSec;
+  double idealBurstDurationMs = idealBurstDurationSec * baseToMilli;
 
-  NS_LOG_INFO(
-      "Ideal burst duration: " << idealBurstDurationSec * baseToMilli << "ms");
-
+  NS_LOG_INFO("Ideal burst duration: " << idealBurstDurationMs << "ms");
   NS_LOG_INFO("Burst durations (x ideal):");
+
   for (const auto &p : aggregatorApp->GetBurstTimes()) {
     Time burstDuration = p.second - p.first;
     NS_LOG_INFO(
@@ -845,7 +848,7 @@ main(int argc, char *argv[]) {
           {"firstPacket", flow.second[1].GetSeconds()},
           {"end", flow.second[2].GetSeconds()}};
     }
-    
+
     flowTimesJson[std::to_string(i)] = burstJson;
   }
 
