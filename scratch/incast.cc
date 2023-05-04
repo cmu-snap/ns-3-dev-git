@@ -20,7 +20,7 @@
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 //
 // Run with:
-//  $ ./ns3 run "scratch/incast --bytesPerSender=100000 --numBursts=5
+//  $ ./ns3 run "scratch/incast --bytesPerBurstSender=100000 --numBursts=5
 //       --numBurstSenders=100 --smallLinkBandwidthMbps=12500
 //       --largeLinkBandwidthMbps=100000"
 
@@ -147,7 +147,7 @@ main(int argc, char *argv[]) {
   uint32_t numBursts = 5;
   uint32_t numBurstSenders = 10;
   uint32_t numBackgroundSenders = 5;
-  uint32_t bytesPerSender = 500000;
+  uint32_t bytesPerBurstSender = 500000;
   float delayPerLinkUs = 5;
   uint32_t jitterUs = 100;
 
@@ -206,9 +206,9 @@ main(int argc, char *argv[]) {
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
   cmd.AddValue("numBurstSenders", "Number of burst senders", numBurstSenders);
   cmd.AddValue(
-      "bytesPerSender",
+      "bytesPerBurstSender",
       "Number of bytes for each sender to send for each burst",
-      bytesPerSender);
+      bytesPerBurstSender);
   cmd.AddValue(
       "jitterUs",
       "Maximum random jitter when sending requests (in microseconds)",
@@ -533,10 +533,6 @@ main(int argc, char *argv[]) {
   QueueDiscContainer burstSwitchQueues =
       largeBurstLinkQueueHelper.Install(burstDumbbellHelper.GetRouterDevices());
 
-  // QueueDiscContainer backgroundSwitchQueues =
-  //     largeBackgroundLinkQueueHelper.Install(
-  //         backgroundDumbbellHelper.GetRouterDevices());
-
   // Get the queue from the right switch to the left switch.
   Ptr<QueueDisc> uplinkQueue = burstSwitchQueues.Get(1);
 
@@ -549,9 +545,9 @@ main(int argc, char *argv[]) {
       Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
 
   backgroundDumbbellHelper.AssignIpv4Addresses(
-      Ipv4AddressHelper("13.0.0.0", "255.255.255.0"),
-      Ipv4AddressHelper("14.0.0.0", "255.255.255.0"),
-      Ipv4AddressHelper("15.0.0.0", "255.255.255.0"));
+      Ipv4AddressHelper("20.0.0.0", "255.255.255.0"),
+      Ipv4AddressHelper("21.0.0.0", "255.255.255.0"),
+      Ipv4AddressHelper("22.0.0.0", "255.255.255.0"));
 
   NS_LOG_INFO("Configuring static global routing...");
 
@@ -560,12 +556,12 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Creating applications...");
 
-  // Global record which burst is currently running.
-  uint32_t currentBurstCount = 0;
   // Global record of burst senders, which maps the sender node ID to a pair of
   // SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
       burstSenders;
+  // Global record which burst is currently running.
+  uint32_t currentBurstCount = 0;
   // Global record of flow start and end times, which is a vector of burst info,
   // where each entry maps the sender node ID to a (start time, end time) pair.
   std::vector<std::unordered_map<uint32_t, std::vector<Time>>> flowTimes;
@@ -578,7 +574,7 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
   aggregatorApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
-  aggregatorApp->SetAttribute("BytesPerSender", UintegerValue(bytesPerSender));
+  aggregatorApp->SetAttribute("BytesPerBurstSender", UintegerValue(bytesPerBurstSender));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   aggregatorApp->SetAttribute(
       "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
@@ -618,13 +614,16 @@ main(int argc, char *argv[]) {
     burstDumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
 
-  // TODO: add bg senders
-  aggregatorApp->SetBurstSenders(&burstSenders);
+  // Global record of background senders, which maps the sender node ID to a
+  // pair of SenderApp and sender IP address.
+  std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+      backgroundSenders;
 
   // Create the background sender applications
   for (size_t i = 0; i < backgroundDumbbellHelper.RightCount(); ++i) {
     Ptr<BackgroundSender> senderApp = CreateObject<BackgroundSender>();
-    // TODO: add bg senders
+    backgroundSenders[backgroundDumbbellHelper.GetRight(i)->GetId()] = {
+        senderApp, backgroundDumbbellHelper.GetRightIpv4Address(i)};
 
     senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
@@ -638,6 +637,10 @@ main(int argc, char *argv[]) {
     senderApp->SetStartTime(Seconds(0.0));
     backgroundDumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
+
+  // Store burst and background senders 
+  aggregatorApp->SetBurstSenders(&burstSenders);
+  aggregatorApp->SetBackgroundSenders(&backgroundSenders);
 
   NS_LOG_INFO("Enabling tracing...");
 
@@ -671,7 +674,7 @@ main(int argc, char *argv[]) {
   }
 
   // Compute the data per burst
-  double totalBytesPerBurst = bytesPerSender * numBurstSenders;
+  double totalBytesPerBurst = bytesPerBurstSender * numBurstSenders;
   double totalBytes = totalBytesPerBurst * numBursts;
   uint32_t megaToBase = pow(10, 6);
 
@@ -744,7 +747,7 @@ main(int argc, char *argv[]) {
   configJson["numBursts"] = numBursts;
   configJson["numBurstSenders"] = numBurstSenders;
   configJson["numBackgroundSenders"] = numBackgroundSenders;
-  configJson["bytesPerSender"] = bytesPerSender;
+  configJson["bytesPerBurstSender"] = bytesPerBurstSender;
   configJson["jitterUs"] = jitterUs;
   configJson["segmentSizeBytes"] = segmentSizeBytes;
   configJson["delAckCount"] = delAckCount;
@@ -812,7 +815,7 @@ main(int argc, char *argv[]) {
   uint32_t baseToMilli = pow(10, 3);
   uint32_t baseToMicro = pow(10, 6);
 
-  double burstTransmissionSec = (double)bytesPerSender * numBurstSenders *
+  double burstTransmissionSec = (double)bytesPerBurstSender * numBurstSenders *
                                 numBitsPerByte /
                                 ((double)smallLinkBandwidthMbps * megaToBase);
   double firstRttSec = numHops * 2 * delayPerLinkUs / baseToMicro;

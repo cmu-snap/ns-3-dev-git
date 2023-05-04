@@ -53,7 +53,8 @@ BackgroundSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(
       this << " socket: " << socket << " totalBytes: " << totalBytes);
 
-  while (*m_currentBurstCount <= m_numBursts) {
+  while (*m_currentBurstCount < m_numBursts) {
+    std::cout << "Loop in BackgroundSender::SendData()" << std::endl;
     Ptr<Packet> packet = Create<Packet>(totalBytes);
     int newSentBytes = socket->Send(packet);
 

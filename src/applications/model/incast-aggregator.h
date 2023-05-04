@@ -72,6 +72,13 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
+  void SetBackgroundSenders(
+      std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+          *backgroundSenders);
+
+  /**
+   * @brief TODO
+   */
   std::vector<std::pair<Time, Time>> GetBurstTimes();
 
   void WriteLogs();
@@ -122,12 +129,22 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
+  void ScheduleBackground();
+
+  /**
+   * @brief TODO
+   */
   void StartBurst();
 
   /**
    * @brief TODO
    */
-  void SendRequest(Ptr<Socket> socket, bool createNewConn);
+  void StartBackground();
+
+  /**
+   * @brief TODO
+   */
+  void SendRequest(Ptr<Socket> socket, bool createNewConn, bool isBurst);
 
   /**
    * @brief TODO
@@ -183,9 +200,15 @@ class IncastAggregator : public Application {
    */
   void ScheduledRwndTuning(Ptr<TcpSocketBase> tcpSocket, bool socketDone);
 
+  /**
+   * @brief TODO
+   */
   void CloseConnections();
 
-  Ptr<Socket> SetupConnection(Ipv4Address sender, bool scheduleNextBurst);
+  /**
+   * @brief TODO
+   */
+  Ptr<Socket> SetupConnection(Ipv4Address sender, bool canSchedule, bool isBurst);
 
   /**
    * @brief Look up the node ID of the first sender (lowest ID we know about).
@@ -211,7 +234,7 @@ class IncastAggregator : public Application {
   uint32_t *m_currentBurstCount;
 
   // For each burst, the number of bytes to request from each sender
-  uint32_t m_bytesPerSender;
+  uint32_t m_bytesPerBurstSender;
 
   // The number of total bytes received from all workers in the current burst
   uint32_t m_totalBytesSoFar;
@@ -222,8 +245,11 @@ class IncastAggregator : public Application {
   // TypeId of the protocol used
   TypeId m_tid;
 
-  // Map from socket to remote node ID
-  std::unordered_map<Ptr<Socket>, uint32_t> m_sockets;
+  // Map from the socket to the burst sender node ID
+  std::unordered_map<Ptr<Socket>, uint32_t> m_burstSockets;
+
+  // Map from the socket to the background sender node ID
+  std::unordered_map<Ptr<Socket>, uint32_t> m_backgroundSockets;
 
   // Max random jitter in microseconds
   uint32_t m_requestJitterUs;
@@ -283,6 +309,11 @@ class IncastAggregator : public Application {
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
       *m_burstSenders;
 
+  // Global record of background senders, which maps the sender node ID to a
+  // pair of SenderApp and sender IP address.
+  std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+      *m_backgroundSenders;
+
   // Time to delay the request for the first sender in each burst (in
   // milliseconds). Overrides any jitter at the aggregator node. 0 means no
   // delay, and use jitter instead.
@@ -290,6 +321,9 @@ class IncastAggregator : public Application {
 
   // Parameter G for updating dctcp_alpha.
   double m_dctcpShiftG;
+
+  // Whether background flows have already started
+  bool m_startedBackground{false};
 };
 
 }  // namespace ns3

@@ -23,7 +23,7 @@ metaQueueSizeBytes=1800000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($metaQueueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
-bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numBurstSenders))")"
+bytesPerBurstSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numBurstSenders))")"
 icwnd=10
 firstFlowOffsetMs=0
 rwndStrategy="none"
@@ -85,7 +85,7 @@ ns3_dir="$(realpath "$(dirname "$0")/..")"
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
     --numBurstSenders=$numBurstSenders \
-    --bytesPerSender="$bytesPerSender" \
+    --bytesPerBurstSender="$bytesPerBurstSender" \
     --numBursts=$numBursts \
     --delayPerLinkUs=$delayPerLinkUs \
     --jitterUs=$jitterUs \
