@@ -199,7 +199,8 @@ main(int argc, char *argv[]) {
       traceDirectory);
   cmd.AddValue(
       "cca",
-      "Congestion control algorithm (e.g., TcpCubic, TcpDctcp, etc.)",
+      "Congestion control algorithm for the burst senders (e.g., TcpCubic, "
+      "TcpDctcp, etc.)",
       tcpTypeId);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
   cmd.AddValue("numBurstSenders", "Number of burst senders", numBurstSenders);

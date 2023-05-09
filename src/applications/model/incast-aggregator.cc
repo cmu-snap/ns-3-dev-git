@@ -400,7 +400,7 @@ IncastAggregator::ScheduleNextBurst() {
   std::unordered_map<uint32_t, std::vector<Time>> newFlowTimesEntry;
   m_flowTimes->push_back(newFlowTimesEntry);
 
-  // Schedule the next burst for 1 second later
+  // Schedule the next burst for 100 ms later
   Simulator::Schedule(MilliSeconds(100), &IncastAggregator::StartBurst, this);
 
   // Start the RTT probes 10ms before the next burst
@@ -420,7 +420,10 @@ IncastAggregator::ScheduleBackground() {
 
   // Start the background flows after the burst senders get connected
   if (!m_startedBackground) {
-    Simulator::Schedule(MilliSeconds(m_burstSenders->size() + 10), &IncastAggregator::StartBackground, this);
+    Simulator::Schedule(
+        MilliSeconds(m_burstSenders->size() + 10),
+        &IncastAggregator::StartBackground,
+        this);
   }
 }
 
@@ -575,8 +578,7 @@ IncastAggregator::SendRequest(
         "Sending request to sender "
         << (*m_burstSenders)[m_burstSockets[socket]].second);
   } else {
-    packetSize = 10000;
-    std::cout << "Sending packet to a background sender " << std::endl;
+    packetSize = 10000; // TODO: use a less arbitrary size
   }
 
   Ptr<Packet> packet = Create<Packet>((uint8_t *)&packetSize, sizeof(uint32_t));
