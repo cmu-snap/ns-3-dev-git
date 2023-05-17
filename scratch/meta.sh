@@ -11,9 +11,9 @@ if [ "$#" -ne 1 ]; then
 fi
 
 burstDurationMs=15
-numBursts=3
+numBursts=1
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numBurstSenders=200 # $((200 + 1))
+numBurstSenders=1 # $((200 + 1))
 cca="TcpDctcp"
 nicRateMbps=12500
 uplinkRateMbps=100000
@@ -81,7 +81,7 @@ mkdir -p "$tmpfs_results_dir/"{logs,pcap}
 # Run simulation.
 ns3_dir="$(realpath "$(dirname "$0")/..")"
 "$ns3_dir/ns3" build "scratch/incast"
-"$ns3_dir"/build/scratch/ns3-dev-incast-default \
+time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
     --numBurstSenders=$numBurstSenders \
@@ -106,6 +106,8 @@ ns3_dir="$(realpath "$(dirname "$0")/..")"
     --dctcpShiftG="$dctcpShiftG" \
     --delAckCount=$delAckCount \
     --delAckTimeoutMs=$delAckTimeoutMs
+    #  \
+    # --enableSenderPcap
 
 # Move results to out_dir.
 mkdir -pv "$out_dir"

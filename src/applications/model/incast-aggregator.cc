@@ -579,6 +579,7 @@ IncastAggregator::SendRequest(
         << (*m_burstSenders)[m_burstSockets[socket]].second);
   } else {
     packetSize = 10000; // TODO: use a less arbitrary size
+    NS_LOG_INFO("Sending request to a background sender");
   }
 
   Ptr<Packet> packet = Create<Packet>((uint8_t *)&packetSize, sizeof(uint32_t));

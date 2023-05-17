@@ -36,8 +36,9 @@ class BackgroundSender : public IncastSender {
 
  protected:
   /**
-   * @brief TODO
+   * @brief Repeatedly send totalBytes through socket until the final burst has
+   * completed.
    */
-  void SendData(Ptr<Socket> socket, uint32_t burstBytes) override;
+  void SendData(Ptr<Socket> socket, uint32_t totalBytes) override;
 };
 }  // namespace ns3

@@ -134,6 +134,7 @@ main(int argc, char *argv[]) {
   LogComponentEnable("IncastSim", logConfigInfo);
   LogComponentEnable("IncastAggregator", logConfigInfo);
   LogComponentEnable("BurstSender", logConfigInfo);
+  LogComponentEnable("IncastSender", logConfigInfo);
   LogComponentEnable("BackgroundSender", logConfigInfo);
   //   LogLevel logConfigWarn =
   //       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE |

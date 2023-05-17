@@ -32,7 +32,6 @@ BackgroundSender::GetTypeId() {
   static TypeId tid = TypeId("ns3::BackgroundSender")
                           .SetParent<IncastSender>()
                           .AddConstructor<BackgroundSender>();
-
   return tid;
 }
 
@@ -40,21 +39,24 @@ void
 BackgroundSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   NS_LOG_FUNCTION(
       this << " socket: " << socket << " totalBytes: " << totalBytes);
-  // NS_LOG_INFO("BackgroundSender::SendData() " << totalBytes);
 
   if (*m_currentBurstCount >= m_numBursts) {
+    NS_LOG_INFO(m_logPrefix << "BackgroundSender done.");
     return;
   }
 
+  // If there is space in the send buffer, then send some data. Otherwise, wait
+  // until the next invocation.
   if (socket->GetTxAvailable() > totalBytes) {
-    Ptr<Packet> packet = Create<Packet>(totalBytes);
-    if (socket->Send(packet) <= 0) {
+    if (socket->Send(Create<Packet>(totalBytes)) != totalBytes) {
       NS_FATAL_ERROR(
           m_logPrefix
-          << "Error: could not send data from the background sender.");
+          << "Error: Could not send data from the background sender.");
     }
   }
+
+  // Schedule this function again in the future to tru sending more data.
   Simulator::Schedule(
-      MicroSeconds(1), &BackgroundSender::SendData, this, socket, totalBytes);
+      MilliSeconds(1), &BackgroundSender::SendData, this, socket, totalBytes);
 }
 }  // namespace ns3
