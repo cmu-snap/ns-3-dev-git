@@ -22,10 +22,23 @@ Release 3-dev
 
 - (lr-wpan) !1399 - Add orphan scan support.
 - (network) !1405 - Add ConvertToInt to Mac64Address
+- (lr-wpan) !1402 - Add attributes to MLME-SET and MLME-GET
+- (lr-wpan) !1410 - Add Mac16 and Mac64 functions
+- (applications) !1412 - Add Tx and TxWithAddresses trace sources in UdpClient
 
 ### Bugs fixed
 
 - (lr-wpan) !1406 - Fixes issues during MAC scan
+- (wifi) #880 - Post-install change in WifiPhy::ChannelSettings does not completely reconfigure Wi-Fi
+- (energy) !1422 - Fix null harvester issue in EnergySource
+- (wifi) #862 - sta-wifi-mac.cc cond="!link.bssid.has_value()", High occurrence at higher numbers of STAs per AP in indoor deployment.
+- (wifi) Fix the equality operator of WifiInformationElement
+- (wifi) Make the implementation of the Multi-Link Element compliant with the 11be specs by adding support of inheritance
+- (wifi) Reset intra-BSS NAV when CF-End is an intra-BSS PPDU
+- (wifi) UL MU CS shall be evaluated a SIFS after end of MU-RTS
+- (wifi) Fix crash when changing operating channel after configuration but before initialization
+- (wifi) Fix assert when non-HE STAs receive CTS frames sent using non-HT duplicate following a MU-RTS frame
+- (lr-wpan) !1481 Small fixes in MAC orphan scan
 
 Release 3.38
 ------------
@@ -70,6 +83,7 @@ This release has discontinued support for g++-8 compilers.
 - (wifi) Added 802.11ax dual NAV (basic NAV and intra-BSS NAV)
 - (wifi) Added 802.11ax Uplink Multi-User Carrier Sense (UL MU CS) mechanism and have it used by non-AP STAs when determining if they can reply to a received Trigger Frame
 - (wifi) Added support for 802.11ax MU-RTS/CTS protection
+- (internet) InternetStackHelper can be now used on nodes with an InternetStack already installed (it will not install IPv[4,6] twice).
 
 ### Bugs fixed
 

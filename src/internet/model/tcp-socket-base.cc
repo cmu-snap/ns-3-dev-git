@@ -513,14 +513,14 @@ TcpSocketBase::SetRtt(Ptr<RttEstimator> rtt)
 }
 
 /* Inherit from Socket class: Returns error code */
-enum Socket::SocketErrno
+Socket::SocketErrno
 TcpSocketBase::GetErrno() const
 {
     return m_errno;
 }
 
 /* Inherit from Socket class: Returns socket type, NS3_SOCK_STREAM */
-enum Socket::SocketType
+Socket::SocketType
 TcpSocketBase::GetSocketType() const
 {
     return NS3_SOCK_STREAM;
@@ -709,7 +709,7 @@ TcpSocketBase::Connect(const Address& address)
         // a v4 address and re-call this function
         Inet6SocketAddress transport = Inet6SocketAddress::ConvertFrom(address);
         Ipv6Address v6Addr = transport.GetIpv6();
-        if (v6Addr.IsIpv4MappedAddress() == true)
+        if (v6Addr.IsIpv4MappedAddress())
         {
             Ipv4Address v4Addr = v6Addr.GetIpv4MappedAddress();
             return Connect(InetSocketAddress(v4Addr, transport.GetPort()));
@@ -786,7 +786,7 @@ TcpSocketBase::Close()
 
     if (m_txBuffer->SizeFromSequence(m_tcb->m_nextTxSequence) > 0)
     { // App close with pending data must wait until all data transmitted
-        if (m_closeOnEmpty == false)
+        if (!m_closeOnEmpty)
         {
             m_closeOnEmpty = true;
             NS_LOG_INFO("Socket " << this << " deferring close, state " << TcpStateName[m_state]);
@@ -1596,13 +1596,9 @@ void
 TcpSocketBase::ReadOptions(const TcpHeader& tcpHeader, uint32_t* bytesSacked)
 {
     NS_LOG_FUNCTION(this << tcpHeader);
-    TcpHeader::TcpOptionList::const_iterator it;
-    const TcpHeader::TcpOptionList options = tcpHeader.GetOptionList();
 
-    for (it = options.begin(); it != options.end(); ++it)
+    for (const auto& option : tcpHeader.GetOptionList())
     {
-        const Ptr<const TcpOption> option = (*it);
-
         // Check only for ACK options here
         switch (option->GetKind())
         {
@@ -3275,7 +3271,7 @@ TcpSocketBase::UpdateRttHistory(const SequenceNumber32& seq, uint32_t sz, bool i
     NS_LOG_FUNCTION(this);
 
     // update the history of sequence numbers used to calculate the RTT
-    if (isRetransmission == false)
+    if (!isRetransmission)
     { // This is the next expected one, just log at end
         m_history.emplace_back(seq, sz, Simulator::Now());
     }
@@ -4422,7 +4418,7 @@ TcpSocketBase::UpdateWindowSize(const TcpHeader& header)
         m_highRxMark = header.GetSequenceNumber();
         update = true;
     }
-    if (update == true)
+    if (update)
     {
         m_rWnd = receivedWindow;
         NS_LOG_LOGIC("updating rWnd to " << m_rWnd);

@@ -579,8 +579,6 @@ DsrRouting::DoDispose()
                 Ptr<AdhocWifiMac> adhoc = mac->GetObject<AdhocWifiMac>();
                 if (adhoc)
                 {
-                    adhoc->TraceDisconnectWithoutContext("TxErrHeader",
-                                                         m_routeCache->GetTxErrorCallback());
                     m_routeCache->DelArpCache(m_ipv4->GetInterface(i)->GetArpCache());
                 }
             }
@@ -3535,7 +3533,7 @@ DsrRouting::SendAck(uint16_t ackId,
     }
 }
 
-enum IpL4Protocol::RxStatus
+IpL4Protocol::RxStatus
 DsrRouting::Receive(Ptr<Packet> p, const Ipv4Header& ip, Ptr<Ipv4Interface> incomingInterface)
 {
     NS_LOG_FUNCTION(this << p << ip << incomingInterface);
@@ -3679,8 +3677,7 @@ DsrRouting::Receive(Ptr<Packet> p, const Ipv4Header& ip, Ptr<Ipv4Interface> inco
                     // we need to make a copy in the unlikely event we hit the
                     // RX_ENDPOINT_UNREACH code path
                     // Here we can use the packet that has been get off whole DSR header
-                    enum IpL4Protocol::RxStatus status =
-                        nextProto->Receive(copy, ip, incomingInterface);
+                    IpL4Protocol::RxStatus status = nextProto->Receive(copy, ip, incomingInterface);
                     NS_LOG_DEBUG("The receive status " << status);
                     switch (status)
                     {
@@ -3691,8 +3688,7 @@ DsrRouting::Receive(Ptr<Packet> p, const Ipv4Header& ip, Ptr<Ipv4Interface> inco
                     case IpL4Protocol::RX_CSUM_FAILED:
                         break;
                     case IpL4Protocol::RX_ENDPOINT_UNREACH:
-                        if (ip.GetDestination().IsBroadcast() == true ||
-                            ip.GetDestination().IsMulticast() == true)
+                        if (ip.GetDestination().IsBroadcast() || ip.GetDestination().IsMulticast())
                         {
                             break; // Do not reply to broadcast or multicast
                         }
@@ -3739,7 +3735,7 @@ DsrRouting::Receive(Ptr<Packet> p, const Ipv4Header& ip, Ptr<Ipv4Interface> inco
     return IpL4Protocol::RX_OK;
 }
 
-enum IpL4Protocol::RxStatus
+IpL4Protocol::RxStatus
 DsrRouting::Receive(Ptr<Packet> p, const Ipv6Header& ip, Ptr<Ipv6Interface> incomingInterface)
 {
     NS_LOG_FUNCTION(this << p << ip.GetSource() << ip.GetDestination() << incomingInterface);
