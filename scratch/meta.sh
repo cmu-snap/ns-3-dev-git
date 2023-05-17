@@ -29,8 +29,8 @@ firstFlowOffsetMs=0
 rwndStrategy="none"
 staticRwndBytes=1000000
 rwndScheduleMaxConns=20
-delAckCount=2
-delAckTimeoutMs=2
+delAckCount=1
+delAckTimeoutMs=0
 
 # Pick the right ECN marking threshold.
 nicRatePps="$(python -c "print($nicRateMbps * 1e6 / 8 / $bytesPerPacket)")"
