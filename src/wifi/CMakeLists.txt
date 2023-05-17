@@ -73,10 +73,10 @@ set(source_files
     model/non-ht/erp-ofdm-ppdu.cc
     model/non-ht/ofdm-phy.cc
     model/non-ht/ofdm-ppdu.cc
+    model/non-inheritance.cc
     model/originator-block-ack-agreement.cc
     model/phy-entity.cc
     model/preamble-detection-model.cc
-    model/qos-blocked-destinations.cc
     model/qos-frame-exchange-manager.cc
     model/qos-txop.cc
     model/qos-utils.cc
@@ -119,7 +119,6 @@ set(source_files
     model/wifi-default-ack-manager.cc
     model/wifi-default-assoc-manager.cc
     model/wifi-default-protection-manager.cc
-    model/wifi-information-element-vector.cc
     model/wifi-information-element.cc
     model/wifi-mac-header.cc
     model/wifi-mac-queue-container.cc
@@ -222,10 +221,10 @@ set(header_files
     model/non-ht/erp-ofdm-ppdu.h
     model/non-ht/ofdm-phy.h
     model/non-ht/ofdm-ppdu.h
+    model/non-inheritance.h
     model/originator-block-ack-agreement.h
     model/phy-entity.h
     model/preamble-detection-model.h
-    model/qos-blocked-destinations.h
     model/qos-frame-exchange-manager.h
     model/qos-txop.h
     model/qos-utils.h
@@ -269,7 +268,6 @@ set(header_files
     model/wifi-default-ack-manager.h
     model/wifi-default-assoc-manager.h
     model/wifi-default-protection-manager.h
-    model/wifi-information-element-vector.h
     model/wifi-information-element.h
     model/wifi-mac-header.h
     model/wifi-mac-queue-container.h
@@ -279,6 +277,7 @@ set(header_files
     model/wifi-mac-queue.h
     model/wifi-mac-trailer.h
     model/wifi-mac.h
+    model/wifi-mgt-header.h
     model/wifi-mode.h
     model/wifi-mpdu-type.h
     model/wifi-mpdu.h

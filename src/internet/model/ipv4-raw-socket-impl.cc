@@ -88,14 +88,14 @@ Ipv4RawSocketImpl::DoDispose()
     Socket::DoDispose();
 }
 
-enum Socket::SocketErrno
+Socket::SocketErrno
 Ipv4RawSocketImpl::GetErrno() const
 {
     NS_LOG_FUNCTION(this);
     return m_err;
 }
 
-enum Socket::SocketType
+Socket::SocketType
 Ipv4RawSocketImpl::GetSocketType() const
 {
     NS_LOG_FUNCTION(this);
@@ -526,11 +526,7 @@ bool
 Ipv4RawSocketImpl::SetAllowBroadcast(bool allowBroadcast)
 {
     NS_LOG_FUNCTION(this << allowBroadcast);
-    if (!allowBroadcast)
-    {
-        return false;
-    }
-    return true;
+    return allowBroadcast;
 }
 
 bool

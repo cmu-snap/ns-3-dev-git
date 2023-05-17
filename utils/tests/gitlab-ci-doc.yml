@@ -17,6 +17,8 @@
     # - sed -i "s/none/read\ |\ write/g" /etc/ImageMagick-7/policy.xml
   image: archlinux
   timeout: 2h
+  interruptible: true
+  dependencies: []
   # artifacts:
   #   paths:
   #     - public

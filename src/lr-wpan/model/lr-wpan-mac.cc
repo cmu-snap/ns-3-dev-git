@@ -189,6 +189,7 @@ LrWpanMac::LrWpanMac()
     m_macSIFSPeriod = 12;
 
     m_panCoor = false;
+    m_coor = false;
     m_macBeaconOrder = 15;
     m_macSuperframeOrder = 15;
     m_macTransactionPersistenceTime = 500; // 0x01F5
@@ -498,9 +499,8 @@ LrWpanMac::McpsDataRequest(McpsDataRequestParams params, Ptr<Packet> p)
         // A DEVICE must be tracking beacons (MLME-SYNC.request is running) before attempting
         // request data from the coordinator.
 
-        // TODO: Check if the current device is coordinator (not just pan coordinator)
         //  Indirect Transmission can only be done by PAN coordinator or coordinators.
-        NS_ASSERT(m_panCoor);
+        NS_ASSERT(m_coor);
         p->AddHeader(macHdr);
 
         LrWpanMacTrailer macTrailer;
@@ -579,9 +579,9 @@ LrWpanMac::MlmeStartRequest(MlmeStartRequestParams params)
     m_pendPrimitive = MLME_START_REQ;
     m_startParams = params;
 
-    LrWpanPhyPibAttributes pibAttr;
-    pibAttr.phyCurrentPage = m_startParams.m_logChPage;
-    m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentPage, &pibAttr);
+    Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+    pibAttr->phyCurrentPage = m_startParams.m_logChPage;
+    m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentPage, pibAttr);
 }
 
 void
@@ -639,9 +639,9 @@ LrWpanMac::MlmeScanRequest(MlmeScanRequestParams params)
     m_scanParams = params;
     m_pendPrimitive = MLME_SCAN_REQ;
 
-    LrWpanPhyPibAttributes pibAttr;
-    pibAttr.phyCurrentPage = params.m_chPage;
-    m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentPage, &pibAttr);
+    Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+    pibAttr->phyCurrentPage = params.m_chPage;
+    m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentPage, pibAttr);
 }
 
 void
@@ -693,9 +693,9 @@ LrWpanMac::MlmeAssociateRequest(MlmeAssociateRequestParams params)
     }
     else
     {
-        LrWpanPhyPibAttributes pibAttr;
-        pibAttr.phyCurrentPage = params.m_chPage;
-        m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentPage, &pibAttr);
+        Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+        pibAttr->phyCurrentPage = params.m_chPage;
+        m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentPage, pibAttr);
     }
 }
 
@@ -849,9 +849,9 @@ LrWpanMac::MlmeSyncRequest(MlmeSyncRequestParams params)
 
     uint64_t symbolRate = (uint64_t)m_phy->GetDataOrSymbolRate(false); // symbols per second
     // change phy current logical channel
-    LrWpanPhyPibAttributes pibAttr;
-    pibAttr.phyCurrentChannel = params.m_logCh;
-    m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel, &pibAttr);
+    Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+    pibAttr->phyCurrentChannel = params.m_logCh;
+    m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel, pibAttr);
 
     // Enable Phy receiver
     m_phy->PlmeSetTRXStateRequest(IEEE_802_15_4_PHY_RX_ON);
@@ -900,6 +900,8 @@ void
 LrWpanMac::MlmeSetRequest(LrWpanMacPibAttributeIdentifier id, Ptr<LrWpanMacPibAttributes> attribute)
 {
     MlmeSetConfirmParams confirmParams;
+    confirmParams.m_status = MLMESET_SUCCESS;
+
     switch (id)
     {
     case macBeaconPayload:
@@ -909,13 +911,21 @@ LrWpanMac::MlmeSetRequest(LrWpanMacPibAttributeIdentifier id, Ptr<LrWpanMacPibAt
         }
         else
         {
-            confirmParams.m_status = MLMESET_SUCCESS;
             m_macBeaconPayload = attribute->macBeaconPayload;
             m_macBeaconPayloadLength = attribute->macBeaconPayload->GetSize();
         }
         break;
     case macBeaconPayloadLength:
         confirmParams.m_status = MLMESET_INVALID_PARAMETER;
+        break;
+    case macShortAddress:
+        m_shortAddress = attribute->macShortAddress;
+        break;
+    case macExtendedAddress:
+        confirmParams.m_status = MLMESET_READ_ONLY;
+        break;
+    case macPanId:
+        m_macPanId = macPanId;
         break;
     default:
         // TODO: Add support for setting other attributes
@@ -927,6 +937,40 @@ LrWpanMac::MlmeSetRequest(LrWpanMacPibAttributeIdentifier id, Ptr<LrWpanMacPibAt
     {
         confirmParams.id = id;
         m_mlmeSetConfirmCallback(confirmParams);
+    }
+}
+
+void
+LrWpanMac::MlmeGetRequest(LrWpanMacPibAttributeIdentifier id)
+{
+    LrWpanMlmeGetConfirmStatus status = MLMEGET_SUCCESS;
+    Ptr<LrWpanMacPibAttributes> attributes = Create<LrWpanMacPibAttributes>();
+
+    switch (id)
+    {
+    case macBeaconPayload:
+        attributes->macBeaconPayload = m_macBeaconPayload;
+        break;
+    case macBeaconPayloadLength:
+        attributes->macBeaconPayloadLength = m_macBeaconPayloadLength;
+        break;
+    case macShortAddress:
+        attributes->macShortAddress = m_shortAddress;
+        break;
+    case macExtendedAddress:
+        attributes->macExtendedAddress = m_selfExt;
+        break;
+    case macPanId:
+        attributes->macPanId = m_macPanId;
+        break;
+    default:
+        status = MLMEGET_UNSUPPORTED_ATTRIBUTE;
+        break;
+    }
+
+    if (!m_mlmeGetConfirmCallback.IsNull())
+    {
+        m_mlmeGetConfirmCallback(status, id, attributes);
     }
 }
 
@@ -1250,8 +1294,10 @@ LrWpanMac::EndStartRequest()
         if (m_startParams.m_panCoor)
         {
             m_panCoor = true;
-            m_macPanId = m_startParams.m_PanId;
         }
+
+        m_coor = true;
+        m_macPanId = m_startParams.m_PanId;
 
         NS_ASSERT(m_startParams.m_PanId != 0xffff);
 
@@ -1333,9 +1379,9 @@ LrWpanMac::EndChannelScan()
     if (channelFound)
     {
         // Switch to the next channel in the list and restart scan
-        LrWpanPhyPibAttributes pibAttr;
-        pibAttr.phyCurrentChannel = m_channelScanIndex;
-        m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel, &pibAttr);
+        Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+        pibAttr->phyCurrentChannel = m_channelScanIndex;
+        m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel, pibAttr);
     }
     else
     {
@@ -1428,9 +1474,9 @@ LrWpanMac::EndChannelEnergyScan()
     if (channelFound)
     {
         // switch to the next channel in the list and restart scan
-        LrWpanPhyPibAttributes pibAttr;
-        pibAttr.phyCurrentChannel = m_channelScanIndex;
-        m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel, &pibAttr);
+        Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+        pibAttr->phyCurrentChannel = m_channelScanIndex;
+        m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel, pibAttr);
     }
     else
     {
@@ -1648,9 +1694,7 @@ LrWpanMac::CheckQueue()
     // Pull a packet from the queue and start sending if we are not already sending.
     if (m_lrWpanMacState == MAC_IDLE && !m_txQueue.empty() && !m_setMacState.IsRunning())
     {
-        // TODO: this should check if the node is a coordinator and using the outcoming superframe
-        // not just the PAN coordinator
-        if (m_csmaCa->IsUnSlottedCsmaCa() || (m_outSuperframeStatus == CAP && m_panCoor) ||
+        if (m_csmaCa->IsUnSlottedCsmaCa() || (m_outSuperframeStatus == CAP && m_coor) ||
             m_incSuperframeStatus == CAP)
         {
             // check MAC is not in a IFS
@@ -1804,6 +1848,12 @@ LrWpanMac::SetMlmeSetConfirmCallback(MlmeSetConfirmCallback c)
 }
 
 void
+LrWpanMac::SetMlmeGetConfirmCallback(MlmeGetConfirmCallback c)
+{
+    m_mlmeGetConfirmCallback = c;
+}
+
+void
 LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
 {
     NS_ASSERT(m_lrWpanMacState == MAC_IDLE || m_lrWpanMacState == MAC_ACK_PENDING ||
@@ -1913,11 +1963,11 @@ LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
 
             if (acceptFrame && (receivedMacHdr.GetDstAddrMode() > 1))
             {
-                // Accept frame if:
+                // Accept frame if one of the following is true:
 
                 // 1) Have the same macPanId
-                // 2) Or is Message to all PANs
-                // 3) Or Is a beacon and the macPanId is not present (bootstrap)
+                // 2) Is Message to all PANs
+                // 3) Is a beacon or command frame and the macPanId is not present (bootstrap)
                 acceptFrame = ((receivedMacHdr.GetDstPanId() == m_macPanId ||
                                 receivedMacHdr.GetDstPanId() == 0xffff) ||
                                (m_macPanId == 0xffff && receivedMacHdr.IsBeacon())) ||
@@ -1926,10 +1976,17 @@ LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
 
             if (acceptFrame && (receivedMacHdr.GetShortDstAddr() == Mac16Address("FF:FF")))
             {
-                // A broadcast message (e.g. beacons) should not be received by the device who
-                // issues it.
-                acceptFrame = (receivedMacHdr.GetShortSrcAddr() != GetShortAddress());
                 // TODO: shouldn't this be filtered by the PHY?
+                // A broadcast message (e.g. beacons, orphan notifications) should not be received
+                // by the device who issues it.
+                if (receivedMacHdr.GetSrcAddrMode() == EXT_ADDR)
+                {
+                    acceptFrame = (receivedMacHdr.GetExtSrcAddr() != GetExtendedAddress());
+                }
+                else
+                {
+                    acceptFrame = (receivedMacHdr.GetShortSrcAddr() != GetShortAddress());
+                }
             }
 
             if (acceptFrame && (receivedMacHdr.GetDstAddrMode() == SHORT_ADDR))
@@ -1942,16 +1999,9 @@ LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
                 else if (receivedMacHdr.GetShortDstAddr().IsBroadcast() ||
                          receivedMacHdr.GetShortDstAddr().IsMulticast())
                 {
-                    // broadcast or multicast
-                    if (receivedMacHdr.IsAckReq())
-                    {
-                        // discard broadcast/multicast with the ACK bit set
-                        acceptFrame = false;
-                    }
-                    else
-                    {
-                        acceptFrame = true;
-                    }
+                    // Broadcast or multicast.
+                    // Discard broadcast/multicast with the ACK bit set.
+                    acceptFrame = !receivedMacHdr.IsAckReq();
                 }
                 else
                 {
@@ -1995,7 +2045,7 @@ LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
 
                 if (receivedMacPayload.GetCommandFrameType() ==
                         CommandPayloadHeader::ASSOCIATION_REQ &&
-                    !(m_macAssociationPermit == true && m_panCoor == true))
+                    !(m_macAssociationPermit && m_coor))
                 {
                     acceptFrame = false;
                 }
@@ -2305,8 +2355,7 @@ LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
                     switch (receivedMacPayload.GetCommandFrameType())
                     {
                     case CommandPayloadHeader::BEACON_REQ:
-                        // TODO: check that node is any coordinator not just pan coordinator
-                        if (m_csmaCa->IsUnSlottedCsmaCa() && m_panCoor)
+                        if (m_csmaCa->IsUnSlottedCsmaCa() && m_coor)
                         {
                             SendOneBeacon();
                         }
@@ -2318,9 +2367,12 @@ LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
                     case CommandPayloadHeader::ORPHAN_NOTIF:
                         if (!m_mlmeOrphanIndicationCallback.IsNull())
                         {
-                            MlmeOrphanIndicationParams orphanParams;
-                            orphanParams.m_orphanAddr = receivedMacHdr.GetExtSrcAddr();
-                            m_mlmeOrphanIndicationCallback(orphanParams);
+                            if (m_coor)
+                            {
+                                MlmeOrphanIndicationParams orphanParams;
+                                orphanParams.m_orphanAddr = receivedMacHdr.GetExtSrcAddr();
+                                m_mlmeOrphanIndicationCallback(orphanParams);
+                            }
                         }
                         break;
                     case CommandPayloadHeader::COOR_REALIGN:
@@ -2453,6 +2505,24 @@ LrWpanMac::PdDataIndication(uint32_t psduLength, Ptr<Packet> p, uint8_t lqi)
                                     m_mlmePollConfirmCallback(pollConfirmParams);
                                 }
                                 break;
+                            }
+
+                            case CommandPayloadHeader::COOR_REALIGN: {
+                                // ACK of coordinator realigment commands is not specified in the
+                                // standard, in here, we assume they are required as in other
+                                // commands.
+                                if (!m_mlmeCommStatusIndicationCallback.IsNull())
+                                {
+                                    MlmeCommStatusIndicationParams commStatusParams;
+                                    commStatusParams.m_panId = m_macPanId;
+                                    commStatusParams.m_srcAddrMode = LrWpanMacHeader::EXTADDR;
+                                    commStatusParams.m_srcExtAddr = macHdr.GetExtSrcAddr();
+                                    commStatusParams.m_dstAddrMode = LrWpanMacHeader::EXTADDR;
+                                    commStatusParams.m_dstExtAddr = macHdr.GetExtDstAddr();
+                                    commStatusParams.m_status =
+                                        LrWpanMlmeCommStatus::MLMECOMMSTATUS_SUCCESS;
+                                    m_mlmeCommStatusIndicationCallback(commStatusParams);
+                                }
                             }
 
                             default: {
@@ -3252,7 +3322,7 @@ LrWpanMac::PlmeEdConfirm(LrWpanPhyEnumeration status, uint8_t energyLevel)
 void
 LrWpanMac::PlmeGetAttributeConfirm(LrWpanPhyEnumeration status,
                                    LrWpanPibAttributeIdentifier id,
-                                   LrWpanPhyPibAttributes* attribute)
+                                   Ptr<LrWpanPhyPibAttributes> attribute)
 {
     NS_LOG_FUNCTION(this << status << id << attribute);
 }
@@ -3330,10 +3400,10 @@ LrWpanMac::PlmeSetAttributeConfirm(LrWpanPhyEnumeration status, LrWpanPibAttribu
 
             if (channelFound)
             {
-                LrWpanPhyPibAttributes pibAttr;
-                pibAttr.phyCurrentChannel = m_channelScanIndex;
+                Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+                pibAttr->phyCurrentChannel = m_channelScanIndex;
                 m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel,
-                                               &pibAttr);
+                                               pibAttr);
             }
         }
         else
@@ -3425,10 +3495,10 @@ LrWpanMac::PlmeSetAttributeConfirm(LrWpanPhyEnumeration status, LrWpanPibAttribu
     {
         if (status == LrWpanPhyEnumeration::IEEE_802_15_4_PHY_SUCCESS)
         {
-            LrWpanPhyPibAttributes pibAttr;
-            pibAttr.phyCurrentChannel = m_startParams.m_logCh;
+            Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+            pibAttr->phyCurrentChannel = m_startParams.m_logCh;
             m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel,
-                                           &pibAttr);
+                                           pibAttr);
         }
         else
         {
@@ -3464,10 +3534,10 @@ LrWpanMac::PlmeSetAttributeConfirm(LrWpanPhyEnumeration status, LrWpanPibAttribu
     {
         if (status == LrWpanPhyEnumeration::IEEE_802_15_4_PHY_SUCCESS)
         {
-            LrWpanPhyPibAttributes pibAttr;
-            pibAttr.phyCurrentChannel = m_associateParams.m_chNum;
+            Ptr<LrWpanPhyPibAttributes> pibAttr = Create<LrWpanPhyPibAttributes>();
+            pibAttr->phyCurrentChannel = m_associateParams.m_chNum;
             m_phy->PlmeSetAttributeRequest(LrWpanPibAttributeIdentifier::phyCurrentChannel,
-                                           &pibAttr);
+                                           pibAttr);
         }
         else
         {
@@ -3801,9 +3871,9 @@ LrWpanMac::isCoordDest()
     LrWpanMacHeader macHdr;
     m_txPkt->PeekHeader(macHdr);
 
-    if (m_panCoor)
+    if (m_coor)
     {
-        // The device is the PAN coordinator and the packet is not to itself
+        // The device is its coordinator and the packet is not to itself
         return false;
     }
     else if (m_macCoordShortAddress == macHdr.GetShortDstAddr() ||

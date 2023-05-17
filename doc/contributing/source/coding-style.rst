@@ -129,6 +129,9 @@ their code and for the GitLab CI/CD pipeline to check if the codebase is well fo
 All checks are enabled by default. Users can disable specific checks using the corresponding
 flags: ``--no-formatting``, ``--no-whitespace`` and ``--no-tabs``.
 
+Additional information about the formatting issues detected by the script can be enabled
+by adding the ``-v, --verbose`` flag.
+
 In addition to checking the files, the script can automatically fix detected issues in-place.
 This mode is enabled by adding the ``--fix`` flag.
 
@@ -148,16 +151,16 @@ For quick-reference, the most used commands are listed below:
 .. sourcecode:: console
 
   # Entire codebase (using paths relative to the ns-3 main directory)
-  ./utils/check-style-clang-format.py [--fix] [--no-formatting] [--no-whitespace] [--no-tabs] .
+  ./utils/check-style-clang-format.py [--fix] [--verbose] [--no-formatting] [--no-whitespace] [--no-tabs] .
 
   # Entire codebase (using absolute paths)
-  /path/to/utils/check-style-clang-format.py [--fix] [--no-formatting] [--no-whitespace] [--no-tabs] /path/to/ns3
+  /path/to/utils/check-style-clang-format.py [--fix] [--verbose] [--no-formatting] [--no-whitespace] [--no-tabs] /path/to/ns3
 
   # Specific directory
-  /path/to/utils/check-style-clang-format.py [--fix] [--no-formatting] [--no-whitespace] [--no-tabs] absolute_or_relative/path/to/directory
+  /path/to/utils/check-style-clang-format.py [--fix] [--verbose] [--no-formatting] [--no-whitespace] [--no-tabs] absolute_or_relative/path/to/directory
 
   # Individual file
-  /path/to/utils/check-style-clang-format.py [--fix] [--no-formatting] [--no-whitespace] [--no-tabs] absolute_or_relative/path/to/file
+  /path/to/utils/check-style-clang-format.py [--fix] [--verbose] [--no-formatting] [--no-whitespace] [--no-tabs] absolute_or_relative/path/to/file
 
 
 Clang-tidy
@@ -1095,6 +1098,53 @@ can be rewritten as:
 
   n += 3;
   return n;
+
+Boolean Simplifications
+=======================
+
+In order to increase readability and performance, avoid unnecessarily complex boolean
+expressions in if statements and variable declarations.
+
+For instance, the following code:
+
+  .. sourcecode:: cpp
+
+    bool IsPositive(int n)
+    {
+        if (n > 0)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    void ProcessNumber(int n)
+    {
+        if (IsPositive(n) == true)
+        {
+            ...
+        }
+    }
+
+can be rewritten as:
+
+  .. sourcecode:: cpp
+
+    bool IsPositive(int n)
+    {
+        return n > 0;
+    }
+
+    void ProcessNumber(int n)
+    {
+        if (IsPositive(n))
+        {
+            ...
+        }
+    }
 
 Smart pointer boolean comparisons
 =================================

@@ -1307,7 +1307,7 @@ LteUeRrc::EvaluateCellForSelection()
         uint32_t cellCsgId = m_lastSib1.cellAccessRelatedInfo.csgIdentity;
         bool cellCsgIndication = m_lastSib1.cellAccessRelatedInfo.csgIndication;
 
-        isSuitableCell = (cellCsgIndication == false) || (cellCsgId == m_csgWhiteList);
+        isSuitableCell = (!cellCsgIndication || cellCsgId == m_csgWhiteList);
 
         NS_LOG_LOGIC(this << " csg(ue/cell/indication)=" << m_csgWhiteList << "/" << cellCsgId
                           << "/" << cellCsgIndication);
@@ -1415,7 +1415,7 @@ void
 LteUeRrc::ApplyRadioResourceConfigDedicated(LteRrcSap::RadioResourceConfigDedicated rrcd)
 {
     NS_LOG_FUNCTION(this);
-    const struct LteRrcSap::PhysicalConfigDedicated& pcd = rrcd.physicalConfigDedicated;
+    const LteRrcSap::PhysicalConfigDedicated& pcd = rrcd.physicalConfigDedicated;
 
     if (pcd.haveAntennaInfoDedicated)
     {
@@ -1473,7 +1473,7 @@ LteUeRrc::ApplyRadioResourceConfigDedicated(LteRrcSap::RadioResourceConfigDedica
             m_srb1->m_logicalChannelConfig.logicalChannelGroup =
                 stamIt->logicalChannelConfig.logicalChannelGroup;
 
-            struct LteUeCmacSapProvider::LogicalChannelConfig lcConfig;
+            LteUeCmacSapProvider::LogicalChannelConfig lcConfig;
             lcConfig.priority = stamIt->logicalChannelConfig.priority;
             lcConfig.prioritizedBitRateKbps = stamIt->logicalChannelConfig.prioritizedBitRateKbps;
             lcConfig.bucketSizeDurationMs = stamIt->logicalChannelConfig.bucketSizeDurationMs;
@@ -1567,7 +1567,7 @@ LteUeRrc::ApplyRadioResourceConfigDedicated(LteRrcSap::RadioResourceConfigDedica
 
             m_drbCreatedTrace(m_imsi, m_cellId, m_rnti, dtamIt->drbIdentity);
 
-            struct LteUeCmacSapProvider::LogicalChannelConfig lcConfig;
+            LteUeCmacSapProvider::LogicalChannelConfig lcConfig;
             lcConfig.priority = dtamIt->logicalChannelConfig.priority;
             lcConfig.prioritizedBitRateKbps = dtamIt->logicalChannelConfig.prioritizedBitRateKbps;
             lcConfig.bucketSizeDurationMs = dtamIt->logicalChannelConfig.bucketSizeDurationMs;

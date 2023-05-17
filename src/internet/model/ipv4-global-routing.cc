@@ -473,10 +473,10 @@ bool
 Ipv4GlobalRouting::RouteInput(Ptr<const Packet> p,
                               const Ipv4Header& header,
                               Ptr<const NetDevice> idev,
-                              UnicastForwardCallback ucb,
-                              MulticastForwardCallback mcb,
-                              LocalDeliverCallback lcb,
-                              ErrorCallback ecb)
+                              const UnicastForwardCallback& ucb,
+                              const MulticastForwardCallback& mcb,
+                              const LocalDeliverCallback& lcb,
+                              const ErrorCallback& ecb)
 {
     NS_LOG_FUNCTION(this << p << header << header.GetSource() << header.GetDestination() << idev
                          << &lcb << &ecb);
@@ -504,7 +504,7 @@ Ipv4GlobalRouting::RouteInput(Ptr<const Packet> p,
     }
 
     // Check if input device supports IP forwarding
-    if (m_ipv4->IsForwarding(iif) == false)
+    if (!m_ipv4->IsForwarding(iif))
     {
         NS_LOG_LOGIC("Forwarding disabled for this interface");
         ecb(p, header, Socket::ERROR_NOROUTETOHOST);

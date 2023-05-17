@@ -71,6 +71,10 @@ if(WIN32)
   set(NS3_PRECOMPILE_HEADERS OFF
       CACHE BOOL "Precompile module headers to speed up compilation" FORCE
   )
+
+  # For whatever reason getting M_PI and other math.h definitions from cmath requires this definition
+  # https://docs.microsoft.com/en-us/cpp/c-runtime-library/math-constants?view=vs-2019
+  add_definitions(/D_USE_MATH_DEFINES)
 endif()
 
 set(cat_command cat)
@@ -202,12 +206,19 @@ if(CLANG)
 endif()
 
 set(GCC FALSE)
+set(GCC8 FALSE)
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${GNU_MinVersion})
     message(
       FATAL_ERROR
         "GNU ${CMAKE_CXX_COMPILER_VERSION} ${below_minimum_msg} ${GNU_MinVersion}"
     )
+  endif()
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0.0")
+    # This block is used to identify if GCC8 is being used. In this case, we
+    # want to explicitly link stdc++fs, which is done in
+    # ns3-module-macros.cmake.
+    set(GCC8 TRUE)
   endif()
   set(GCC TRUE)
   add_definitions(-fno-semantic-interposition)
@@ -222,6 +233,7 @@ unset(below_minimum_msg)
 set(CXX_UNSUPPORTED_STANDARDS 98 11 14)
 set(CMAKE_CXX_STANDARD_MINIMUM 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(LIB_AS_NEEDED_PRE)
 set(LIB_AS_NEEDED_POST)
 set(STATIC_LINK_FLAGS -static -static-libstdc++ -static-libgcc)
@@ -410,6 +422,8 @@ macro(process_options)
   if(${NS3_TESTS} OR ${ns3rc_tests_enabled})
     set(ENABLE_TESTS ON)
     enable_testing()
+  else()
+    list(REMOVE_ITEM libs_to_build test)
   endif()
 
   set(profiles_without_suffixes release)
@@ -1580,8 +1594,11 @@ function(build_exec)
   )
 
   # Resolve nested scratch prefixes without user intervention
-  if("${CMAKE_CURRENT_SOURCE_DIR}" MATCHES "scratch"
-     AND "${BEXEC_EXECNAME_PREFIX}" STREQUAL ""
+  string(REPLACE "${PROJECT_SOURCE_DIR}" "" relative_path
+                 "${CMAKE_CURRENT_SOURCE_DIR}"
+  )
+  if("${relative_path}" MATCHES "scratch" AND "${BEXEC_EXECNAME_PREFIX}"
+                                              STREQUAL ""
   )
     get_scratch_prefix(BEXEC_EXECNAME_PREFIX)
   endif()
@@ -1929,10 +1946,6 @@ macro(
       unset(dependencies)
       unset(contrib_dependencies)
     endforeach()
-
-    if(core IN_LIST ${libs_to_build})
-      list(APPEND ${libs_to_build} test) # include test module
-    endif()
   endif()
 
   if(${NS3_DISABLED_MODULES} OR ${ns3rc_disabled_modules})
