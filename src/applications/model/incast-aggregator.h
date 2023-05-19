@@ -108,12 +108,20 @@ class IncastAggregator : public Application {
   /**
    * @brief Callback to log the bytes covered by an ACK.
    */
-  void LogBytesInAct(
+  void LogBytesInAck(
       Ipv4Address sender_ip,
       uint16_t sender_port,
       Ipv4Address aggregator_ip,
       uint16_t aggregator_port,
       uint32_t bytesInAck);
+
+  /**
+   * @brief Callback to log that a packet was received by the aggregator.
+   */
+  void LogBytesReceived(
+      Ptr<const Packet> packet,
+      const TcpHeader &tcpHeader,
+      Ptr<const TcpSocketBase> socket);
 
   /**
    * @brief TODO
@@ -312,11 +320,21 @@ class IncastAggregator : public Application {
     uint32_t bytesInAck;
   };
 
+  struct bytesReceivedEntry {
+    Time time;
+    Ipv4Address sender_ip;
+    uint16_t sender_port;
+    Ipv4Address aggregator_ip;
+    uint16_t aggregator_port;
+    uint32_t bytesReceived;
+  };
+
   // Log streams
   std::vector<std::pair<Time, Time>> m_burstTimesLog;
   std::vector<std::pair<Time, uint32_t>> m_cwndLog;
   std::vector<std::pair<Time, Time>> m_rttLog;
   std::vector<struct bytesInAckEntry> m_bytesInAckLog;
+  std::vector<struct bytesReceivedEntry> m_bytesReceivedLog;
 
   // Maps sockets to the number of bytes received during the current burst
   std::unordered_map<Ptr<Socket>, uint32_t> m_bytesReceived;

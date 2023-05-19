@@ -25,6 +25,7 @@
 #include "ns3/internet-module.h"
 #include "ns3/log.h"
 #include "ns3/pointer.h"
+#include "ns3/ppp-header.h"
 #include "ns3/string.h"
 #include "ns3/tcp-congestion-ops.h"
 #include "ns3/uinteger.h"
@@ -56,7 +57,7 @@ IncastAggregator::LogRtt(Time oldRtt, Time newRtt) {
 }
 
 void
-IncastAggregator::LogBytesInAct(
+IncastAggregator::LogBytesInAck(
     Ipv4Address sender_ip,
     uint16_t sender_port,
     Ipv4Address aggregator_ip,
@@ -70,6 +71,21 @@ IncastAggregator::LogBytesInAct(
   entry.aggregator_port = aggregator_port;
   entry.bytesInAck = bytesInAck;
   m_bytesInAckLog.push_back(entry);
+}
+
+void
+IncastAggregator::LogBytesReceived(
+    Ptr<const Packet> packet,
+    const TcpHeader &tcpHeader,
+    Ptr<const TcpSocketBase> socket) {
+  struct bytesReceivedEntry entry;
+  entry.time = Simulator::Now();
+  entry.sender_ip = socket->GetIpv4EndPoint()->GetPeerAddress();
+  entry.sender_port = tcpHeader.GetSourcePort();
+  entry.aggregator_ip = socket->GetIpv4EndPoint()->GetLocalAddress();
+  entry.aggregator_port = tcpHeader.GetDestinationPort();
+  entry.bytesReceived = packet->GetSize();
+  m_bytesReceivedLog.push_back(entry);
 }
 
 TypeId
@@ -284,7 +300,11 @@ IncastAggregator::SetupConnection(
 
   // Enable tracing for ACK size.
   socket->TraceConnectWithoutContext(
-      "BytesInAck", MakeCallback(&IncastAggregator::LogBytesInAct, this));
+      "BytesInAck", MakeCallback(&IncastAggregator::LogBytesInAck, this));
+
+  // Enable tracing for the size of a received packet.
+  socket->TraceConnectWithoutContext(
+      "Rx", MakeCallback(&IncastAggregator::LogBytesReceived, this));
 
   // Enable TCP timestamp option
   tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
@@ -751,6 +771,25 @@ IncastAggregator::WriteLogs() {
   }
 
   bytesInAckOut.close();
+
+  std::ofstream bytesReceivedOut;
+  bytesReceivedOut.open(
+      m_outputDirectory + "/" + m_traceDirectory +
+          "/logs/aggregator_bytes_received.log",
+      std::ios::out);
+  bytesReceivedOut << "# Time (s) , sender IP , sender port , aggregator IP , "
+                      "aggregator port , bytes received"
+                   << std::endl;
+
+  for (const auto &entry : m_bytesReceivedLog) {
+    bytesReceivedOut << std::fixed << std::setprecision(12)
+                     << entry.time.GetSeconds() << " " << entry.sender_ip << " "
+                     << entry.sender_port << " " << entry.aggregator_ip << " "
+                     << entry.aggregator_port << " " << entry.bytesReceived
+                     << std::endl;
+  }
+
+  bytesReceivedOut.close();
 }
 
 void

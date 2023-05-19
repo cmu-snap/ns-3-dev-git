@@ -4741,4 +4741,8 @@ Ptr<TcpSocketState> TcpSocketBase::GetTcpSocketState() const {
     return m_tcb;
 }
 
+Ipv4EndPoint* TcpSocketBase::GetIpv4EndPoint() const {
+    return m_endPoint;
+}
+
 } // namespace ns3

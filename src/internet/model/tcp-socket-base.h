@@ -331,6 +331,8 @@ class TcpSocketBase : public TcpSocket
 
     Ptr<TcpSocketState> GetTcpSocketState() const;
 
+    Ipv4EndPoint* GetIpv4EndPoint() const;
+
     /**
      * \brief Callback pointer for pacing rate trace chaining
      */
