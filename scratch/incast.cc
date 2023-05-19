@@ -600,7 +600,6 @@ main(int argc, char *argv[]) {
       "PhysicalRTT", TimeValue(MicroSeconds(6 * delayPerLinkUs)));
   aggregatorApp->SetAttribute(
       "FirstFlowOffset", TimeValue(MilliSeconds(firstFlowOffsetMs)));
-  aggregatorApp->SetAttribute("DctcpShiftG", DoubleValue(dctcpShiftG));
   burstDumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
   // Create the burst sender applications

@@ -299,7 +299,7 @@ class IncastAggregator : public Application {
   bool m_probingRtt;
 
   // TCP congestion control algorithm used by the burst senders.
-  TypeId m_BurstSenderCca;
+  TypeId m_burstSenderCca;
 
   // Struct for logging the bytes covered by an ACK, for a specific
   // connection.
