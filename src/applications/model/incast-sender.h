@@ -163,7 +163,7 @@ class IncastSender : public Application {
   // TCP congestion control algorithm
   TypeId m_cca;
 
-  // TODO
+  // Struct for logging congestion estimate info
   struct congEstEntry {
     Time time;
     uint32_t bytesMarked;

@@ -96,20 +96,24 @@ class IncastAggregator : public Application {
 
  private:
   /**
-   * Callback to log congestion window changes
-   *
-   * \param oldCwnd old congestion window
-   * \param newCwnd new congestion window
+   * @brief Callback to log congestion window changes
    */
   void LogCwnd(uint32_t oldCwnd, uint32_t newCwnd);
 
   /**
-   * Callback to log round-trip time changes
-   *
-   * \param oldRtt old round-trip time
-   * \param newRtt new round-trip time
+   * @brief Callback to log round-trip time changes
    */
   void LogRtt(Time oldRtt, Time newRtt);
+
+  /**
+   * @brief Callback to log the bytes covered by an ACK.
+   */
+  void LogBytesInAct(
+      Ipv4Address sender_ip,
+      uint16_t sender_port,
+      Ipv4Address aggregator_ip,
+      uint16_t aggregator_port,
+      uint32_t bytesInAck);
 
   /**
    * @brief TODO
@@ -124,12 +128,12 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void ScheduleNextBurst();
+  void ScheduleNextBurst(Time when);
 
   /**
    * @brief TODO
    */
-  void ScheduleBackground();
+  void ScheduleBackground(Time when);
 
   /**
    * @brief TODO
@@ -144,7 +148,7 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SendRequest(Ptr<Socket> socket, bool createNewConn, bool isBurst);
+  void SendRequest(Ptr<Socket> socket, bool createNewConn, bool isBurstRequest);
 
   /**
    * @brief TODO
@@ -206,9 +210,18 @@ class IncastAggregator : public Application {
   void CloseConnections();
 
   /**
-   * @brief TODO
+   * @brief Create a new connection a sender.
+   *
+   * \param sender IP address of sender
+   * \param canSchedule Whether we should, after setting up the connection,
+   * schedule the next action, such as starting a burst or starting the
+   * background flows.
+   * \param isBurstSender Whether this sender is a burst
+   * sender, as opposed to a background sender.
+   * \param useEcn Whether to enable ECN for this connection.
    */
-  Ptr<Socket> SetupConnection(Ipv4Address sender, bool canSchedule, bool isBurst);
+  Ptr<Socket> SetupConnection(
+      Ipv4Address sender, bool canSchedule, bool isBurstSender, bool useEcn);
 
   /**
    * @brief Look up the node ID of the first sender (lowest ID we know about).
@@ -266,8 +279,8 @@ class IncastAggregator : public Application {
   // If m_rwndStrategy=bdp+connections, then this is the bottleneck bandwidth.
   uint32_t m_bandwidthMbps;
 
-  // If m_rwndStrategy=static, then this is the max number of tokens that can be
-  // claimed at once. Used to reset m_rwndScheduleAvailableTokens.
+  // If m_rwndStrategy=static, then this is the max number of tokens that can
+  // be claimed at once. Used to reset m_rwndScheduleAvailableTokens.
   uint32_t m_rwndScheduleMaxTokens;
 
   // If m_rwndStrategy=static, then this is the current number of tokens that
@@ -285,13 +298,25 @@ class IncastAggregator : public Application {
   // TODO
   bool m_probingRtt;
 
-  // TCP congestion control algorithm
-  TypeId m_cca;
+  // TCP congestion control algorithm used by the burst senders.
+  TypeId m_BurstSenderCca;
+
+  // Struct for logging the bytes covered by an ACK, for a specific
+  // connection.
+  struct bytesInAckEntry {
+    Time time;
+    Ipv4Address sender_ip;
+    uint16_t sender_port;
+    Ipv4Address aggregator_ip;
+    uint16_t aggregator_port;
+    uint32_t bytesInAck;
+  };
 
   // Log streams
   std::vector<std::pair<Time, Time>> m_burstTimesLog;
   std::vector<std::pair<Time, uint32_t>> m_cwndLog;
   std::vector<std::pair<Time, Time>> m_rttLog;
+  std::vector<struct bytesInAckEntry> m_bytesInAckLog;
 
   // Maps sockets to the number of bytes received during the current burst
   std::unordered_map<Ptr<Socket>, uint32_t> m_bytesReceived;
@@ -304,8 +329,8 @@ class IncastAggregator : public Application {
   // (start time, time of first packet, end time).
   std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *m_flowTimes;
 
-  // Global record of burst senders, which maps the sender node ID to a pair of
-  // SenderApp and sender IP address.
+  // Global record of burst senders, which maps the sender node ID to a pair
+  // of SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
       *m_burstSenders;
 
@@ -318,9 +343,6 @@ class IncastAggregator : public Application {
   // milliseconds). Overrides any jitter at the aggregator node. 0 means no
   // delay, and use jitter instead.
   Time m_firstFlowOffset;
-
-  // Parameter G for updating dctcp_alpha.
-  double m_dctcpShiftG;
 
   // Whether background flows have already started
   bool m_startedBackground{false};

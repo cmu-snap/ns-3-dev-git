@@ -255,7 +255,7 @@ IncastSender::LogTx(
 void
 IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   NS_LOG_FUNCTION(this << " socket: " << socket << " from: " << from);
-  NS_LOG_INFO(m_logPrefix << "HandleAccept");
+  NS_LOG_INFO(m_logPrefix << "Connected.");
 
   InetSocketAddress addr = InetSocketAddress::ConvertFrom(from);
   NS_LOG_LOGIC(

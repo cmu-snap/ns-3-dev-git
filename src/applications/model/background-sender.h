@@ -40,5 +40,18 @@ class BackgroundSender : public IncastSender {
    * completed.
    */
   void SendData(Ptr<Socket> socket, uint32_t totalBytes) override;
+
+  /**
+   * @brief Schedule this function to set m_done.
+   */
+  void Stop();
+
+ private:
+  // Whether this background sender should be done and stop sending. Set by
+  // Stop().
+  bool m_done = false;
+
+  // Whether we have scheduled an outstanding call to Stop() to set m_done.
+  bool m_doneScheduled = false;
 };
 }  // namespace ns3

@@ -145,7 +145,7 @@ main(int argc, char *argv[]) {
   std::string tcpTypeId = "TcpCubic";
   uint32_t numBursts = 5;
   uint32_t numBurstSenders = 10;
-  uint32_t numBackgroundSenders = 1;
+  uint32_t numBackgroundSenders = 0;
   uint32_t bytesPerBurstSender = 500000;
   float delayPerLinkUs = 5;
   uint32_t jitterUs = 100;
@@ -205,6 +205,10 @@ main(int argc, char *argv[]) {
       tcpTypeId);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
   cmd.AddValue("numBurstSenders", "Number of burst senders", numBurstSenders);
+  cmd.AddValue(
+      "numBackgroundSenders",
+      "Number of background senders",
+      numBackgroundSenders);
   cmd.AddValue(
       "bytesPerBurstSender",
       "Number of bytes for each sender to send for each burst",
@@ -662,18 +666,16 @@ main(int argc, char *argv[]) {
       burstDumbbellHelper.GetLeft(0)->GetId(),
       0);
 
-  // Enable tracing at each burst sender
   if (enableSenderPcap) {
+    // Enable tracing at each burst sender
     for (uint32_t i = 0; i < burstDumbbellHelper.RightCount(); ++i) {
       largeBurstLinkHelper.EnablePcap(
           outputDirectory + traceDirectory + "/pcap/incast",
           burstDumbbellHelper.GetRight(i)->GetId(),
           0);
     }
-  }
 
-  // Enable tracing at each background sender
-  if (enableSenderPcap) {
+    // Enable tracing at each background sender
     for (uint32_t i = 0; i < backgroundDumbbellHelper.RightCount(); ++i) {
       largeBackgroundLinkHelper.EnablePcap(
           outputDirectory + traceDirectory + "/pcap/incast",

@@ -11,9 +11,10 @@ if [ "$#" -ne 1 ]; then
 fi
 
 burstDurationMs=15
-numBursts=1
+numBursts=3
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numBurstSenders=1 # $((200 + 1))
+numBurstSenders=200 # $((200 + 1))
+numBackgroundSenders=0
 cca="TcpDctcp"
 nicRateMbps=12500
 uplinkRateMbps=100000
@@ -29,8 +30,8 @@ firstFlowOffsetMs=0
 rwndStrategy="none"
 staticRwndBytes=1000000
 rwndScheduleMaxConns=20
-delAckCount=2
-delAckTimeoutMs=2
+delAckCount=1
+delAckTimeoutMs=0
 
 # Pick the right ECN marking threshold.
 nicRatePps="$(python -c "print($nicRateMbps * 1e6 / 8 / $bytesPerPacket)")"
@@ -52,7 +53,7 @@ dctcpShiftGExp="$(python -c "import math; print(math.ceil($dctcpShiftGExpRaw))")
 dctcpShiftG="$(python -c "print(1 / 2**$dctcpShiftGExp)")"
 
 out_dir="$1"
-dir_name="${burstDurationMs}ms-$numBurstSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
+dir_name="${burstDurationMs}ms-$numBurstSenders-$numBackgroundSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
 # We will store in-progress results in a tmpfs and move them to the final
 # location later.
 tmpfs="$out_dir"/tmpfs
@@ -85,6 +86,7 @@ time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
     --numBurstSenders=$numBurstSenders \
+    --numBackgroundSenders=$numBackgroundSenders \
     --bytesPerBurstSender="$bytesPerBurstSender" \
     --numBursts=$numBursts \
     --delayPerLinkUs=$delayPerLinkUs \
@@ -106,8 +108,8 @@ time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --dctcpShiftG="$dctcpShiftG" \
     --delAckCount=$delAckCount \
     --delAckTimeoutMs=$delAckTimeoutMs
-    #  \
-    # --enableSenderPcap
+#  \
+# --enableSenderPcap
 
 # Move results to out_dir.
 mkdir -pv "$out_dir"

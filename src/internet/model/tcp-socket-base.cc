@@ -256,7 +256,11 @@ TcpSocketBase::GetTypeId()
             .AddTraceSource("EcnCwrSeq",
                             "Sequence of last received CWR",
                             MakeTraceSourceAccessor(&TcpSocketBase::m_ecnCWRSeq),
-                            "ns3::SequenceNumber32TracedValueCallback");
+                            "ns3::SequenceNumber32TracedValueCallback")
+            .AddTraceSource("BytesInAck",
+                            "Number of previously-unACKed bytes covered by the current ACK",
+                            MakeTraceSourceAccessor(&TcpSocketBase::m_bytesInAckTrace),
+                            "ns3::TcpBytesInAckTracedCallback");
     return tid;
 }
 
@@ -2828,6 +2832,18 @@ TcpSocketBase::SendEmptyPacket(uint8_t flags)
     { // If sending an ACK, cancel the delay ACK as well
         m_delAckEvent.Cancel();
         m_delAckCount = 0;
+
+        // If this is an ACK, then log the amount of new data covered by the
+        // ACK.
+        m_bytesInAckTrace(
+            m_endPoint->GetPeerAddress(),
+            m_endPoint->GetPeerPort(),
+            m_endPoint->GetLocalAddress(),
+            m_endPoint->GetLocalPort(),
+            // Safety check for the (should not happen) case where the ACK
+            // number is less than the highest ACK number.
+            header.GetAckNumber() < m_highTxAck ? 0 : header.GetAckNumber() - m_highTxAck);
+
         if (m_highTxAck < header.GetAckNumber())
         {
             m_highTxAck = header.GetAckNumber();
