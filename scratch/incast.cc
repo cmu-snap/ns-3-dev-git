@@ -30,6 +30,7 @@
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-layout-module.h"
 #include "ns3/point-to-point-module.h"
+#include "ns3/ppp-header.h"
 #include "ns3/traffic-control-module.h"
 
 #include <fstream>
@@ -60,6 +61,7 @@ std::ofstream incastQueueMarkOut;
 std::ofstream uplinkQueueMarkOut;
 std::ofstream incastQueueDropOut;
 std::ofstream uplinkQueueDropOut;
+std::ofstream aggregatorRxOut;
 
 void
 LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
@@ -124,6 +126,28 @@ LogUplinkQueueDropBeforeEnqueue(Ptr<const QueueDiscItem>, const char *) {
 void
 LogUplinkQueueDropAfterDequeue(Ptr<const QueueDiscItem>, const char *) {
   LogQueueDrop(&uplinkQueueDropOut, 2);
+}
+
+/**
+ * @brief Callback to log that a packet was received by the aggregator.
+ */
+void
+LogAggregatorRx(Ptr<const Packet> packet) {
+  Ptr<Packet> copy = packet->Copy();
+
+  // Headers must be removed in the order they're present.
+  PppHeader pppHeader;
+  copy->RemoveHeader(pppHeader);
+  Ipv4Header ipHeader;
+  copy->RemoveHeader(ipHeader);
+  TcpHeader tcpHeader;
+  copy->RemoveHeader(tcpHeader);
+
+  aggregatorRxOut << Simulator::Now() << " " << ipHeader.GetSource() << " "
+                  << tcpHeader.GetSourcePort() << " "
+                  << ipHeader.GetDestination() << " "
+                  << tcpHeader.GetDestinationPort() << " " << packet->GetSize()
+                  << std::endl;
 }
 
 int
@@ -749,6 +773,20 @@ main(int argc, char *argv[]) {
   uplinkQueue->TraceConnectWithoutContext(
       "DropAfterDequeue", MakeCallback(&LogUplinkQueueDropAfterDequeue));
 
+  aggregatorRxOut.open(
+      outputDirectory + traceDirectory + "/logs/aggregator_bytes_received.log",
+      std::ios::out);
+  aggregatorRxOut << std::fixed << std::setprecision(12)
+                  << "# Time (s) , sender IP , sender port , aggregator IP "
+                     ", aggregator port , bytes received"
+                  << std::endl;
+
+  Ptr<NetDevice> aggregatorDev = burstDumbbellHelper.GetLeftDevice(0);
+  Ptr<PointToPointNetDevice> aggregatorP2PDev =
+      DynamicCast<PointToPointNetDevice>(aggregatorDev);
+  aggregatorP2PDev->TraceConnectWithoutContext(
+      "PhyRxEnd", MakeCallback(LogAggregatorRx));
+
   // Serialize all configuration parameters to a JSON file
   nlohmann::json configJson;
   configJson["outputDirectory"] = outputDirectory;
@@ -818,6 +856,7 @@ main(int argc, char *argv[]) {
   uplinkQueueMarkOut.close();
   incastQueueDropOut.close();
   uplinkQueueDropOut.close();
+  aggregatorRxOut.close();
 
   // Compute the ideal and actual burst durations
   uint32_t numBitsPerByte = 8;

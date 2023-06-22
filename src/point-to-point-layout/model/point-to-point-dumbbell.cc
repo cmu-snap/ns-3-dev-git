@@ -82,7 +82,7 @@ PointToPointDumbbellHelper::GetLeft(uint32_t i) const
 }
 
 Ptr<NetDevice> PointToPointDumbbellHelper::GetLeftDevice(uint32_t i) const {
-    return m_rightLeafDevices.Get(i);
+    return m_leftLeafDevices.Get(i);
 }
 
 NetDeviceContainer PointToPointDumbbellHelper::GetLeftDevices() const {
