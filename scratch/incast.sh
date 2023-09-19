@@ -1,8 +1,8 @@
 #!/usr/bin/env -S bash -x
 #
-# Run the incast simulation datacenter parameters.
+# Run the incast simulation.
 
-set -eou pipefail
+set -eoux pipefail
 
 # Enforce that there is a single argument.
 if [ "$#" -ne 1 ]; then
