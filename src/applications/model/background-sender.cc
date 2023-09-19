@@ -54,7 +54,7 @@ BackgroundSender::SendData(Ptr<Socket> socket, uint32_t totalBytes) {
   // until the next invocation.
   while (socket->GetTxAvailable() > totalBytes) {
     NS_LOG_INFO(m_logPrefix << "BackgroundSender sending " << totalBytes);
-    if (socket->Send(Create<Packet>(totalBytes)) != totalBytes) {
+    if (socket->Send(Create<Packet>(totalBytes)) != (int)totalBytes) {
       NS_FATAL_ERROR(
           m_logPrefix << "Error: Background sender could not send "
                       << totalBytes << " bytes.");

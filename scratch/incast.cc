@@ -143,9 +143,9 @@ LogAggregatorRx(Ptr<const Packet> packet) {
   TcpHeader tcpHeader;
   copy->RemoveHeader(tcpHeader);
 
-  aggregatorRxOut << Simulator::Now() << " " << ipHeader.GetSource() << " "
-                  << tcpHeader.GetSourcePort() << " "
-                  << ipHeader.GetDestination() << " "
+  aggregatorRxOut << Simulator::Now().GetSeconds() << " "
+                  << ipHeader.GetSource() << " " << tcpHeader.GetSourcePort()
+                  << " " << ipHeader.GetDestination() << " "
                   << tcpHeader.GetDestinationPort() << " " << packet->GetSize()
                   << std::endl;
 }
