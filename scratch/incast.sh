@@ -80,6 +80,7 @@ mkdir -p "$tmpfs_results_dir/"{logs,pcap}
 
 # Run simulation.
 ns3_dir="$(realpath "$(dirname "$0")/..")"
+"$ns3_dir/ns3" configure --build-profile=default
 "$ns3_dir/ns3" build "scratch/incast"
 "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
