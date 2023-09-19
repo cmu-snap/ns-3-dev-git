@@ -1,6 +1,6 @@
 #!/usr/bin/env -S bash -x
 #
-# Run the incast simulation with Meta's datacenter parameters.
+# Run the incast simulation datacenter parameters.
 
 set -eou pipefail
 
@@ -13,16 +13,16 @@ fi
 burstDurationMs=15
 numBursts=3
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numBurstSenders=200 # $((200 + 1))
+numBurstSenders=500 # $((200 + 1))
 numBackgroundSenders=0
 cca="TcpDctcp"
 nicRateMbps=12500
 uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
-metaQueueSizeBytes=1800000
+queueSizeBytes=1800000
 bytesPerPacket=1500
-queueSizePackets="$(python -c "import math; print(math.ceil($metaQueueSizeBytes / $bytesPerPacket))")"
+queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
 bytesPerBurstSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numBurstSenders))")"
 icwnd=10
@@ -38,15 +38,15 @@ nicRatePps="$(python -c "print($nicRateMbps * 1e6 / 8 / $bytesPerPacket)")"
 rttSec="$(python -c "print($delayPerLinkUs * 6 / 1e6)")"
 # recommendedThresholdPackets="$(python -c "print($nicRatePps * $rttSec / 7)")"
 # thresholdPackets="$(python -c "import math; print(math.ceil($recommendedThresholdPackets))")"
-# Meta threshold:
-metaQueueThresholdBytes=120000
-thresholdPackets="$(python -c "import math; print(math.ceil($metaQueueThresholdBytes / $bytesPerPacket))")"
+# ECN marking threshold:
+queueThresholdBytes=120000
+thresholdPackets="$(python -c "import math; print(math.ceil($queueThresholdBytes / $bytesPerPacket))")"
 
 # Pick the right DCTCP G parameter.
 recommendedG="$(python -c "import math; print(1.386 / math.sqrt(2 * ($nicRatePps * $rttSec + $thresholdPackets)))")"
 dctcpShiftGExpRaw="$(python -c "import math; print(math.log(1 / $recommendedG, 2))")"
 dctcpShiftGExp="$(python -c "import math; print(math.ceil($dctcpShiftGExpRaw))")"
-# Meta G:
+# DCTCP G:
 # dctcpShiftGExp=4
 # More reactive:
 # dctcpShiftGExp=2
