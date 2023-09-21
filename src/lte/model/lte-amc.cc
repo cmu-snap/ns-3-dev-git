@@ -19,12 +19,14 @@
  *                  Nicola Baldo   <nbaldo@cttc.es>
  */
 
+#include "lte-amc.h"
+
+#include "lte-mi-error-model.h"
+
 #include "ns3/enum.h"
 #include <ns3/assert.h>
 #include <ns3/double.h>
 #include <ns3/log.h>
-#include <ns3/lte-amc.h>
-#include <ns3/lte-mi-error-model.h>
 #include <ns3/math.h>
 #include <ns3/spectrum-value.h>
 
@@ -552,11 +554,10 @@ LteAmc::CreateCqiFeedbacks(const SpectrumValue& sinr, uint8_t rbgSize)
     NS_LOG_FUNCTION(this);
 
     std::vector<int> cqi;
-    Values::const_iterator it;
 
     if (m_amcModel == PiroEW2010)
     {
-        for (it = sinr.ConstValuesBegin(); it != sinr.ConstValuesEnd(); it++)
+        for (auto it = sinr.ConstValuesBegin(); it != sinr.ConstValuesEnd(); it++)
         {
             double sinr_ = (*it);
             if (sinr_ == 0.0)
@@ -592,7 +593,7 @@ LteAmc::CreateCqiFeedbacks(const SpectrumValue& sinr, uint8_t rbgSize)
         NS_ASSERT_MSG(rbgSize > 0, " LteAmc-Vienna: RBG size must be greater than 0");
         std::vector<int> rbgMap;
         int rbId = 0;
-        for (it = sinr.ConstValuesBegin(); it != sinr.ConstValuesEnd(); it++)
+        for (auto it = sinr.ConstValuesBegin(); it != sinr.ConstValuesEnd(); it++)
         {
             rbgMap.push_back(rbId++);
             if ((rbId % rbgSize == 0) || ((it + 1) == sinr.ConstValuesEnd()))

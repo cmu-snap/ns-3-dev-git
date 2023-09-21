@@ -22,11 +22,17 @@
 
 #include "lte-helper.h"
 
+#include "cc-helper.h"
+#include "epc-helper.h"
+#include "mac-stats-calculator.h"
+#include "phy-rx-stats-calculator.h"
+#include "phy-stats-calculator.h"
+#include "phy-tx-stats-calculator.h"
+
 #include <ns3/abort.h>
 #include <ns3/buildings-propagation-loss-model.h>
 #include <ns3/epc-enb-application.h>
 #include <ns3/epc-enb-s1-sap.h>
-#include <ns3/epc-helper.h>
 #include <ns3/epc-ue-nas.h>
 #include <ns3/epc-x2.h>
 #include <ns3/ff-mac-scheduler.h>
@@ -35,6 +41,7 @@
 #include <ns3/log.h>
 #include <ns3/lte-anr.h>
 #include <ns3/lte-chunk-processor.h>
+#include <ns3/lte-common.h>
 #include <ns3/lte-enb-component-carrier-manager.h>
 #include <ns3/lte-enb-mac.h>
 #include <ns3/lte-enb-net-device.h>
@@ -54,13 +61,9 @@
 #include <ns3/lte-ue-net-device.h>
 #include <ns3/lte-ue-phy.h>
 #include <ns3/lte-ue-rrc.h>
-#include <ns3/mac-stats-calculator.h>
 #include <ns3/multi-model-spectrum-channel.h>
 #include <ns3/object-factory.h>
 #include <ns3/object-map.h>
-#include <ns3/phy-rx-stats-calculator.h>
-#include <ns3/phy-stats-calculator.h>
-#include <ns3/phy-tx-stats-calculator.h>
 #include <ns3/pointer.h>
 #include <ns3/string.h>
 #include <ns3/trace-fading-loss-model.h>
@@ -484,7 +487,7 @@ LteHelper::InstallEnbDevice(NodeContainer c)
     NS_LOG_FUNCTION(this);
     Initialize(); // will run DoInitialize () if necessary
     NetDeviceContainer devices;
-    for (NodeContainer::Iterator i = c.Begin(); i != c.End(); ++i)
+    for (auto i = c.Begin(); i != c.End(); ++i)
     {
         Ptr<Node> node = *i;
         Ptr<NetDevice> device = InstallSingleEnbDevice(node);
@@ -498,7 +501,7 @@ LteHelper::InstallUeDevice(NodeContainer c)
 {
     NS_LOG_FUNCTION(this);
     NetDeviceContainer devices;
-    for (NodeContainer::Iterator i = c.Begin(); i != c.End(); ++i)
+    for (auto i = c.Begin(); i != c.End(); ++i)
     {
         Ptr<Node> node = *i;
         Ptr<NetDevice> device = InstallSingleUeDevice(node);
@@ -528,8 +531,7 @@ LteHelper::InstallSingleEnbDevice(Ptr<Node> n)
                                     << ")");
     // create component carrier map for this eNb device
     std::map<uint8_t, Ptr<ComponentCarrierBaseStation>> ccMap;
-    for (std::map<uint8_t, ComponentCarrier>::iterator it = m_componentCarrierPhyParams.begin();
-         it != m_componentCarrierPhyParams.end();
+    for (auto it = m_componentCarrierPhyParams.begin(); it != m_componentCarrierPhyParams.end();
          ++it)
     {
         Ptr<ComponentCarrierEnb> cc = CreateObject<ComponentCarrierEnb>();
@@ -749,7 +751,7 @@ LteHelper::InstallSingleEnbDevice(Ptr<Node> n)
     dev->SetAttribute("CellId", UintegerValue(cellId));
     dev->SetAttribute("LteEnbComponentCarrierManager", PointerValue(ccmEnbManager));
     dev->SetCcMap(ccMap);
-    std::map<uint8_t, Ptr<ComponentCarrierBaseStation>>::iterator it = ccMap.begin();
+    auto it = ccMap.begin();
     dev->SetAttribute("LteEnbRrc", PointerValue(rrc));
     dev->SetAttribute("LteHandoverAlgorithm", PointerValue(handoverAlgorithm));
     dev->SetAttribute(
@@ -845,8 +847,7 @@ LteHelper::InstallSingleUeDevice(Ptr<Node> n)
                                     << ")");
     std::map<uint8_t, Ptr<ComponentCarrierUe>> ueCcMap;
 
-    for (std::map<uint8_t, ComponentCarrier>::iterator it = m_componentCarrierPhyParams.begin();
-         it != m_componentCarrierPhyParams.end();
+    for (auto it = m_componentCarrierPhyParams.begin(); it != m_componentCarrierPhyParams.end();
          ++it)
     {
         Ptr<ComponentCarrierUe> cc = CreateObject<ComponentCarrierUe>();
@@ -864,9 +865,7 @@ LteHelper::InstallSingleUeDevice(Ptr<Node> n)
     // CC map is not needed anymore
     m_componentCarrierPhyParams.clear();
 
-    for (std::map<uint8_t, Ptr<ComponentCarrierUe>>::iterator it = ueCcMap.begin();
-         it != ueCcMap.end();
-         ++it)
+    for (auto it = ueCcMap.begin(); it != ueCcMap.end(); ++it)
     {
         Ptr<LteSpectrumPhy> dlPhy = CreateObject<LteSpectrumPhy>();
         Ptr<LteSpectrumPhy> ulPhy = CreateObject<LteSpectrumPhy>();
@@ -968,9 +967,7 @@ LteHelper::InstallSingleUeDevice(Ptr<Node> n)
     nas->SetAsSapProvider(rrc->GetAsSapProvider());
     rrc->SetAsSapUser(nas->GetAsSapUser());
 
-    for (std::map<uint8_t, Ptr<ComponentCarrierUe>>::iterator it = ueCcMap.begin();
-         it != ueCcMap.end();
-         ++it)
+    for (auto it = ueCcMap.begin(); it != ueCcMap.end(); ++it)
     {
         rrc->SetLteUeCmacSapProvider(it->second->GetMac()->GetLteUeCmacSapProvider(), it->first);
         it->second->GetMac()->SetLteUeCmacSapUser(rrc->GetLteUeCmacSapUser(it->first));
@@ -1006,9 +1003,7 @@ LteHelper::InstallSingleUeDevice(Ptr<Node> n)
     // when the default PDP context is created. This is a simplification.
     dev->SetAddress(Mac64Address::Allocate());
 
-    for (std::map<uint8_t, Ptr<ComponentCarrierUe>>::iterator it = ueCcMap.begin();
-         it != ueCcMap.end();
-         ++it)
+    for (auto it = ueCcMap.begin(); it != ueCcMap.end(); ++it)
     {
         Ptr<LteUePhy> ccPhy = it->second->GetPhy();
         ccPhy->SetDevice(dev);
@@ -1044,7 +1039,7 @@ void
 LteHelper::Attach(NetDeviceContainer ueDevices)
 {
     NS_LOG_FUNCTION(this);
-    for (NetDeviceContainer::Iterator i = ueDevices.Begin(); i != ueDevices.End(); ++i)
+    for (auto i = ueDevices.Begin(); i != ueDevices.End(); ++i)
     {
         Attach(*i);
     }
@@ -1086,7 +1081,7 @@ void
 LteHelper::Attach(NetDeviceContainer ueDevices, Ptr<NetDevice> enbDevice)
 {
     NS_LOG_FUNCTION(this);
-    for (NetDeviceContainer::Iterator i = ueDevices.Begin(); i != ueDevices.End(); ++i)
+    for (auto i = ueDevices.Begin(); i != ueDevices.End(); ++i)
     {
         Attach(*i, enbDevice);
     }
@@ -1127,7 +1122,7 @@ void
 LteHelper::AttachToClosestEnb(NetDeviceContainer ueDevices, NetDeviceContainer enbDevices)
 {
     NS_LOG_FUNCTION(this);
-    for (NetDeviceContainer::Iterator i = ueDevices.Begin(); i != ueDevices.End(); ++i)
+    for (auto i = ueDevices.Begin(); i != ueDevices.End(); ++i)
     {
         AttachToClosestEnb(*i, enbDevices);
     }
@@ -1141,7 +1136,7 @@ LteHelper::AttachToClosestEnb(Ptr<NetDevice> ueDevice, NetDeviceContainer enbDev
     Vector uepos = ueDevice->GetNode()->GetObject<MobilityModel>()->GetPosition();
     double minDistance = std::numeric_limits<double>::infinity();
     Ptr<NetDevice> closestEnbDevice;
-    for (NetDeviceContainer::Iterator i = enbDevices.Begin(); i != enbDevices.End(); ++i)
+    for (auto i = enbDevices.Begin(); i != enbDevices.End(); ++i)
     {
         Vector enbpos = (*i)->GetNode()->GetObject<MobilityModel>()->GetPosition();
         double distance = CalculateDistance(uepos, enbpos);
@@ -1161,7 +1156,7 @@ LteHelper::ActivateDedicatedEpsBearer(NetDeviceContainer ueDevices,
                                       Ptr<EpcTft> tft)
 {
     NS_LOG_FUNCTION(this);
-    for (NetDeviceContainer::Iterator i = ueDevices.Begin(); i != ueDevices.End(); ++i)
+    for (auto i = ueDevices.Begin(); i != ueDevices.End(); ++i)
     {
         uint8_t bearerId = ActivateDedicatedEpsBearer(*i, bearer, tft);
         return bearerId;
@@ -1321,9 +1316,9 @@ LteHelper::AddX2Interface(NodeContainer enbNodes)
 
     NS_ASSERT_MSG(m_epcHelper, "X2 interfaces cannot be set up when the EPC is not used");
 
-    for (NodeContainer::Iterator i = enbNodes.Begin(); i != enbNodes.End(); ++i)
+    for (auto i = enbNodes.Begin(); i != enbNodes.End(); ++i)
     {
-        for (NodeContainer::Iterator j = i + 1; j != enbNodes.End(); ++j)
+        for (auto j = i + 1; j != enbNodes.End(); ++j)
         {
             AddX2Interface(*i, *j);
         }
@@ -1441,7 +1436,7 @@ void
 LteHelper::ActivateDataRadioBearer(NetDeviceContainer ueDevices, EpsBearer bearer)
 {
     NS_LOG_FUNCTION(this);
-    for (NetDeviceContainer::Iterator i = ueDevices.Begin(); i != ueDevices.End(); ++i)
+    for (auto i = ueDevices.Begin(); i != ueDevices.End(); ++i)
     {
         ActivateDataRadioBearer(*i, bearer);
     }
@@ -1582,15 +1577,14 @@ LteHelper::AssignStreams(NetDeviceContainer c, int64_t stream)
         }
     }
     Ptr<NetDevice> netDevice;
-    for (NetDeviceContainer::Iterator i = c.Begin(); i != c.End(); ++i)
+    for (auto i = c.Begin(); i != c.End(); ++i)
     {
         netDevice = (*i);
         Ptr<LteEnbNetDevice> lteEnb = DynamicCast<LteEnbNetDevice>(netDevice);
         if (lteEnb)
         {
             std::map<uint8_t, Ptr<ComponentCarrierBaseStation>> tmpMap = lteEnb->GetCcMap();
-            std::map<uint8_t, Ptr<ComponentCarrierBaseStation>>::iterator it;
-            it = tmpMap.begin();
+            auto it = tmpMap.begin();
             Ptr<LteSpectrumPhy> dlPhy =
                 DynamicCast<ComponentCarrierEnb>(it->second)->GetPhy()->GetDownlinkSpectrumPhy();
             Ptr<LteSpectrumPhy> ulPhy =
@@ -1602,8 +1596,7 @@ LteHelper::AssignStreams(NetDeviceContainer c, int64_t stream)
         if (lteUe)
         {
             std::map<uint8_t, Ptr<ComponentCarrierUe>> tmpMap = lteUe->GetCcMap();
-            std::map<uint8_t, Ptr<ComponentCarrierUe>>::iterator it;
-            it = tmpMap.begin();
+            auto it = tmpMap.begin();
             Ptr<LteSpectrumPhy> dlPhy = it->second->GetPhy()->GetDownlinkSpectrumPhy();
             Ptr<LteSpectrumPhy> ulPhy = it->second->GetPhy()->GetUplinkSpectrumPhy();
             Ptr<LteUeMac> ueMac = lteUe->GetMac();

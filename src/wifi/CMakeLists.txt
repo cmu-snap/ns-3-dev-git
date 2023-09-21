@@ -25,6 +25,7 @@ set(source_files
     model/channel-access-manager.cc
     model/ctrl-headers.cc
     model/edca-parameter-set.cc
+    model/eht/default-emlsr-manager.cc
     model/eht/eht-capabilities.cc
     model/eht/eht-configuration.cc
     model/eht/eht-frame-exchange-manager.cc
@@ -32,6 +33,7 @@ set(source_files
     model/eht/tid-to-link-mapping-element.cc
     model/eht/eht-phy.cc
     model/eht/eht-ppdu.cc
+    model/eht/emlsr-manager.cc
     model/eht/multi-link-element.cc
     model/error-rate-model.cc
     model/extended-capabilities.cc
@@ -116,6 +118,7 @@ set(source_files
     model/wifi-ack-manager.cc
     model/wifi-acknowledgment.cc
     model/wifi-assoc-manager.cc
+    model/wifi-bandwidth-filter.cc
     model/wifi-default-ack-manager.cc
     model/wifi-default-assoc-manager.cc
     model/wifi-default-protection-manager.cc
@@ -173,6 +176,7 @@ set(header_files
     model/channel-access-manager.h
     model/ctrl-headers.h
     model/edca-parameter-set.h
+    model/eht/default-emlsr-manager.h
     model/eht/eht-capabilities.h
     model/eht/eht-configuration.h
     model/eht/eht-frame-exchange-manager.h
@@ -180,6 +184,7 @@ set(header_files
     model/eht/tid-to-link-mapping-element.h
     model/eht/eht-phy.h
     model/eht/eht-ppdu.h
+    model/eht/emlsr-manager.h
     model/eht/multi-link-element.h
     model/error-rate-model.h
     model/extended-capabilities.h
@@ -265,6 +270,7 @@ set(header_files
     model/wifi-ack-manager.h
     model/wifi-acknowledgment.h
     model/wifi-assoc-manager.h
+    model/wifi-bandwidth-filter.h
     model/wifi-default-ack-manager.h
     model/wifi-default-assoc-manager.h
     model/wifi-default-protection-manager.h
@@ -331,6 +337,7 @@ build_lib(
     test/wifi-aggregation-test.cc
     test/wifi-dynamic-bw-op-test.cc
     test/wifi-eht-info-elems-test.cc
+    test/wifi-emlsr-test.cc
     test/wifi-error-rate-models-test.cc
     test/wifi-ie-fragment-test.cc
     test/wifi-mac-ofdma-test.cc
@@ -347,4 +354,5 @@ build_lib(
     test/wifi-txop-test.cc
     test/wifi-phy-cca-test.cc
     test/wifi-non-ht-dup-test.cc
+    test/wifi-phy-mu-mimo-test.cc
 )

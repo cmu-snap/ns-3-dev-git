@@ -17,12 +17,13 @@
  * Author: Manuel Requena <manuel.requena@cttc.es>
  */
 
-#include "ns3/lte-rlc-um.h"
+#include "lte-rlc-um.h"
+
+#include "lte-rlc-header.h"
+#include "lte-rlc-sdu-status-tag.h"
+#include "lte-rlc-tag.h"
 
 #include "ns3/log.h"
-#include "ns3/lte-rlc-header.h"
-#include "ns3/lte-rlc-sdu-status-tag.h"
-#include "ns3/lte-rlc-tag.h"
 #include "ns3/simulator.h"
 
 namespace ns3
@@ -68,7 +69,21 @@ LteRlcUm::GetTypeId()
                           "Value of the t-Reordering timer (See section 7.3 of 3GPP TS 36.322)",
                           TimeValue(MilliSeconds(100)),
                           MakeTimeAccessor(&LteRlcUm::m_reorderingTimerValue),
-                          MakeTimeChecker());
+                          MakeTimeChecker())
+            .AddAttribute(
+                "EnablePdcpDiscarding",
+                "Whether to use the PDCP discarding, i.e., perform discarding at the moment "
+                "of passing the PDCP SDU to RLC)",
+                BooleanValue(true),
+                MakeBooleanAccessor(&LteRlcUm::m_enablePdcpDiscarding),
+                MakeBooleanChecker())
+            .AddAttribute("DiscardTimerMs",
+                          "Discard timer in milliseconds to be used to discard packets. "
+                          "If set to 0 then packet delay budget will be used as the discard "
+                          "timer value, otherwise it will be used this value.",
+                          UintegerValue(0),
+                          MakeUintegerAccessor(&LteRlcUm::m_discardTimerMs),
+                          MakeUintegerChecker<uint32_t>());
     return tid;
 }
 
@@ -93,6 +108,29 @@ LteRlcUm::DoTransmitPdcpPdu(Ptr<Packet> p)
 
     if (m_txBufferSize + p->GetSize() <= m_maxTxBufferSize)
     {
+        if (m_enablePdcpDiscarding)
+        {
+            // discart the packet
+            uint32_t headOfLineDelayInMs = 0;
+            uint32_t discardTimerMs =
+                (m_discardTimerMs > 0) ? m_discardTimerMs : m_packetDelayBudgetMs;
+
+            if (!m_txBuffer.empty())
+            {
+                headOfLineDelayInMs =
+                    (Simulator::Now() - m_txBuffer.begin()->m_waitingSince).GetMilliSeconds();
+            }
+            NS_LOG_DEBUG("head of line delay in MS:" << headOfLineDelayInMs);
+            if (headOfLineDelayInMs > discardTimerMs)
+            {
+                NS_LOG_DEBUG("Tx HOL is higher than this packet can allow. RLC SDU discarded");
+                NS_LOG_DEBUG("headOfLineDelayInMs    = " << headOfLineDelayInMs);
+                NS_LOG_DEBUG("m_packetDelayBudgetMs    = " << m_packetDelayBudgetMs);
+                NS_LOG_DEBUG("packet size     = " << p->GetSize());
+                m_txDropTrace(p);
+            }
+        }
+
         /** Store PDCP PDU */
         LteRlcSduStatusTag tag;
         tag.SetStatus(LteRlcSduStatusTag::FULL_SDU);
@@ -326,8 +364,7 @@ LteRlcUm::DoNotifyTxOpportunity(LteMacSapUser::TxOpportunityParameters txOpParam
     rlcHeader.SetSequenceNumber(m_sequenceNumber++);
 
     // Build RLC PDU with DataField and Header
-    std::vector<Ptr<Packet>>::iterator it;
-    it = dataField.begin();
+    auto it = dataField.begin();
 
     uint8_t framingInfo = 0;
 
@@ -519,11 +556,10 @@ LteRlcUm::DoReceivePdu(LteMacSapUser::ReceivePduParameters rxPduParams)
     {
         NS_LOG_LOGIC("Reception buffer contains SN = " << m_vrUr);
 
-        std::map<uint16_t, Ptr<Packet>>::iterator it;
         uint16_t newVrUr;
         SequenceNumber10 oldVrUr = m_vrUr;
 
-        it = m_rxBuffer.find(m_vrUr.GetValue());
+        auto it = m_rxBuffer.find(m_vrUr.GetValue());
         newVrUr = (it->first) + 1;
         while (m_rxBuffer.count(newVrUr) > 0)
         {
@@ -655,15 +691,19 @@ LteRlcUm::ReassembleAndDeliver(Ptr<Packet> packet)
         }
     } while (extensionBit == 1);
 
-    std::list<Ptr<Packet>>::iterator it;
-
     // Current reassembling state
     if (m_reassemblingState == WAITING_S0_FULL)
+    {
         NS_LOG_LOGIC("Reassembling State = 'WAITING_S0_FULL'");
+    }
     else if (m_reassemblingState == WAITING_SI_SF)
+    {
         NS_LOG_LOGIC("Reassembling State = 'WAITING_SI_SF'");
+    }
     else
+    {
         NS_LOG_LOGIC("Reassembling State = Unknown state");
+    }
 
     // Received framing Info
     NS_LOG_LOGIC("Framing Info = " << (uint16_t)framingInfo);
@@ -682,7 +722,7 @@ LteRlcUm::ReassembleAndDeliver(Ptr<Packet> packet)
                 /**
                  * Deliver one or multiple PDUs
                  */
-                for (it = m_sdusBuffer.begin(); it != m_sdusBuffer.end(); it++)
+                for (auto it = m_sdusBuffer.begin(); it != m_sdusBuffer.end(); it++)
                 {
                     m_rlcSapUser->ReceivePdcpPdu(*it);
                 }
@@ -862,7 +902,7 @@ LteRlcUm::ReassembleAndDeliver(Ptr<Packet> packet)
                 /**
                  * Deliver one or multiple PDUs
                  */
-                for (it = m_sdusBuffer.begin(); it != m_sdusBuffer.end(); it++)
+                for (auto it = m_sdusBuffer.begin(); it != m_sdusBuffer.end(); it++)
                 {
                     m_rlcSapUser->ReceivePdcpPdu(*it);
                 }
@@ -1081,8 +1121,7 @@ LteRlcUm::ReassembleOutsideWindow()
 {
     NS_LOG_LOGIC("Reassemble Outside Window");
 
-    std::map<uint16_t, Ptr<Packet>>::iterator it;
-    it = m_rxBuffer.begin();
+    auto it = m_rxBuffer.begin();
 
     while ((it != m_rxBuffer.end()) && !IsInsideReorderingWindow(SequenceNumber10(it->first)))
     {
@@ -1091,7 +1130,7 @@ LteRlcUm::ReassembleOutsideWindow()
         // Reassemble RLC SDUs and deliver the PDCP PDU to upper layer
         ReassembleAndDeliver(it->second);
 
-        std::map<uint16_t, Ptr<Packet>>::iterator it_tmp = it;
+        auto it_tmp = it;
         ++it;
         m_rxBuffer.erase(it_tmp);
     }
@@ -1107,15 +1146,13 @@ LteRlcUm::ReassembleSnInterval(SequenceNumber10 lowSeqNumber, SequenceNumber10 h
 {
     NS_LOG_LOGIC("Reassemble SN between " << lowSeqNumber << " and " << highSeqNumber);
 
-    std::map<uint16_t, Ptr<Packet>>::iterator it;
-
     SequenceNumber10 reassembleSn = lowSeqNumber;
     NS_LOG_LOGIC("reassembleSN = " << reassembleSn);
     NS_LOG_LOGIC("highSeqNumber = " << highSeqNumber);
     while (reassembleSn < highSeqNumber)
     {
         NS_LOG_LOGIC("reassembleSn < highSeqNumber");
-        it = m_rxBuffer.find(reassembleSn.GetValue());
+        auto it = m_rxBuffer.find(reassembleSn.GetValue());
         NS_LOG_LOGIC("it->first  = " << it->first);
         NS_LOG_LOGIC("it->second = " << it->second);
         if (it != m_rxBuffer.end())
@@ -1176,10 +1213,9 @@ LteRlcUm::ExpireReorderingTimer()
     //    - start t-Reordering;
     //    - set VR(UX) to VR(UH).
 
-    std::map<uint16_t, Ptr<Packet>>::iterator it;
     SequenceNumber10 newVrUr = m_vrUx;
 
-    while ((it = m_rxBuffer.find(newVrUr.GetValue())) != m_rxBuffer.end())
+    while (m_rxBuffer.find(newVrUr.GetValue()) != m_rxBuffer.end())
     {
         newVrUr++;
     }

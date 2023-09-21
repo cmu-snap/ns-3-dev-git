@@ -46,8 +46,12 @@
 #include "ns3/vht-capabilities.h"
 #include "ns3/vht-operation.h"
 
+#include <list>
+
 namespace ns3
 {
+
+class Packet;
 
 /**
  * Indicate which Information Elements cannot be included in a Per-STA Profile subelement of
@@ -117,7 +121,7 @@ using ProbeResponseElems = std::tuple<Ssid,
                                       std::optional<MultiLinkElement>,
                                       std::optional<EhtCapabilities>,
                                       std::optional<EhtOperation>,
-                                      std::optional<TidToLinkMapping>>;
+                                      std::vector<TidToLinkMapping>>;
 
 /// List of Information Elements included in Association Request frames
 using AssocRequestElems = std::tuple<Ssid,
@@ -129,7 +133,7 @@ using AssocRequestElems = std::tuple<Ssid,
                                      std::optional<HeCapabilities>,
                                      std::optional<MultiLinkElement>,
                                      std::optional<EhtCapabilities>,
-                                     std::optional<TidToLinkMapping>>;
+                                     std::vector<TidToLinkMapping>>;
 
 /// List of Information Elements included in Association Response frames
 using AssocResponseElems = std::tuple<SupportedRates,
@@ -146,7 +150,7 @@ using AssocResponseElems = std::tuple<SupportedRates,
                                       std::optional<MultiLinkElement>,
                                       std::optional<EhtCapabilities>,
                                       std::optional<EhtOperation>,
-                                      std::optional<TidToLinkMapping>>;
+                                      std::vector<TidToLinkMapping>>;
 
 /**
  * \ingroup wifi
@@ -543,7 +547,7 @@ class WifiActionHeader : public Header
      */
 
     /// CategoryValue enumeration
-    enum CategoryValue // table 8-38 staring from IEEE 802.11, Part11, (Year 2012)
+    enum CategoryValue // table 9-51 of IEEE 802.11-2020
     {
         QOS = 1,
         BLOCK_ACK = 3,
@@ -555,6 +559,7 @@ class WifiActionHeader : public Header
         DMG = 16,              // Category: DMG
         FST = 18,              // Category: Fast Session Transfer
         UNPROTECTED_DMG = 20,  // Category: Unprotected DMG
+        PROTECTED_EHT = 37,    // Category: Protected EHT
         // Since vendor specific action has no stationary Action value,the parse process is not
         // here. Refer to vendor-specific-action in wave module.
         VENDOR_SPECIFIC_ACTION = 127,
@@ -695,6 +700,24 @@ class WifiActionHeader : public Header
     };
 
     /**
+     * Protected EHT action field values
+     * See 802.11be D3.0 Table 9-623c
+     */
+    enum ProtectedEhtActionValue
+    {
+        PROTECTED_EHT_TID_TO_LINK_MAPPING_REQUEST = 0,
+        PROTECTED_EHT_TID_TO_LINK_MAPPING_RESPONSE = 1,
+        PROTECTED_EHT_TID_TO_LINK_MAPPING_TEARDOWN = 2,
+        PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_REQUEST = 3,
+        PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_RESPONSE = 4,
+        PROTECTED_EHT_EPCS_PRIORITY_ACCESS_TEARDOWN = 5,
+        PROTECTED_EHT_EML_OPERATING_MODE_NOTIFICATION = 6,
+        PROTECTED_EHT_LINK_RECOMMENDATION = 7,
+        PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_REQUEST = 8,
+        PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_RESPONSE = 9,
+    };
+
+    /**
      * typedef for union of different ActionValues
      */
     typedef union {
@@ -708,6 +731,7 @@ class WifiActionHeader : public Header
         DmgActionValue dmgAction;                           ///< dmg
         FstActionValue fstAction;                           ///< fst
         UnprotectedDmgActionValue unprotectedDmgAction;     ///< unprotected dmg
+        ProtectedEhtActionValue protectedEhtAction;         ///< protected eht
     } ActionValue;                                          ///< the action value
 
     /**
@@ -732,6 +756,22 @@ class WifiActionHeader : public Header
     ActionValue GetAction() const;
 
     /**
+     * Peek an Action header from the given packet.
+     *
+     * \param pkt the given packet
+     * \return the category value and the action value in the peeked Action header
+     */
+    static std::pair<CategoryValue, ActionValue> Peek(Ptr<const Packet> pkt);
+
+    /**
+     * Remove an Action header from the given packet.
+     *
+     * \param pkt the given packet
+     * \return the category value and the action value in the removed Action header
+     */
+    static std::pair<CategoryValue, ActionValue> Remove(Ptr<Packet> pkt);
+
+    /**
      * Register this type.
      * \return The TypeId.
      */
@@ -743,18 +783,6 @@ class WifiActionHeader : public Header
     uint32_t Deserialize(Buffer::Iterator start) override;
 
   private:
-    /**
-     * Category value to string function
-     * \param value the category value
-     * \returns the category value string
-     */
-    std::string CategoryValueToString(CategoryValue value) const;
-    /**
-     * Self protected action value to string function
-     * \param value the protected action value
-     * \returns the self protected action value string
-     */
-    std::string SelfProtectedActionValueToString(SelfProtectedActionValue value) const;
     uint8_t m_category;    //!< Category of the action
     uint8_t m_actionValue; //!< Action value
 };
@@ -1075,6 +1103,65 @@ class MgtDelBaHeader : public Header
     uint16_t m_initiator;  //!< initiator
     uint16_t m_tid;        //!< Traffic ID
     uint16_t m_reasonCode; //!< Not used for now. Always set to 1: "Unspecified reason"
+};
+
+/**
+ * \ingroup wifi
+ * Implement the header for Action frames of type EML Operating Mode Notification.
+ */
+class MgtEmlOmn : public Header
+{
+  public:
+    MgtEmlOmn() = default;
+
+    /**
+     * Register this type.
+     * \return The TypeId.
+     */
+    static TypeId GetTypeId();
+    TypeId GetInstanceTypeId() const override;
+    void Print(std::ostream& os) const override;
+    uint32_t GetSerializedSize() const override;
+    void Serialize(Buffer::Iterator start) const override;
+    uint32_t Deserialize(Buffer::Iterator start) override;
+
+    /**
+     * EML Control field.
+     */
+    struct EmlControl
+    {
+        uint8_t emlsrMode : 1;                  //!< EMLSR Mode
+        uint8_t emlmrMode : 1;                  //!< EMLMR Mode
+        uint8_t emlsrParamUpdateCtrl : 1;       //!< EMLSR Parameter Update Control
+        uint8_t : 5;                            //!< reserved
+        std::optional<uint16_t> linkBitmap;     //!< EMLSR/EMLMR Link Bitmap
+        std::optional<uint8_t> mcsMapCountCtrl; //!< MCS Map Count Control
+        // TODO Add EMLMR Supported MCS And NSS Set subfield when EMLMR is supported
+    };
+
+    /**
+     * EMLSR Parameter Update field.
+     */
+    struct EmlsrParamUpdate
+    {
+        uint8_t paddingDelay : 3;    //!< EMLSR Padding Delay
+        uint8_t transitionDelay : 3; //!< EMLSR Transition Delay
+    };
+
+    /**
+     * Set the bit position in the link bitmap corresponding to the given link.
+     *
+     * \param linkId the ID of the given link
+     */
+    void SetLinkIdInBitmap(uint8_t linkId);
+    /**
+     * \return the ID of the links whose bit position in the link bitmap is set to 1
+     */
+    std::list<uint8_t> GetLinkBitmap() const;
+
+    uint8_t m_dialogToken{0};                             //!< Dialog Token
+    EmlControl m_emlControl{};                            //!< EML Control field
+    std::optional<EmlsrParamUpdate> m_emlsrParamUpdate{}; //!< EMLSR Parameter Update field
 };
 
 } // namespace ns3

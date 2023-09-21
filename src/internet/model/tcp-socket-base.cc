@@ -27,8 +27,13 @@
 #include "tcp-socket-base.h"
 
 #include "ipv4-end-point.h"
+#include "ipv4-route.h"
+#include "ipv4-routing-protocol.h"
+#include "ipv4.h"
 #include "ipv6-end-point.h"
 #include "ipv6-l3-protocol.h"
+#include "ipv6-route.h"
+#include "ipv6-routing-protocol.h"
 #include "rtt-estimator.h"
 #include "tcp-congestion-ops.h"
 #include "tcp-header.h"
@@ -37,6 +42,7 @@
 #include "tcp-option-sack.h"
 #include "tcp-option-ts.h"
 #include "tcp-option-winscale.h"
+#include "tcp-rate-ops.h"
 #include "tcp-recovery-ops.h"
 #include "tcp-rx-buffer.h"
 #include "tcp-tx-buffer.h"
@@ -46,13 +52,6 @@
 #include "ns3/double.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/inet6-socket-address.h"
-#include "ns3/ipv4-interface-address.h"
-#include "ns3/ipv4-route.h"
-#include "ns3/ipv4-routing-protocol.h"
-#include "ns3/ipv4.h"
-#include "ns3/ipv6-route.h"
-#include "ns3/ipv6-routing-protocol.h"
-#include "ns3/ipv6.h"
 #include "ns3/log.h"
 #include "ns3/node.h"
 #include "ns3/object.h"
@@ -60,7 +59,6 @@
 #include "ns3/pointer.h"
 #include "ns3/simulation-singleton.h"
 #include "ns3/simulator.h"
-#include "ns3/tcp-rate-ops.h"
 #include "ns3/trace-source-accessor.h"
 #include "ns3/uinteger.h"
 
@@ -1853,7 +1851,7 @@ TcpSocketBase::ReceivedAck(Ptr<Packet> packet, const TcpHeader& tcpHeader)
 
     m_txBuffer->DiscardUpTo(ackNumber, MakeCallback(&TcpRateOps::SkbDelivered, m_rateOps));
 
-    uint32_t currentDelivered =
+    auto currentDelivered =
         static_cast<uint32_t>(m_rateOps->GetConnectionRate().m_delivered - previousDelivered);
     m_tcb->m_lastAckedSackedBytes = currentDelivered;
 
@@ -2881,6 +2879,11 @@ TcpSocketBase::SendRST()
 void
 TcpSocketBase::DeallocateEndPoint()
 {
+    // note: it shouldn't be necessary to invalidate the callback and manually call
+    // TcpL4Protocol::RemoveSocket. Alas, if one relies on the endpoint destruction
+    // callback, there's a weird memory access to a free'd area. Harmless, but valgrind
+    // considers it an error.
+
     if (m_endPoint != nullptr)
     {
         CancelAllTimers();
@@ -3277,7 +3280,7 @@ TcpSocketBase::UpdateRttHistory(const SequenceNumber32& seq, uint32_t sz, bool i
     }
     else
     { // This is a retransmit, find in list and mark as re-tx
-        for (std::deque<RttHistory>::iterator i = m_history.begin(); i != m_history.end(); ++i)
+        for (auto i = m_history.begin(); i != m_history.end(); ++i)
         {
             if ((seq >= i->seq) && (seq < (i->seq + SequenceNumber32(i->count))))
             { // Found it
@@ -3296,13 +3299,13 @@ TcpSocketBase::SendPendingData(bool withAck)
     NS_LOG_FUNCTION(this << withAck);
     if (m_txBuffer->Size() == 0)
     {
-        return false; // Nothing to send
+        return 0; // Nothing to send
     }
     if (m_endPoint == nullptr && m_endPoint6 == nullptr)
     {
         NS_LOG_INFO(
             "TcpSocketBase::SendPendingData: No endpoint; m_shutdownSend=" << m_shutdownSend);
-        return false; // Is this the right way to handle this condition?
+        return 0; // Is this the right way to handle this condition?
     }
 
     uint32_t nPacketsSent = 0;
@@ -3375,7 +3378,7 @@ TcpSocketBase::SendPendingData(bool withAck)
 
             uint32_t s = std::min(availableWindow, m_tcb->m_segmentSize);
             // NextSeg () may have further constrained the segment size
-            uint32_t maxSizeToSend = static_cast<uint32_t>(nextHigh - next);
+            auto maxSizeToSend = static_cast<uint32_t>(nextHigh - next);
             s = std::min(s, maxSizeToSend);
 
             // (C.2) If any of the data octets sent in (C.1) are below HighData,
@@ -4326,8 +4329,8 @@ TcpSocketBase::AddOptionSack(TcpHeader& header)
 
     // Append the allowed number of SACK blocks
     Ptr<TcpOptionSack> option = CreateObject<TcpOptionSack>();
-    TcpOptionSack::SackList::iterator i;
-    for (i = sackList.begin(); allowedSackBlocks > 0 && i != sackList.end(); ++i)
+
+    for (auto i = sackList.begin(); allowedSackBlocks > 0 && i != sackList.end(); ++i)
     {
         option->AddSackBlock(*i);
         allowedSackBlocks--;
