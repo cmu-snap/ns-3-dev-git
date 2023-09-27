@@ -2,7 +2,7 @@
 #
 # Run the incast simulation datacenter parameters.
 
-set -eou pipefail
+set -eoux pipefail
 
 # Enforce that there is a single argument.
 if [ "$#" -ne 1 ]; then
