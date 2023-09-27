@@ -4237,13 +4237,13 @@ TcpSocketBase::CalculateWScale() const
 {
     NS_LOG_FUNCTION(this);
     uint32_t maxSpace = m_tcb->m_rxBuffer->MaxBufferSize();
-    uint8_t scale = 0;
+    uint8_t scale = 11;
 
-    while (maxSpace > m_maxWinSize)
-    {
-        maxSpace = maxSpace >> 1;
-        ++scale;
-    }
+    // while (maxSpace > m_maxWinSize)
+    // {
+    //     maxSpace = maxSpace >> 1;
+    //     ++scale;
+    // }
 
     if (scale > 14)
     {
