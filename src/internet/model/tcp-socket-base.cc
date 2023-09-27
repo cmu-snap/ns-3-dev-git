@@ -4701,10 +4701,13 @@ RttHistory::RttHistory(const RttHistory& h)
 void TcpSocketBase::SetOverrideWindowSize(uint16_t windowSize) {
     uint16_t oldWindowSize = m_overrideWindowSize;
     m_overrideWindowSize = windowSize;
-    if (oldWindowSize == 0 && m_overrideWindowSize != 0) {
-        // In effect, we are configuring the receiver to tell the sender that
-        // it can now send data. So we need to send an ACK to update the peer's
-        // window size
+    // if (oldWindowSize == 0 && m_overrideWindowSize != 0) {
+    //     // In effect, we are configuring the receiver to tell the sender that
+    //     // it can now send data. So we need to send an ACK to update the peer's
+    //     // window size
+    //     SendEmptyPacket(TcpHeader::ACK);
+    // }
+    if (oldWindowSize != m_overrideWindowSize) {
         SendEmptyPacket(TcpHeader::ACK);
     }
 }
