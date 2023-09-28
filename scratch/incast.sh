@@ -52,7 +52,17 @@ dctcpShiftGExp="$(python -c "import math; print(math.ceil($dctcpShiftGExpRaw))")
 # dctcpShiftGExp=2
 dctcpShiftG="$(python -c "print(1 / 2**$dctcpShiftGExp)")"
 
-out_dir="$1"
+# Get git branch
+ns3_dir="$(realpath "$(dirname "$0")/..")"
+pushd "$ns3_dir"
+git_branch="$(git branch --show-current)"
+popd
+if [ -z "$git_branch" ]; then
+    printf "Error: Unable to determine Git branch of simulator!\n"
+    exit 1
+fi
+
+out_dir="$1/$git_branch"
 dir_name="${burstDurationMs}ms-$numBurstSenders-$numBackgroundSenders-$numBursts-$cca-${nicRateMbps}mbps-${queueSizeBytes}B-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
 # We will store in-progress results in a tmpfs and move them to the final
 # location later.
@@ -80,7 +90,6 @@ rm -rfv "${tmpfs_results_dir:?}" "${results_dir:?}"
 mkdir -p "$tmpfs_results_dir/"{logs,pcap}
 
 # Run simulation.
-ns3_dir="$(realpath "$(dirname "$0")/..")"
 "$ns3_dir/ns3" configure --build-profile=default
 "$ns3_dir/ns3" build "scratch/incast"
 time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
