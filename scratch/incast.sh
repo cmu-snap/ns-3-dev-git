@@ -11,15 +11,15 @@ if [ "$#" -ne 1 ]; then
 fi
 
 burstDurationMs=15
-numBursts=3
+numBursts=11
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numSenders=500 # $((200 + 1))
+numSenders=100 # $((100 + 1))
 cca="TcpDctcp"
-nicRateMbps=12500
+nicRateMbps=10000
 uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
-queueSizeBytes=1800000
+queueSizeBytes=2000000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
@@ -27,7 +27,7 @@ bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e
 icwnd=10
 firstFlowOffsetMs=0
 rwndStrategy="none"
-staticRwndBytes=1000000
+staticRwndBytes=65536
 rwndScheduleMaxConns=20
 delAckCount=1
 delAckTimeoutMs=0
