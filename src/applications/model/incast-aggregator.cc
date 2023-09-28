@@ -655,7 +655,7 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     // Simulator::Schedule(
     //     MilliSeconds(20), &IncastAggregator::StartRttProbes, this);
     // Start the burst itself in 30 ms.
-    ScheduleNextBurst(MilliSeconds(30));
+    ScheduleNextBurst(MilliSeconds(1000));
   }
 }
 
