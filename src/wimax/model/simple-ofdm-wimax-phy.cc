@@ -273,7 +273,7 @@ SimpleOfdmWimaxPhy::DoAttach(Ptr<WimaxChannel> channel)
 void
 SimpleOfdmWimaxPhy::Send(SendParams* params)
 {
-    OfdmSendParams* o_params = dynamic_cast<OfdmSendParams*>(params);
+    auto o_params = dynamic_cast<OfdmSendParams*>(params);
     NS_ASSERT(o_params != nullptr);
     Send(o_params->GetBurst(),
          (WimaxPhy::ModulationType)o_params->GetModulationType(),
@@ -309,7 +309,7 @@ SimpleOfdmWimaxPhy::StartSendDummyFecBlock(bool isFirstBlock,
                                            uint8_t direction)
 {
     SetState(PHY_STATE_TX);
-    bool isLastFecBlock = 0;
+    bool isLastFecBlock = false;
     if (isFirstBlock)
     {
         m_blockTime = GetBlockTransmissionTime(modulationType);
@@ -496,20 +496,20 @@ SimpleOfdmWimaxPhy::EndReceive(Ptr<const PacketBurst> burst)
 Bvec
 SimpleOfdmWimaxPhy::ConvertBurstToBits(Ptr<const PacketBurst> burst)
 {
-    Bvec buffer(burst->GetSize() * 8, 0);
+    Bvec buffer(burst->GetSize() * 8, false);
 
     std::list<Ptr<Packet>> packets = burst->GetPackets();
 
     uint32_t j = 0;
-    for (std::list<Ptr<Packet>>::iterator iter = packets.begin(); iter != packets.end(); ++iter)
+    for (auto iter = packets.begin(); iter != packets.end(); ++iter)
     {
         Ptr<Packet> packet = *iter;
-        uint8_t* pstart = (uint8_t*)std::malloc(packet->GetSize());
+        auto pstart = (uint8_t*)std::malloc(packet->GetSize());
         std::memset(pstart, 0, packet->GetSize());
         packet->CopyData(pstart, packet->GetSize());
         Bvec temp(8);
-        temp.resize(0, 0);
-        temp.resize(8, 0);
+        temp.resize(0, false);
+        temp.resize(8, false);
         for (uint32_t i = 0; i < packet->GetSize(); i++)
         {
             for (uint8_t l = 0; l < 8; l++)
@@ -547,7 +547,7 @@ SimpleOfdmWimaxPhy::ConvertBitsToBurst(Bvec buffer)
         for (int l = 0; l < 8; l++)
         {
             bool bin = buffer.at(i + l);
-            temp += (uint8_t)(bin * std::pow(2.0, (7 - l)));
+            temp |= (bin << (7 - l));
         }
 
         *(pstart + j) = temp;
@@ -593,7 +593,7 @@ SimpleOfdmWimaxPhy::CreateFecBlocks(const Bvec& buffer, WimaxPhy::ModulationType
         if (j == 1 && m_paddingBits > 0) // last block can be smaller than block size
         {
             fecBlock = Bvec(buffer.begin() + i, buffer.end());
-            fecBlock.resize(m_blockSize, 0);
+            fecBlock.resize(m_blockSize, false);
         }
         else
         {
@@ -677,7 +677,7 @@ SimpleOfdmWimaxPhy::CalculateDataRate(WimaxPhy::ModulationType modulationType) c
     double fecCode = 0;
     GetModulationFecParams(modulationType, bitsPerSymbol, fecCode);
     double symbolsPerSecond = 1 / GetSymbolDuration().GetSeconds();
-    uint16_t bitsTransmittedPerSymbol = (uint16_t)(bitsPerSymbol * GetNrCarriers() * fecCode);
+    auto bitsTransmittedPerSymbol = (uint16_t)(bitsPerSymbol * GetNrCarriers() * fecCode);
     // 96, 192, 288, 384, 576, 767 and 864 bits per symbol for the seven modulations, respectively
 
     return (uint32_t)symbolsPerSecond * bitsTransmittedPerSymbol;
@@ -690,25 +690,18 @@ SimpleOfdmWimaxPhy::DoGetDataRate(WimaxPhy::ModulationType modulationType) const
     {
     case MODULATION_TYPE_BPSK_12:
         return m_dataRateBpsk12;
-        break;
     case MODULATION_TYPE_QPSK_12:
         return m_dataRateQpsk12;
-        break;
     case MODULATION_TYPE_QPSK_34:
         return m_dataRateQpsk34;
-        break;
     case MODULATION_TYPE_QAM16_12:
         return m_dataRateQam16_12;
-        break;
     case MODULATION_TYPE_QAM16_34:
         return m_dataRateQam16_34;
-        break;
     case MODULATION_TYPE_QAM64_23:
         return m_dataRateQam64_23;
-        break;
     case MODULATION_TYPE_QAM64_34:
         return m_dataRateQam64_34;
-        break;
     }
     NS_FATAL_ERROR("Invalid modulation type");
     return 0;
@@ -893,25 +886,18 @@ SimpleOfdmWimaxPhy::DoGetFrameDuration(uint8_t frameDurationCode) const
     {
     case FRAME_DURATION_2_POINT_5_MS:
         return Seconds(2.5);
-        break;
     case FRAME_DURATION_4_MS:
         return Seconds(4);
-        break;
     case FRAME_DURATION_5_MS:
         return Seconds(5);
-        break;
     case FRAME_DURATION_8_MS:
         return Seconds(8);
-        break;
     case FRAME_DURATION_10_MS:
         return Seconds(10);
-        break;
     case FRAME_DURATION_12_POINT_5_MS:
         return Seconds(12.5);
-        break;
     case FRAME_DURATION_20_MS:
         return Seconds(20);
-        break;
     default:
         NS_FATAL_ERROR("Invalid modulation type");
     }

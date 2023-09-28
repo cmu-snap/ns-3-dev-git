@@ -167,8 +167,6 @@ packets.  Interference from other wireless technologies is only modeled
 when the SpectrumWifiPhy is used.
 The following details pertain to the physical layer and channel models:
 
-* 802.11ax/be MU-RTS/CTS is not yet supported
-* 802.11ac/ax/be MU-MIMO is not supported, and no more than 4 antennas can be configured
 * 802.11n/ac/ax/be beamforming is not supported
 * 802.11n RIFS is not supported
 * 802.11 PCF/HCF/HCCA are not implemented
@@ -178,11 +176,11 @@ The following details pertain to the physical layer and channel models:
 * Cases where RTS/CTS and ACK are transmitted using HT/VHT/HE/EHT formats are not supported
 * Energy consumption model does not consider MIMO
 * 802.11ax preamble puncturing is supported by the PHY but is currently not exploited by the MAC
-* Only minimal 802.11be PHY is supported (no MAC layer yet)
+* Only minimal MU-MIMO is supported (ideal PHY assumed, no MAC layer yet)
 
 At the MAC layer, most of the main functions found in deployed Wi-Fi
-equipment for 802.11a/b/e/g/n/ac/ax are implemented, but there are scattered instances
-where some limitations in the models exist. Support for 802.11n, ac and ax is evolving.
+equipment for 802.11a/b/e/g/n/ac/ax/be are implemented, but there are scattered instances
+where some limitations in the models exist. Support for 802.11n, ac, ax and be is evolving.
 
 Some implementation choices that are not imposed by the standard are listed below:
 
@@ -707,6 +705,18 @@ is spread across the sub-bands roughly according to how power would
 be allocated to sub-carriers. Adjacent channels are models by the use of
 OFDM transmit spectrum masks as defined in the standards.
 
+The class ``WifiBandwidthFilter`` is used to discard signals early in the
+transmission process by ignoring any Wi-Fi PPDU whose TX band (including guard bands)
+does not overlap the current operating channel. Therefore, it bypasses the signal
+propagation/loss calculations reducing the computational load and increasing the
+simulation performance. To enable the ``WifiBandwidthFilter``, the user can use object
+aggregation as follows:
+.. sourcecode:: cpp
+
+  Ptr<WifiBandwidthFilter> wifiFilter = CreateObject<WifiBandwidthFilter> ();
+  Ptr<MultiModelSpectrumChannel> spectrumChannel = CreateObject<MultiModelSpectrumChannel> ();
+  spectrumChannel->AddSpectrumTransmitFilter(wifiFilter);
+
 To support an easier user configuration experience, the existing
 YansWifi helper classes (in ``src/wifi/helper``) were copied and
 adapted to provide equivalent SpectrumWifi helper classes.
@@ -723,6 +733,40 @@ to the InterferenceHelper and can raise CCA_BUSY but are not further processed
 in the reception chain.   After this point, valid Wi-Fi signals cause
 ``WifiPhy::StartReceivePreamble`` to be called, and the processing continues
 as described above.
+
+Furthermore, in order to support more flexible channel switching,
+the ``SpectrumWifiPhy`` can hold multiple instances of ``WifiSpectrumPhyInterface``
+(:ref:`fig-spectrum-wifi-phy-multiple-interfaces`).
+Each of these instances handles a given frequency range of the spectrum, identified by
+a start and a stop frequency expressed in MHz, and there can be no overlap in spectrum between them.
+Only one of these ``WifiSpectrumPhyInterface`` instances corresponds to the active RF interface of the ``SpectrumWifiPhy``,
+the other ones are referred to as inactive RF interfaces and might be disconnected from the spectrum channel.
+
+.. _fig-spectrum-wifi-phy-multiple-interfaces:
+
+.. figure:: figures/spectrum-wifi-phy-multiple-interfaces.*
+   :align: center
+
+   Multiple RF interfaces concept
+
+If the ``SpectrumWifiPhy::TrackSignalsFromInactiveInterfaces`` attribute is set to true (default),
+inactive RF interfaces are connected to their respective spectrum channels and the ``SpectrumWifiPhy``
+also receive signals from these inactive RF interfaces when they belong to a configured portion
+of the frequency range covered by the interface.
+The portion of the spectrum being monitored by an inactive interface is specified by a center frequency
+and a channel width, and is seamlessly set to equivalent of the operating channel of the spectrum PHY
+that is actively using that frequency range. The ``SpectrumWifiPhy``forwards these received signals
+from inactive interfaces to the ``InterferenceHelper`` without further processing them.
+The benefit of the latter is that more accurate PHY-CCA.indication can be generated upon channel switching
+if one or more signals started to be transmitted on the new channel before the switch occurs,
+which would be ignored otherwise. This is illustrated in Figure :ref:`fig-cca-channel-switching-multiple-interfaces`, where the parts in red are only generated when ``SpectrumWifiPhy::TrackSignalsFromInactiveInterfaces`` is set to true.
+
+.. _fig-cca-channel-switching-multiple-interfaces:
+
+.. figure:: figures/cca-channel-switching-multiple-interfaces.*
+   :align: center
+
+   Illustration of signals tracking upon channel switching
 
 The MAC model
 =============
@@ -924,6 +968,16 @@ assigned a User Priority based on the socket priority (see, e.g., the wifi-multi
 the wifi-mac-ofdma examples), which determines the Access Category that handles the
 packet. By default, wifi MAC queues support flow control, hence upper layers do not
 forward a packet down if there is no room for it in the corresponding MAC queue.
+Wifi MAC queues do not support dynamic queue limits (byte queue limits); therefore,
+there is no backpressure into the traffic control layer until the WifiMacQueue for
+an access category is completely full (i.e., when the queue depth reaches the value
+of the MaxSize attribute, which defaults to 500 packets).
+TCP small queues (TSQ) [corbet2012]_ is a Linux feature that provides feedback from the
+Wi-Fi device to the socket layer, to control how much data is queued at the Wi-Fi
+level.  |ns3| TCP does not implement TSQ, nor does the WifiNetDevice provide that
+specific feedback (although some use of the existing trace sources may be enough to
+support it).  Regardless, experimental tests have demonstrated that TSQ interferes with
+Wi-Fi aggregation on uplink transfers [grazia2022]_.
 Packets stay in the wifi MAC queue until they are acknowledged or discarded. A packet
 may be discarded because, e.g., its lifetime expired (i.e., it stayed in the queue for too
 long) or the maximum number of retries was reached. The maximum lifetime for a packet can
@@ -1045,6 +1099,52 @@ allocation as the preceding DL multi-user frame. The transmission of a BSRP Trig
 optionally (depending on the value of the ``EnableBsrp`` attribute) precede the transmission
 of a Basic Trigger Frame in order for the AP to collect information about the buffer status
 of the stations.
+
+Enhanced multi-link single radio operation (EMLSR)
+##################################################
+
+The IEEE 802.11be amendment introduced EMLSR operating mode to allow a non-AP MLD to alternate
+frame exchanges over a subset of setup links identified as EMLSR links. |ns3| supports EMLSR
+operations as described in the following.
+
+Non-AP MLD side
+---------------
+
+A non-AP MLD supports EMLSR operating mode if the ``EmlsrActivated`` attribute of the EHT
+configuration is set to true. In such a case, the WifiMacHelper will install an EMLSR Manager
+by using the type and attribute values configured through the ``SetEmlsrManager`` method. The
+EMLSR Manager is a base class providing the ``EmlsrLinkSet`` attribute, which can be used to
+enable or disable EMLSR mode (after multi-link setup, EMLSR mode is disabled by default). Setting
+the ``EmlsrLinkSet`` attribute triggers the transmission of an EML Operating Mode Notification
+frame to the AP to communicate the new set of EMLSR links, if ML setup has been completed.
+Otherwise, the set of EMLSR links is stored and the EML Operating Mode Notification frame is
+sent as soon as the ML setup is completed. The selection of the link used to transmit
+the EML Operating Mode Notification frame is done by the EMLSR Manager subclass. The default
+EMLSR Manager subclass, ``DefaultEmlsrManager``, selects the link that was used to perform
+ML setup. When the non-AP MLD receives the acknowledgment for the EML Operating Mode Notification
+frame, it starts a timer whose duration is the transition timeout advertised by the AP MLD.
+When the timer expires, or the non-AP MLD receives an EML Operating Mode Notification frame
+from the AP MLD, the EMLSR mode is assumed to be enabled (or disabled).
+
+AP MLD side
+-----------
+An AP MLD supports EMLSR operating mode if the ``EmlsrActivated`` attribute of the EHT
+configuration is set to true. When an AP MLD that supports EMLSR operating mode has to initiate a
+frame exchange with a non-AP MLD that is operating in EMLSR mode, it sends an MU-RTS Trigger Frame
+soliciting a response from the non-AP MLD (and possibly others) as the initial Control frame for
+that exchange. The MU-RTS Trigger Frame includes a Padding field whose transmission duration is the
+maximum among the padding delays advertised by all the EMLSR clients solicited by the MU-RTS
+Trigger Frame. Also, the MU-RTS Trigger Frame is carried in a non-HT (duplicate) PPDU transmitted
+at a rate of 6 Mbps, 12 Mbps or 24 Mbps. When the transmission of an initial Control frame starts,
+the AP MLD blocks transmissions to the solicited EMLSR clients on the EMLSR links other than the
+link used to transmit the initial Control frame, so that the AP MLD does not initiate another
+frame exchange on such links. The frame exchange with an EMLSR client is assumed to terminate
+when the AP MLD does not start a frame transmission a SIFS after the response to the last frame
+transmitted by the AP MLD or the AP MLD transmits a frame that is not addressed to the EMLSR
+client. When a frame exchange with an EMLSR client terminates, the AP MLD blocks transmissions on
+all the EMLSR links and starts a timer whose duration is the transition delay advertised by the
+EMLSR client. When the timer expires, the EMLSR client is assumed to be back to the listening
+operations and transmissions on all the EMLSR links are unblocked.
 
 Ack manager
 ###########

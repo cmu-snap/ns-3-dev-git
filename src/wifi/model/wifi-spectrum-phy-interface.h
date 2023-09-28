@@ -22,6 +22,7 @@
 
 #include "spectrum-wifi-phy.h"
 
+#include "ns3/he-phy.h"
 #include "ns3/spectrum-phy.h"
 
 namespace ns3
@@ -51,14 +52,20 @@ class WifiSpectrumPhyInterface : public SpectrumPhy
     /**
      * Constructor
      *
-     * \param range the frequency range covered by the interface
+     * \param freqRange the frequency range covered by the interface
      */
-    WifiSpectrumPhyInterface(FrequencyRange range);
+    WifiSpectrumPhyInterface(FrequencyRange freqRange);
     /**
      * Connect SpectrumWifiPhy object
      * \param phy SpectrumWifiPhy object to be connected to this object
      */
     void SetSpectrumWifiPhy(const Ptr<SpectrumWifiPhy> phy);
+
+    /**
+     * Get SpectrumWifiPhy object
+     * \return Pointer to SpectrumWifiPhy object
+     */
+    Ptr<const SpectrumWifiPhy> GetSpectrumWifiPhy() const;
 
     Ptr<NetDevice> GetDevice() const override;
     void SetDevice(const Ptr<NetDevice> d) override;
@@ -119,16 +126,46 @@ class WifiSpectrumPhyInterface : public SpectrumPhy
                             uint32_t bandBandwidth,
                             uint16_t guardBandwidth);
 
+    /**
+     * Set the vector of spectrum bands handled by this interface
+     *
+     * \param bands vector of spectrum bands
+     */
+    void SetBands(WifiSpectrumBands&& bands);
+    /**
+     * Get the vector of spectrum bands handled by this interface
+     *
+     * \return the vector of spectrum bands
+     */
+    const WifiSpectrumBands& GetBands() const;
+
+    /**
+     * Set the HE RU spectrum bands handled by this interface (if any)
+     *
+     * \param heRuBands the HE RU spectrum bands
+     */
+    void SetHeRuBands(HeRuBands&& heRuBands);
+    /**
+     * Get the HE RU spectrum bands handled by this interface
+     *
+     * \return the HE RU spectrum bands
+     */
+    const HeRuBands& GetHeRuBands() const;
+
   private:
     void DoDispose() override;
 
-    FrequencyRange m_range;                     ///< frequency range
+    FrequencyRange m_frequencyRange;            ///< frequency range
     Ptr<SpectrumWifiPhy> m_spectrumWifiPhy;     ///< spectrum PHY
     Ptr<NetDevice> m_netDevice;                 ///< the device
     Ptr<SpectrumChannel> m_channel;             ///< spectrum channel
     uint16_t m_centerFrequency;                 ///< center frequency in MHz
     uint16_t m_channelWidth;                    ///< channel width in MHz
     Ptr<const SpectrumModel> m_rxSpectrumModel; ///< receive spectrum model
+
+    WifiSpectrumBands
+        m_bands; /**< Store all the distinct spectrum bands associated with every channels widths */
+    HeRuBands m_heRuBands; /**< Store all the distinct spectrum bands associated with every RU */
 };
 
 } // namespace ns3

@@ -25,16 +25,18 @@
 
 #include "lte-enb-rrc.h"
 
+#include "component-carrier-enb.h"
+#include "eps-bearer-tag.h"
+#include "lte-pdcp.h"
+#include "lte-radio-bearer-info.h"
+#include "lte-rlc-am.h"
+#include "lte-rlc-tm.h"
+#include "lte-rlc-um.h"
+#include "lte-rlc.h"
+
 #include <ns3/abort.h>
-#include <ns3/eps-bearer-tag.h>
 #include <ns3/fatal-error.h>
 #include <ns3/log.h>
-#include <ns3/lte-pdcp.h>
-#include <ns3/lte-radio-bearer-info.h>
-#include <ns3/lte-rlc-am.h>
-#include <ns3/lte-rlc-tm.h>
-#include <ns3/lte-rlc-um.h>
-#include <ns3/lte-rlc.h>
 #include <ns3/object-factory.h>
 #include <ns3/object-map.h>
 #include <ns3/packet.h>
@@ -204,7 +206,7 @@ UeManager::DoInitialize()
         // Iinterface Specification v1.11, 4.3.4 logicalChannelConfigListElement
         lcinfo.lcGroup = 0;
         lcinfo.qci = 0;
-        lcinfo.isGbr = false;
+        lcinfo.resourceType = 0;
         lcinfo.mbrUl = 0;
         lcinfo.mbrDl = 0;
         lcinfo.gbrUl = 0;
@@ -249,7 +251,7 @@ UeManager::DoInitialize()
         lcinfo.lcGroup = 0; // all SRBs always mapped to LCG 0
         lcinfo.qci =
             EpsBearer::GBR_CONV_VOICE; // not sure why the FF API requires a CQI even for SRBs...
-        lcinfo.isGbr = true;
+        lcinfo.resourceType = 1;       // GBR resource type
         lcinfo.mbrUl = 1e6;
         lcinfo.mbrDl = 1e6;
         lcinfo.gbrUl = 1e4;
@@ -318,9 +320,7 @@ UeManager::DoDispose()
 {
     delete m_drbPdcpSapUser;
     // delete eventual X2-U TEIDs
-    for (std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.begin();
-         it != m_drbMap.end();
-         ++it)
+    for (auto it = m_drbMap.begin(); it != m_drbMap.end(); ++it)
     {
         m_rrc->m_x2uTeidInfoMap.erase(it->second->m_gtpTeid);
     }
@@ -423,9 +423,8 @@ UeManager::SetupDataRadioBearer(EpsBearer bearer,
         LteEnbRrc::X2uTeidInfo x2uTeidInfo;
         x2uTeidInfo.rnti = m_rnti;
         x2uTeidInfo.drbid = drbid;
-        std::pair<std::map<uint32_t, LteEnbRrc::X2uTeidInfo>::iterator, bool> ret =
-            m_rrc->m_x2uTeidInfoMap.insert(
-                std::pair<uint32_t, LteEnbRrc::X2uTeidInfo>(gtpTeid, x2uTeidInfo));
+        auto ret = m_rrc->m_x2uTeidInfoMap.insert(
+            std::pair<uint32_t, LteEnbRrc::X2uTeidInfo>(gtpTeid, x2uTeidInfo));
         NS_ASSERT_MSG(ret.second == true, "overwriting a pre-existing entry in m_x2uTeidInfoMap");
     }
 
@@ -436,6 +435,7 @@ UeManager::SetupDataRadioBearer(EpsBearer bearer,
     Ptr<LteRlc> rlc = rlcObjectFactory.Create()->GetObject<LteRlc>();
     rlc->SetLteMacSapProvider(m_rrc->m_macSapProvider);
     rlc->SetRnti(m_rnti);
+    rlc->SetPacketDelayBudgetMs(bearer.GetPacketDelayBudgetMs());
 
     drbInfo->m_rlc = rlc;
 
@@ -468,14 +468,14 @@ UeManager::SetupDataRadioBearer(EpsBearer bearer,
     // lcinfo.lcId = lcid;
     // lcinfo.lcGroup = m_rrc->GetLogicalChannelGroup (bearer);
     // lcinfo.qci = bearer.qci;
-    // lcinfo.isGbr = bearer.IsGbr ();
+    // lcinfo.resourceType = bearer.GetResourceType();
     // lcinfo.mbrUl = bearer.gbrQosInfo.mbrUl;
     // lcinfo.mbrDl = bearer.gbrQosInfo.mbrDl;
     // lcinfo.gbrUl = bearer.gbrQosInfo.gbrUl;
     // lcinfo.gbrDl = bearer.gbrQosInfo.gbrDl;
     // use a for cycle to send the AddLc to the appropriate Mac Sap
     // if the sap is not initialized the appropriated method has to be called
-    std::vector<LteCcmRrcSapProvider::LcsConfig>::iterator itLcOnCcMapping = lcOnCcMapping.begin();
+    auto itLcOnCcMapping = lcOnCcMapping.begin();
     NS_ASSERT_MSG(itLcOnCcMapping != lcOnCcMapping.end(), "Problem");
     for (itLcOnCcMapping = lcOnCcMapping.begin(); itLcOnCcMapping != lcOnCcMapping.end();
          ++itLcOnCcMapping)
@@ -503,7 +503,7 @@ UeManager::SetupDataRadioBearer(EpsBearer bearer,
     drbInfo->m_logicalChannelIdentity = lcid;
     drbInfo->m_logicalChannelConfig.priority = m_rrc->GetLogicalChannelPriority(bearer);
     drbInfo->m_logicalChannelConfig.logicalChannelGroup = m_rrc->GetLogicalChannelGroup(bearer);
-    if (bearer.IsGbr())
+    if (bearer.GetResourceType() > 0) // 1, 2 for GBR and DC-GBR
     {
         drbInfo->m_logicalChannelConfig.prioritizedBitRateKbps = bearer.gbrQosInfo.gbrUl;
     }
@@ -520,9 +520,7 @@ void
 UeManager::RecordDataRadioBearersToBeStarted()
 {
     NS_LOG_FUNCTION(this << (uint32_t)m_rnti);
-    for (std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.begin();
-         it != m_drbMap.end();
-         ++it)
+    for (auto it = m_drbMap.begin(); it != m_drbMap.end(); ++it)
     {
         m_drbsToBeStarted.push_back(it->first);
     }
@@ -532,11 +530,9 @@ void
 UeManager::StartDataRadioBearers()
 {
     NS_LOG_FUNCTION(this << (uint32_t)m_rnti);
-    for (std::list<uint8_t>::iterator drbIdIt = m_drbsToBeStarted.begin();
-         drbIdIt != m_drbsToBeStarted.end();
-         ++drbIdIt)
+    for (auto drbIdIt = m_drbsToBeStarted.begin(); drbIdIt != m_drbsToBeStarted.end(); ++drbIdIt)
     {
-        std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator drbIt = m_drbMap.find(*drbIdIt);
+        auto drbIt = m_drbMap.find(*drbIdIt);
         NS_ASSERT(drbIt != m_drbMap.end());
         drbIt->second->m_rlc->Initialize();
         if (drbIt->second->m_pdcp)
@@ -552,7 +548,7 @@ UeManager::ReleaseDataRadioBearer(uint8_t drbid)
 {
     NS_LOG_FUNCTION(this << (uint32_t)m_rnti << (uint32_t)drbid);
     uint8_t lcid = Drbid2Lcid(drbid);
-    std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.find(drbid);
+    auto it = m_drbMap.find(drbid);
     NS_ASSERT_MSG(it != m_drbMap.end(),
                   "request to remove radio bearer with unknown drbid " << drbid);
 
@@ -562,7 +558,7 @@ UeManager::ReleaseDataRadioBearer(uint8_t drbid)
     m_drbMap.erase(it);
     std::vector<uint8_t> ccToRelease =
         m_rrc->m_ccmRrcSapProvider->ReleaseDataRadioBearer(m_rnti, lcid);
-    std::vector<uint8_t>::iterator itCcToRelease = ccToRelease.begin();
+    auto itCcToRelease = ccToRelease.begin();
     NS_ASSERT_MSG(itCcToRelease != ccToRelease.end(),
                   "request to remove radio bearer with unknown drbid (ComponentCarrierManager)");
     for (itCcToRelease = ccToRelease.begin(); itCcToRelease != ccToRelease.end(); ++itCcToRelease)
@@ -853,9 +849,7 @@ UeManager::RecvHandoverRequestAck(EpcX2SapUser::HandoverRequestAckParams params)
     sst.newEnbUeX2apId = params.newEnbUeX2apId;
     sst.sourceCellId = params.sourceCellId;
     sst.targetCellId = params.targetCellId;
-    for (std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator drbIt = m_drbMap.begin();
-         drbIt != m_drbMap.end();
-         ++drbIt)
+    for (auto drbIt = m_drbMap.begin(); drbIt != m_drbMap.end(); ++drbIt)
     {
         // SN status transfer is only for AM RLC
         if (drbIt->second->m_rlc->GetObject<LteRlcAm>())
@@ -936,12 +930,13 @@ UeManager::SendPacket(uint8_t bid, Ptr<Packet> p)
     params.lcid = Bid2Lcid(bid);
     uint8_t drbid = Bid2Drbid(bid);
     // Transmit PDCP sdu only if DRB ID found in drbMap
-    std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.find(drbid);
+    auto it = m_drbMap.find(drbid);
     if (it != m_drbMap.end())
     {
         Ptr<LteDataRadioBearerInfo> bearerInfo = GetDataRadioBearerInfo(drbid);
         if (bearerInfo)
         {
+            NS_LOG_INFO("Send packet to PDCP layer");
             LtePdcpSapProvider* pdcpSapProvider = bearerInfo->m_pdcp->GetLtePdcpSapProvider();
             pdcpSapProvider->TransmitPdcpSdu(params);
         }
@@ -958,27 +953,26 @@ UeManager::SendData(uint8_t bid, Ptr<Packet> p)
     case CONNECTION_SETUP:
         NS_LOG_WARN("not connected, discarding packet");
         return;
-        break;
 
     case CONNECTED_NORMALLY:
     case CONNECTION_RECONFIGURATION:
     case CONNECTION_REESTABLISHMENT:
     case HANDOVER_PREPARATION:
     case HANDOVER_PATH_SWITCH: {
-        NS_LOG_LOGIC("queueing data on PDCP for transmission over the air");
+        NS_LOG_INFO("queueing data on PDCP for transmission over the air");
         SendPacket(bid, p);
     }
     break;
 
     case HANDOVER_JOINING: {
         // Buffer data until RRC Connection Reconfiguration Complete message is received
-        NS_LOG_LOGIC("buffering data");
+        NS_LOG_INFO("buffering data");
         m_packetBuffer.emplace_back(bid, p);
     }
     break;
 
     case HANDOVER_LEAVING: {
-        NS_LOG_LOGIC("forwarding data to target eNB over X2-U");
+        NS_LOG_INFO("forwarding data to target eNB over X2-U");
         uint8_t drbid = Bid2Drbid(bid);
         EpcX2Sap::UeDataParams params;
         params.sourceCellId = m_rrc->ComponentCarrierToCellId(m_componentCarrierId);
@@ -1000,9 +994,7 @@ UeManager::GetErabList()
 {
     NS_LOG_FUNCTION(this);
     std::vector<EpcX2Sap::ErabToBeSetupItem> ret;
-    for (std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.begin();
-         it != m_drbMap.end();
-         ++it)
+    for (auto it = m_drbMap.begin(); it != m_drbMap.end(); ++it)
     {
         EpcX2Sap::ErabToBeSetupItem etbsi;
         etbsi.erabId = it->second->m_epsBearerIdentity;
@@ -1077,8 +1069,7 @@ void
 UeManager::RecvSnStatusTransfer(EpcX2SapUser::SnStatusTransferParams params)
 {
     NS_LOG_FUNCTION(this);
-    for (std::vector<EpcX2Sap::ErabsSubjectToStatusTransferItem>::iterator erabIt =
-             params.erabsSubjectToStatusTransferList.begin();
+    for (auto erabIt = params.erabsSubjectToStatusTransferList.begin();
          erabIt != params.erabsSubjectToStatusTransferList.end();
          ++erabIt)
     {
@@ -1086,7 +1077,7 @@ UeManager::RecvSnStatusTransfer(EpcX2SapUser::SnStatusTransferParams params)
         // status.txSn = erabIt->dlPdcpSn;
         // status.rxSn = erabIt->ulPdcpSn;
         // uint8_t drbId = Bid2Drbid (erabIt->erabId);
-        // std::map <uint8_t, Ptr<LteDataRadioBearerInfo> >::iterator drbIt = m_drbMap.find (drbId);
+        // auto drbIt = m_drbMap.find (drbId);
         // NS_ASSERT_MSG (drbIt != m_drbMap.end (), "could not find DRBID " << (uint32_t) drbId);
         // drbIt->second->m_pdcp->SetStatus (status);
     }
@@ -1291,9 +1282,7 @@ UeManager::RecvRrcConnectionReconfigurationCompleted(
         params.cellId = m_rrc->ComponentCarrierToCellId(m_componentCarrierId);
         params.mmeUeS1Id = m_imsi;
         SwitchToState(HANDOVER_PATH_SWITCH);
-        for (std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.begin();
-             it != m_drbMap.end();
-             ++it)
+        for (auto it = m_drbMap.begin(); it != m_drbMap.end(); ++it)
         {
             EpcEnbS1SapProvider::BearerToBeSwitched b;
             b.epsBearerId = it->second->m_epsBearerIdentity;
@@ -1360,8 +1349,7 @@ UeManager::RecvMeasurementReport(LteRrcSap::MeasurementReport msg)
                  << (uint16_t)msg.measResults.measResultPCell.rsrpResult << " RSRQ "
                  << (uint16_t)msg.measResults.measResultPCell.rsrqResult);
 
-    for (std::list<LteRrcSap::MeasResultEutra>::iterator it =
-             msg.measResults.measResultListEutra.begin();
+    for (auto it = msg.measResults.measResultListEutra.begin();
          it != msg.measResults.measResultListEutra.end();
          ++it)
     {
@@ -1584,7 +1572,7 @@ UeManager::GetDataRadioBearerInfo(uint8_t drbid)
 {
     NS_LOG_FUNCTION(this << (uint32_t)drbid);
     NS_ASSERT(0 != drbid);
-    std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.find(drbid);
+    auto it = m_drbMap.find(drbid);
     NS_ABORT_IF(it == m_drbMap.end());
     return it->second;
 }
@@ -1593,7 +1581,7 @@ void
 UeManager::RemoveDataRadioBearerInfo(uint8_t drbid)
 {
     NS_LOG_FUNCTION(this << (uint32_t)drbid);
-    std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.find(drbid);
+    auto it = m_drbMap.find(drbid);
     NS_ASSERT_MSG(it != m_drbMap.end(),
                   "request to remove radio bearer with unknown drbid " << drbid);
     m_drbMap.erase(it);
@@ -1640,9 +1628,7 @@ UeManager::BuildRadioResourceConfigDedicated()
         rrcd.srbToAddModList.push_back(stam);
     }
 
-    for (std::map<uint8_t, Ptr<LteDataRadioBearerInfo>>::iterator it = m_drbMap.begin();
-         it != m_drbMap.end();
-         ++it)
+    for (auto it = m_drbMap.begin(); it != m_drbMap.end(); ++it)
     {
         LteRrcSap::DrbToAddMod dtam;
         dtam.epsBearerIdentity = it->second->m_epsBearerIdentity;
@@ -1937,7 +1923,6 @@ LteEnbRrc::DoDispose()
 TypeId
 LteEnbRrc::GetTypeId()
 {
-    NS_LOG_FUNCTION("LteEnbRrc::GetTypeId");
     static TypeId tid =
         TypeId("ns3::LteEnbRrc")
             .SetParent<Object>()
@@ -2349,7 +2334,7 @@ bool
 LteEnbRrc::HasUeManager(uint16_t rnti) const
 {
     NS_LOG_FUNCTION(this << (uint32_t)rnti);
-    std::map<uint16_t, Ptr<UeManager>>::const_iterator it = m_ueMap.find(rnti);
+    auto it = m_ueMap.find(rnti);
     return (it != m_ueMap.end());
 }
 
@@ -2358,7 +2343,7 @@ LteEnbRrc::GetUeManager(uint16_t rnti)
 {
     NS_LOG_FUNCTION(this << (uint32_t)rnti);
     NS_ASSERT(0 != rnti);
-    std::map<uint16_t, Ptr<UeManager>>::iterator it = m_ueMap.find(rnti);
+    auto it = m_ueMap.find(rnti);
     NS_ASSERT_MSG(it != m_ueMap.end(), "UE manager for RNTI " << rnti << " not found");
     return it->second;
 }
@@ -2614,11 +2599,14 @@ bool
 LteEnbRrc::SendData(Ptr<Packet> packet)
 {
     NS_LOG_FUNCTION(this << packet);
-
     EpsBearerTag tag;
     bool found = packet->RemovePacketTag(tag);
     NS_ASSERT_MSG(found, "no EpsBearerTag found in packet to be sent");
     Ptr<UeManager> ueManager = GetUeManager(tag.GetRnti());
+
+    NS_LOG_INFO("Sending a packet of " << packet->GetSize() << " bytes to IMSI "
+                                       << ueManager->GetImsi() << ", RNTI " << ueManager->GetRnti()
+                                       << ", BID " << (uint16_t)tag.GetBid());
     ueManager->SendData(tag.GetBid(), packet);
 
     return true;
@@ -2914,9 +2902,7 @@ LteEnbRrc::DoRecvHandoverRequest(EpcX2SapUser::HandoverRequestParams req)
     ackParams.sourceCellId = req.sourceCellId;
     ackParams.targetCellId = req.targetCellId;
 
-    for (std::vector<EpcX2Sap::ErabToBeSetupItem>::iterator it = req.bearers.begin();
-         it != req.bearers.end();
-         ++it)
+    for (auto it = req.bearers.begin(); it != req.bearers.end(); ++it)
     {
         ueManager->SetupDataRadioBearer(it->erabLevelQosParameters,
                                         it->erabId,
@@ -3081,7 +3067,7 @@ LteEnbRrc::DoRecvUeData(EpcX2SapUser::UeDataParams params)
     NS_LOG_LOGIC("ueData = " << params.ueData);
     NS_LOG_LOGIC("ueData size = " << params.ueData->GetSize());
 
-    std::map<uint32_t, X2uTeidInfo>::iterator teidInfoIt = m_x2uTeidInfoMap.find(params.gtpTeid);
+    auto teidInfoIt = m_x2uTeidInfoMap.find(params.gtpTeid);
     if (teidInfoIt != m_x2uTeidInfoMap.end())
     {
         GetUeManager(teidInfoIt->second.rnti)->SendData(teidInfoIt->second.drbid, params.ueData);
@@ -3121,6 +3107,7 @@ LteEnbRrc::DoAllocateTemporaryCellRnti(uint8_t componentCarrierId)
     // if no SRS index is available, then do not create a new UE context.
     if (IsMaxSrsReached())
     {
+        NS_LOG_WARN("Not enough SRS configuration indices, UE context not created");
         return 0; // return 0 since new RNTI was not assigned for the received preamble
     }
     return AddUe(UeManager::INITIAL_RANDOM_ACCESS, componentCarrierId);
@@ -3273,7 +3260,7 @@ void
 LteEnbRrc::RemoveUe(uint16_t rnti)
 {
     NS_LOG_FUNCTION(this << (uint32_t)rnti);
-    std::map<uint16_t, Ptr<UeManager>>::iterator it = m_ueMap.find(rnti);
+    auto it = m_ueMap.find(rnti);
     NS_ASSERT_MSG(it != m_ueMap.end(), "request to remove UE info with unknown rnti " << rnti);
     uint64_t imsi = it->second->GetImsi();
     uint16_t srsCi = (*it).second->GetSrsConfigurationIndex();
@@ -3310,15 +3297,12 @@ LteEnbRrc::GetRlcType(EpsBearer bearer)
     {
     case RLC_SM_ALWAYS:
         return LteRlcSm::GetTypeId();
-        break;
 
     case RLC_UM_ALWAYS:
         return LteRlcUm::GetTypeId();
-        break;
 
     case RLC_AM_ALWAYS:
         return LteRlcAm::GetTypeId();
-        break;
 
     case PER_BASED:
         if (bearer.GetPacketErrorLossRate() > 1.0e-5)
@@ -3329,11 +3313,9 @@ LteEnbRrc::GetRlcType(EpsBearer bearer)
         {
             return LteRlcAm::GetTypeId();
         }
-        break;
 
     default:
         return LteRlcSm::GetTypeId();
-        break;
     }
 }
 
@@ -3440,7 +3422,7 @@ LteEnbRrc::GetNewSrsConfigurationIndex()
     else
     {
         // find a CI from the available ones
-        std::set<uint16_t>::reverse_iterator rit = m_ueSrsConfigurationIndexSet.rbegin();
+        auto rit = m_ueSrsConfigurationIndexSet.rbegin();
         NS_ASSERT(rit != m_ueSrsConfigurationIndexSet.rend());
         NS_LOG_DEBUG(this << " lower bound " << (*rit) << " of "
                           << g_srsCiHigh[m_srsCurrentPeriodicityId]);
@@ -3457,7 +3439,7 @@ LteEnbRrc::GetNewSrsConfigurationIndex()
                  srcCi < g_srsCiHigh[m_srsCurrentPeriodicityId];
                  srcCi++)
             {
-                std::set<uint16_t>::iterator it = m_ueSrsConfigurationIndexSet.find(srcCi);
+                auto it = m_ueSrsConfigurationIndexSet.find(srcCi);
                 if (it == m_ueSrsConfigurationIndexSet.end())
                 {
                     m_lastAllocatedConfigurationIndex = srcCi;
@@ -3474,7 +3456,7 @@ void
 LteEnbRrc::RemoveSrsConfigurationIndex(uint16_t srcCi)
 {
     NS_LOG_FUNCTION(this << srcCi);
-    std::set<uint16_t>::iterator it = m_ueSrsConfigurationIndexSet.find(srcCi);
+    auto it = m_ueSrsConfigurationIndexSet.find(srcCi);
     NS_ASSERT_MSG(it != m_ueSrsConfigurationIndexSet.end(),
                   "request to remove unknown SRS CI " << srcCi);
     m_ueSrsConfigurationIndexSet.erase(it);
@@ -3493,7 +3475,7 @@ LteEnbRrc::IsMaxSrsReached()
 uint8_t
 LteEnbRrc::GetLogicalChannelGroup(EpsBearer bearer)
 {
-    if (bearer.IsGbr())
+    if (bearer.GetResourceType() > 0) // 1, 2 for GBR and DC-GBR
     {
         return 1;
     }
@@ -3554,10 +3536,8 @@ LteEnbRrc::IsRandomAccessCompleted(uint16_t rnti)
     case UeManager::CONNECTED_NORMALLY:
     case UeManager::CONNECTION_RECONFIGURATION:
         return true;
-        break;
     default:
         return false;
-        break;
     }
 }
 

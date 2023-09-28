@@ -22,18 +22,18 @@
 #include "icmpv6-header.h"
 #include "icmpv6-l4-protocol.h"
 #include "ipv6-l3-protocol.h"
+#include "ipv6-packet-info-tag.h"
+#include "ipv6-route.h"
+#include "ipv6-routing-protocol.h"
 
 #include "ns3/inet6-socket-address.h"
-#include "ns3/ipv6-packet-info-tag.h"
-#include "ns3/ipv6-route.h"
-#include "ns3/ipv6-routing-protocol.h"
 #include "ns3/log.h"
 #include "ns3/node.h"
 #include "ns3/packet.h"
 #include "ns3/uinteger.h"
 
 #ifdef __WIN32__
-#include "ns3/win32-internet.h"
+#include "win32-internet.h"
 #else
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -293,7 +293,7 @@ Ipv6RawSocketImpl::SendTo(Ptr<Packet> p, uint32_t flags, const Address& toAddres
                 p->CopyData(&type, sizeof(type));
                 if (type == Icmpv6Header::ICMPV6_ECHO_REQUEST)
                 {
-                    Icmpv6Echo hdr(1);
+                    Icmpv6Echo hdr(true);
                     p->RemoveHeader(hdr);
                     hdr.CalculatePseudoHeaderChecksum(route->GetSource(),
                                                       dst,
@@ -421,7 +421,7 @@ Ipv6RawSocketImpl::GetRxAvailable() const
     NS_LOG_FUNCTION(this);
     uint32_t rx = 0;
 
-    for (std::list<Data>::const_iterator it = m_data.begin(); it != m_data.end(); ++it)
+    for (auto it = m_data.begin(); it != m_data.end(); ++it)
     {
         rx += (it->packet)->GetSize();
     }

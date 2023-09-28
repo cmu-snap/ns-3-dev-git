@@ -20,6 +20,8 @@
 
 #include "three-gpp-http-client.h"
 
+#include "three-gpp-http-variables.h"
+
 #include <ns3/callback.h>
 #include <ns3/double.h>
 #include <ns3/inet-socket-address.h>
@@ -30,7 +32,6 @@
 #include <ns3/simulator.h>
 #include <ns3/socket.h>
 #include <ns3/tcp-socket-factory.h>
-#include <ns3/three-gpp-http-variables.h>
 #include <ns3/uinteger.h>
 
 NS_LOG_COMPONENT_DEFINE("ThreeGppHttpClient");
@@ -169,29 +170,21 @@ ThreeGppHttpClient::GetStateString(ThreeGppHttpClient::State_t state)
     {
     case NOT_STARTED:
         return "NOT_STARTED";
-        break;
     case CONNECTING:
         return "CONNECTING";
-        break;
     case EXPECTING_MAIN_OBJECT:
         return "EXPECTING_MAIN_OBJECT";
-        break;
     case PARSING_MAIN_OBJECT:
         return "PARSING_MAIN_OBJECT";
-        break;
     case EXPECTING_EMBEDDED_OBJECT:
         return "EXPECTING_EMBEDDED_OBJECT";
-        break;
     case READING:
         return "READING";
-        break;
     case STOPPED:
         return "STOPPED";
-        break;
     default:
         NS_FATAL_ERROR("Unknown state");
         return "FATAL_ERROR";
-        break;
     }
 }
 

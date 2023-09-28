@@ -13,8 +13,38 @@ Note that users who upgrade the simulator across versions, or who work directly 
 
 This file is a best-effort approach to solving this issue; we will do our best but can guarantee that there will be things that fall through the cracks, unfortunately. If you, as a user, can suggest improvements to this file based on your experience, please contribute a patch or drop us a note on ns-developers mailing list.
 
-Changes from ns-3.38 to ns-3-dev
---------------------------------
+Changes from ns-3.39 to ns-3.40
+-------------------------------
+
+### New API
+
+* (energy) Added `GenericBatteryModel` to the energy module with working examples, and support for battery presets and cell packs.
+* (lr-wpan) Added the functions to set or get the capability field via bitmap (a 8 bit int).
+* (lr-wpan) Added the possibility to obtain the LQI from a received `MlmeAssociateIndicationParams`.
+* (wifi) Added new helper methods to SpectrumWifiPhyHelper to allow flexible configuration for the mapping between spectrum PHY interfaces and PHY instances.
+* (wifi) Added new trace sources to `WifiPhy`: **OperatingChannelChange**, which is fired when the operating channel of a PHY is changed.
+* (wifi) The attribute `WifiPhy::Antennas` is extended to support up to 8 antennas.
+
+### Changes to existing API
+
+* (core) Removed private class `EmpiricalRandomVariable::ValueCDF` in favor of `std::map`.
+* (lr-wpan) Removed unnecessary bcst filter from `LrWpanMac::PdDataIndication` which also blocked the correct reception of beacon request commands.
+* (wifi) The attribute `WifiPhy::Antennas` is extended to support up to 8 antennas.
+* (wifi) `StaWifiMac::MacState` enum is now public, and `WifiMacHeader` can be subclassed
+
+### Changes to build system
+
+* Added support for Vcpkg and CPM package managers
+
+### Changed behavior
+
+* (core) `EmpiricalRandomVariable` CDF pairs can now be added in any order.
+* (core) `EmpiricalRandomVariable` no longer requires that a CDF pair with a range value exactly equal to 1.0 be added (see issue #922).
+* (wifi) Upon ML setup, a non-AP MLD updates the IDs of the setup links to match the IDs used by the AP MLD.
+* (wifi) Attribute **TrackSignalsFromInactiveInterfaces** in SpectrumWifiPhy has been defaulted to be enabled.
+
+Changes from ns-3.38 to ns-3.39
+-------------------------------
 
 ### New API
 
@@ -24,6 +54,10 @@ Changes from ns-3.38 to ns-3-dev
 * (network) Added `Mac16Address::Mac16Address(uint16t addr)` and `Mac16Address::Mac64Address(uint64t addr)` constructors.
 * (lr-wpan) Added `LrwpanMac::MlmeGetRequest` function and the corresponding confirm callbacks as well as `LrwpanMac::SetMlmeGetConfirm` function.
 * (applications) Added `Tx` and `TxWithAddresses` trace sources in `UdpClient`.
+* (spectrum) Added `SpectrumTransmitFilter` class and the ability to add them to `SpectrumChannel` instances.
+* (stats) Added `Histogram::Clear` function to clear the histogram contents.
+* (wifi) Added `WifiBandwidthFilter` class to allow filtering of out-of-band Wi-Fi signals.
+* (flow-monitor) Added `FlowMonitor::ResetAllStats` function to reset the FlowMonitor statistics.
 
 ### Changes to existing API
 
@@ -51,21 +85,33 @@ Changes from ns-3.38 to ns-3-dev
   * (wimax) Attribute `m_nrRecivedFecBlocks` from `simple-ofdm-wimax-phy.h` was renamed `m_nrReceivedFecBlocks`.
 * (lr-wpan) Updated `LrWpanPhy::PlmeSetAttribute` and `LrWpanPhy::PlmeGetAttribute` (Request and Confirm) to use smart pointers.
 * (lr-wpan) Modified `LrWpanPhy::PlmeGetAttributeRequest` to include support for a few attributes (none were supported before the change).
-* (lr-wpan) Added `macShortAddress`, `macExtendendAddress` and `macPanId` to the attributes that can be use with MLME-GET and MLME-SET functions.
+* (lr-wpan) Added `macShortAddress`, `macExtendedAddress` and `macPanId` to the attributes that can be use with MLME-GET and MLME-SET functions.
 * (wifi) The QosBlockedDestinations class has been removed and its functionality is now provided via a new framework for blocking/unblocking packets that is based on the queue scheduler.
 * (internet) The function signature of `Ipv4RoutingProtocol::RouteInput` and `Ipv6RoutingProtocol::RouteInput` have changed. The `UnicastForwardCallback` (ucb), `MulticastForwardCallback` (mcb), `LocalDeliverCallback` (lcb) and `ErrorCallback` (ecb) should now be passed as const references.
 * (olsr) The defines `OLSR_WILL_*` have been replaced by enum `Willingness`.
+* (olsr) The defines `OLSR_*_LINK` have been replaced by enum `LinkType`.
+* (olsr) The defines `OLSR_*_NEIGH` have been replaced by enum `NeighborType`.
 * (wifi) The `WifiCodeRate` typedef was converted to an enum.
 * (internet) `InternetStackHelper` can be now used on nodes with an `InternetStack` already installed (it will not install IPv[4,6] twice).
 * (lr-wpan) Block the reception of orphan notification commands to devices other than PAN coordinators or coordinators.
 * (lr-wpan) Block the reception of broadcast messages in the same device that issues it. This is done in both cases when the src address is either short or extended address.
 * (lr-wpan) Adds a new variable flag `m_coor` to the MAC to differentiate between coordinators and PAN coordinators.
+* (lte) Add support for DC-GBR. The member `QosBearerType_e` of the structure `LogicalChannelConfigListElement_s` is extended to include DC-GBR resource type. Based on this change, the method **IsGbr** of `EpsBearer`, is renamed to **GetResourceType**. LTE code using this method, is updated according to this change.
+* (lte) The `EpsBearer` is extended to include 3GPP Release 18 5QIs.
+* (lte) Add PDCP discard timer. If enabled using the attribute `EnablePdcpDiscarding`, in case that the buffering time (head-of-line delay) of a packet is greater than the PDB or a value set by the user, it will perform discarding at the moment of passing the PDCP SDU to RLC.
+* (lte) Centralize the constants `MIN_NO_CC` and `MAX_NO_CC`, declared in multiple header files, into the header `lte-common.h`.
+* (wave) The Wave module was removed from the codebase due to lack of maintenance
 
 ### Changes to build system
 
 ### Changed behavior
 
+* (core) The priority of `DEBUG` level logging has been lowered from just below `WARN` level to just below `LOGIC` level.
+* (buildings) Calculation of the O2I Low/High Building Penetration Losses based on 3GPP 38.901 7.4.3.1 was missing. These losses are now included in the pathloss calculation when buildings are present.
 * (network) The function `Buffer::Allocate` will over-provision `ALLOC_OVER_PROVISION` bytes when allocating buffers for packets. `ALLOC_OVER_PROVISION` is currently set to 100 bytes.
+* (wifi) By default, the `SpectrumWifiHelper` now adds a `WifiBandwidthFilter` to discard out-of-band signals before scheduling them on the receiver.  This should not affect the simulated behavior of Wi-Fi but may speed up the execution of large Wi-Fi simulations.
+* (wifi) Protection mechanisms (e.g., RTS/CTS) are not used if destinations have already received (MU-)RTS in the current TXOP
+* (wifi) Protection mechanisms can be used for management frames as well (if needed)
 
 Changes from ns-3.37 to ns-3.38
 -------------------------------
@@ -83,6 +129,7 @@ Changes from ns-3.37 to ns-3.38
 * (wifi) Added a new attribute **NMaxInflights** to QosTxop to set the maximum number of links on which an MPDU can be simultaneously in-flight.
 * (wifi) New API has been introduced to support 802.11be Multi-Link Operations (MLO)
 * (wifi) New API has been introduced to support 802.11ax dual NAV, UL MU CS, and MU-RTS/CTS features
+* (wifi) Added a new attribute **TrackSignalsFromInactiveInterfaces** to SpectrumWifiPhy to select whether it should track signals from inactive spectrum PHY interfaces.
 
 ### Changes to existing API
 
@@ -93,6 +140,8 @@ Changes from ns-3.37 to ns-3.38
 * (lr-wpan) Added file `src/lr-wpan/model/lr-wpan-constants.h` with common constants of the LR-WPAN module.
 * (lr-wpan) Removed the functions `LrWpanCsmaCa::GetUnitBackoffPeriod()` and `LrWpanCsmaCa::SetUnitBackoffPeriod()`, and moved the constant `m_aUnitBackoffPeriod` to `src/lr-wpan/model/lr-wpan-constants.h`.
 * (lr-wpan) `LrWpanHelper::CreateAssociatedPan` replace `LrWpanHelper::AssociateToPan` and is able to create an associated PAN of the devices with both short addresses (16-bits) and extended addresses (EUI-64 bits).
+* (wifi) `SpectrumWifiPhy::SetChannel` has been renamed to `SpectrumWifiPhy::AddChannel` and has one additional parameter (optional) to indicate the frequency range that is covered by the provided spectrum channel. By default, the whole wifi spectrum channel is considered.
+* The `WifiSpectrumHelper::SetChannel` functions used for MLO do no longer take a link ID parameter, but instead takes the frequency range covered by the spectrum channel and have been renamed to `WifiSpectrumHelper::AddChannel`. The remaining `WifiSpectrumHelper::SetChannel` functions assume the whole wifi spectrum range is used by the spectrum channel.
 
 ### Changes to build system
 

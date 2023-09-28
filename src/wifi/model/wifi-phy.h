@@ -1054,20 +1054,13 @@ class WifiPhy : public Object
     void NotifyChannelAccessRequested();
 
     /**
-     * \param bandWidth the width (MHz) of the band used for the OFDMA transmission. Must be
-     *                  a multiple of 20 MHz
-     * \param guardBandwidth width of the guard band (MHz)
-     * \param range the subcarrier range of the HE RU
-     * \param bandIndex the index (starting at 0) of the band within the operating channel
-     * \return the converted subcarriers
+     * This is a helper function to convert start and stop indices to start and stop frequencies.
      *
-     * This is a helper function to convert HE RU subcarriers, which are relative to the center
-     * frequency subcarrier, to the indexes used by the Spectrum model.
+     * \param indices the start/stop indices to convert
+     * \return the converted frequencies
      */
-    virtual WifiSpectrumBand ConvertHeRuSubcarriers(uint16_t bandWidth,
-                                                    uint16_t guardBandwidth,
-                                                    HeRu::SubcarrierRange range,
-                                                    uint8_t bandIndex = 0) const;
+    virtual WifiSpectrumBandFrequencies ConvertIndicesToFrequencies(
+        const WifiSpectrumBandIndices& indices) const = 0;
 
     /**
      * Add the PHY entity to the map of __implemented__ PHY entities for the
@@ -1130,6 +1123,18 @@ class WifiPhy : public Object
     uint64_t GetPreviouslyRxPpduUid() const;
 
     /**
+     * Set the UID of the previously received PPDU.
+     *
+     * \param uid the value for the UID of the previously received PPDU
+     *
+     * \note This method shall only be used in exceptional circumstances, such as when a PHY
+     * transmits a response to a Trigger Frame that was received by another PHY. This is the
+     * case, e.g., when an aux PHY of an EMLSR client receives an ICF but it is the main PHY
+     * that switches channel and transmits the response to the ICF.
+     */
+    void SetPreviouslyRxPpduUid(uint64_t uid);
+
+    /**
      * \param currentChannelWidth channel width of the current transmission (MHz)
      * \return the width of the guard band (MHz)
      *
@@ -1162,14 +1167,14 @@ class WifiPhy : public Object
     uint8_t GetPrimaryChannelNumber(uint16_t primaryChannelWidth) const;
 
     /**
-     * Get the start band index and the stop band index for a given band
+     * Get the info of a given band
      *
      * \param bandWidth the width of the band to be returned (MHz)
      * \param bandIndex the index of the band to be returned
      *
-     * \return a pair of start and stop indexes that defines the band
+     * \return the info that defines the band
      */
-    virtual WifiSpectrumBand GetBand(uint16_t bandWidth, uint8_t bandIndex = 0) = 0;
+    virtual WifiSpectrumBandInfo GetBand(uint16_t bandWidth, uint8_t bandIndex = 0) = 0;
 
     /**
      * Get the frequency range of the current RF interface.
@@ -1177,6 +1182,11 @@ class WifiPhy : public Object
      * \return the frequency range of the current RF interface
      */
     virtual FrequencyRange GetCurrentFrequencyRange() const = 0;
+
+    /**
+     * \return the subcarrier spacing corresponding to the configure standard (Hz)
+     */
+    uint32_t GetSubcarrierSpacing() const;
 
   protected:
     void DoInitialize() override;

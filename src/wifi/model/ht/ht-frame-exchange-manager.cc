@@ -26,6 +26,7 @@
 #include "ns3/mgt-headers.h"
 #include "ns3/recipient-block-ack-agreement.h"
 #include "ns3/snr-tag.h"
+#include "ns3/sta-wifi-mac.h"
 #include "ns3/wifi-mac-queue.h"
 #include "ns3/wifi-utils.h"
 
@@ -132,14 +133,16 @@ HtFrameExchangeManager::NeedSetupBlockAck(Mac48Address recipient, uint8_t tid)
     return establish;
 }
 
-void
+bool
 HtFrameExchangeManager::SendAddBaRequest(Mac48Address dest,
                                          uint8_t tid,
                                          uint16_t startingSeq,
                                          uint16_t timeout,
-                                         bool immediateBAck)
+                                         bool immediateBAck,
+                                         Time availableTime)
 {
-    NS_LOG_FUNCTION(this << dest << +tid << startingSeq << timeout << immediateBAck);
+    NS_LOG_FUNCTION(this << dest << +tid << startingSeq << timeout << immediateBAck
+                         << availableTime);
     NS_LOG_DEBUG("Send ADDBA request to " << dest);
 
     WifiMacHeader hdr;
@@ -192,12 +195,16 @@ HtFrameExchangeManager::SendAddBaRequest(Mac48Address dest,
     WifiTxParameters txParams;
     txParams.m_txVector =
         GetWifiRemoteStationManager()->GetDataTxVector(mpdu->GetHeader(), m_allowedWidth);
-    txParams.m_protection = std::unique_ptr<WifiProtection>(new WifiNoProtection);
-    txParams.m_acknowledgment = GetAckManager()->TryAddMpdu(mpdu, txParams);
+    if (!TryAddMpdu(mpdu, txParams, availableTime))
+    {
+        NS_LOG_DEBUG("Not enough time to send the ADDBA Request frame");
+        return false;
+    }
 
     // Wifi MAC queue scheduler is expected to prioritize management frames
     m_mac->GetQosTxop(tid)->GetWifiMacQueue()->Enqueue(mpdu);
     SendMpduWithProtection(mpdu, txParams);
+    return true;
 }
 
 void
@@ -380,12 +387,12 @@ HtFrameExchangeManager::StartFrameExchange(Ptr<QosTxop> edca, Time availableTime
             (hdr.IsRetry()
                  ? hdr.GetSequenceNumber()
                  : m_txMiddle->GetNextSeqNumberByTidAndAddress(hdr.GetQosTid(), hdr.GetAddr1()));
-        SendAddBaRequest(hdr.GetAddr1(),
-                         hdr.GetQosTid(),
-                         startingSeq,
-                         edca->GetBlockAckInactivityTimeout(),
-                         true);
-        return true;
+        return SendAddBaRequest(hdr.GetAddr1(),
+                                hdr.GetQosTid(),
+                                startingSeq,
+                                edca->GetBlockAckInactivityTimeout(),
+                                true,
+                                availableTime);
     }
 
     // Use SendDataFrame if we can try aggregation
@@ -569,25 +576,8 @@ HtFrameExchangeManager::SendMpduFromBaManager(Ptr<WifiMpdu> mpdu,
     WifiTxParameters txParams;
     txParams.m_txVector =
         GetWifiRemoteStationManager()->GetDataTxVector(mpdu->GetHeader(), m_allowedWidth);
-    txParams.m_protection = std::unique_ptr<WifiProtection>(new WifiNoProtection);
-    txParams.m_acknowledgment = GetAckManager()->TryAddMpdu(mpdu, txParams);
 
-    NS_ABORT_IF(txParams.m_acknowledgment->method != WifiAcknowledgment::BLOCK_ACK);
-
-    WifiBlockAck* blockAcknowledgment = static_cast<WifiBlockAck*>(txParams.m_acknowledgment.get());
-    CalculateAcknowledgmentTime(blockAcknowledgment);
-    // the BlockAckReq frame is sent using the same TXVECTOR as the BlockAck frame
-    txParams.m_txVector = blockAcknowledgment->blockAckTxVector;
-
-    Time barTxDuration = m_phy->CalculateTxDuration(mpdu->GetSize(),
-                                                    blockAcknowledgment->blockAckTxVector,
-                                                    m_phy->GetPhyBand());
-
-    // if the available time is limited and we are not transmitting the initial
-    // frame of the TXOP, we have to check that this frame and its response fit
-    // within the given time limits
-    if (availableTime != Time::Min() && !initialFrame &&
-        barTxDuration + m_phy->GetSifs() + blockAcknowledgment->acknowledgmentTime > availableTime)
+    if (!TryAddMpdu(mpdu, txParams, availableTime))
     {
         NS_LOG_DEBUG("Not enough time to send the BAR frame returned by the Block Ack Manager");
         return false;
@@ -653,7 +643,7 @@ HtFrameExchangeManager::CalculateAcknowledgmentTime(WifiAcknowledgment* acknowle
 
     if (acknowledgment->method == WifiAcknowledgment::BLOCK_ACK)
     {
-        WifiBlockAck* blockAcknowledgment = static_cast<WifiBlockAck*>(acknowledgment);
+        auto blockAcknowledgment = static_cast<WifiBlockAck*>(acknowledgment);
         Time baTxDuration = m_phy->CalculateTxDuration(GetBlockAckSize(blockAcknowledgment->baType),
                                                        blockAcknowledgment->blockAckTxVector,
                                                        m_phy->GetPhyBand());
@@ -661,7 +651,7 @@ HtFrameExchangeManager::CalculateAcknowledgmentTime(WifiAcknowledgment* acknowle
     }
     else if (acknowledgment->method == WifiAcknowledgment::BAR_BLOCK_ACK)
     {
-        WifiBarBlockAck* barBlockAcknowledgment = static_cast<WifiBarBlockAck*>(acknowledgment);
+        auto barBlockAcknowledgment = static_cast<WifiBarBlockAck*>(acknowledgment);
         Time barTxDuration =
             m_phy->CalculateTxDuration(GetBlockAckRequestSize(barBlockAcknowledgment->barType),
                                        barBlockAcknowledgment->blockAckReqTxVector,
@@ -953,22 +943,21 @@ HtFrameExchangeManager::SendPsduWithProtection(Ptr<WifiPsdu> psdu, WifiTxParamet
         }
     }
 
-    if (m_txParams.m_protection->method == WifiProtection::RTS_CTS)
+    StartProtection(m_txParams);
+}
+
+void
+HtFrameExchangeManager::ProtectionCompleted()
+{
+    NS_LOG_FUNCTION(this);
+    if (m_psdu)
     {
-        SendRts(m_txParams);
-    }
-    else if (m_txParams.m_protection->method == WifiProtection::CTS_TO_SELF)
-    {
-        SendCtsToSelf(m_txParams);
-    }
-    else if (m_txParams.m_protection->method == WifiProtection::NONE)
-    {
+        m_protectedStas.merge(m_sentRtsTo);
+        m_sentRtsTo.clear();
         SendPsdu();
+        return;
     }
-    else
-    {
-        NS_ABORT_MSG("Unknown protection type");
-    }
+    QosFrameExchangeManager::ProtectionCompleted();
 }
 
 void
@@ -1018,8 +1007,7 @@ HtFrameExchangeManager::SendPsdu()
         // the timeout duration is "aSIFSTime + aSlotTime + aRxPHYStartDelay, starting
         // at the PHY-TXEND.confirm primitive" (section 10.3.2.9 or 10.22.2.2 of 802.11-2016).
         // aRxPHYStartDelay equals the time to transmit the PHY header.
-        WifiBlockAck* blockAcknowledgment =
-            static_cast<WifiBlockAck*>(m_txParams.m_acknowledgment.get());
+        auto blockAcknowledgment = static_cast<WifiBlockAck*>(m_txParams.m_acknowledgment.get());
 
         Time timeout =
             txDuration + m_phy->GetSifs() + m_phy->GetSlot() +
@@ -1027,6 +1015,7 @@ HtFrameExchangeManager::SendPsdu()
         NS_ASSERT(!m_txTimer.IsRunning());
         m_txTimer.Set(WifiTxTimer::WAIT_BLOCK_ACK,
                       timeout,
+                      {m_psdu->GetAddr1()},
                       &HtFrameExchangeManager::BlockAckTimeout,
                       this,
                       m_psdu,
@@ -1077,6 +1066,23 @@ HtFrameExchangeManager::NotifyTxToEdca(Ptr<const WifiPsdu> psdu) const
 {
     NS_LOG_FUNCTION(this << psdu);
 
+    for (const auto& mpdu : *PeekPointer(psdu))
+    {
+        auto& hdr = mpdu->GetHeader();
+
+        if (hdr.IsQosData() && hdr.HasData())
+        {
+            auto tid = hdr.GetQosTid();
+            m_mac->GetQosTxop(tid)->CompleteMpduTx(mpdu);
+        }
+    }
+}
+
+void
+HtFrameExchangeManager::FinalizeMacHeader(Ptr<const WifiPsdu> psdu)
+{
+    NS_LOG_FUNCTION(this << psdu);
+
     // use an array to avoid computing the queue size for every MPDU in the PSDU
     std::array<std::optional<uint8_t>, 8> queueSizeForTid;
 
@@ -1087,7 +1093,7 @@ HtFrameExchangeManager::NotifyTxToEdca(Ptr<const WifiPsdu> psdu) const
         if (hdr.IsQosData())
         {
             uint8_t tid = hdr.GetQosTid();
-            Ptr<QosTxop> edca = m_mac->GetQosTxop(tid);
+            auto edca = m_mac->GetQosTxop(tid);
 
             if (m_mac->GetTypeOfStation() == STA && (m_setQosQueueSize || hdr.IsQosEosp()))
             {
@@ -1100,13 +1106,10 @@ HtFrameExchangeManager::NotifyTxToEdca(Ptr<const WifiPsdu> psdu) const
                 hdr.SetQosEosp();
                 hdr.SetQosQueueSize(queueSizeForTid[tid].value());
             }
-
-            if (hdr.HasData())
-            {
-                edca->CompleteMpduTx(mpdu);
-            }
         }
     }
+
+    QosFrameExchangeManager::FinalizeMacHeader(psdu);
 }
 
 void
@@ -1126,7 +1129,9 @@ HtFrameExchangeManager::ForwardPsduDown(Ptr<const WifiPsdu> psdu, WifiTxVector& 
     NS_LOG_FUNCTION(this << psdu << txVector);
 
     NS_LOG_DEBUG("Transmitting a PSDU: " << *psdu << " TXVECTOR: " << txVector);
+    FinalizeMacHeader(psdu);
     NotifyTxToEdca(psdu);
+    m_allowedWidth = std::min(m_allowedWidth, txVector.GetChannelWidth());
 
     if (psdu->IsAggregate())
     {
@@ -1536,7 +1541,9 @@ HtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
             m_txTimer.Cancel();
             m_channelAccessManager->NotifyCtsTimeoutResetNow();
-            Simulator::Schedule(m_phy->GetSifs(), &HtFrameExchangeManager::SendPsdu, this);
+            Simulator::Schedule(m_phy->GetSifs(),
+                                &HtFrameExchangeManager::ProtectionCompleted,
+                                this);
         }
         else if (hdr.IsBlockAck() && m_txTimer.IsRunning() &&
                  m_txTimer.GetReason() == WifiTxTimer::WAIT_BLOCK_ACK && hdr.GetAddr1() == m_self)

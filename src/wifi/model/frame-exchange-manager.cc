@@ -20,6 +20,7 @@
 #include "frame-exchange-manager.h"
 
 #include "snr-tag.h"
+#include "sta-wifi-mac.h"
 #include "wifi-mac-queue.h"
 #include "wifi-mac-trailer.h"
 #include "wifi-utils.h"
@@ -318,7 +319,7 @@ FrameExchangeManager::StartTransmission(Ptr<Txop> dcf, uint16_t allowedWidth)
     if (!mpdu)
     {
         NS_LOG_DEBUG("Queue empty");
-        m_dcf->NotifyChannelReleased(m_linkId);
+        NotifyChannelReleased(m_dcf);
         m_dcf = nullptr;
         return false;
     }
@@ -413,26 +414,50 @@ FrameExchangeManager::SendMpduWithProtection(Ptr<WifiMpdu> mpdu, WifiTxParameter
         m_mpdu->SetInFlight(m_linkId);
     }
 
-    switch (m_txParams.m_protection->method)
-    {
-    case WifiProtection::RTS_CTS:
-        SendRts(m_txParams);
-        break;
-    case WifiProtection::CTS_TO_SELF:
-        SendCtsToSelf(m_txParams);
-        break;
-    case WifiProtection::NONE:
-        SendMpdu();
-        break;
-    default:
-        NS_ABORT_MSG("Unknown protection type");
-    }
+    StartProtection(m_txParams);
 
     if (m_txParams.m_acknowledgment->method == WifiAcknowledgment::NONE)
     {
         // we are done with frames that do not require acknowledgment
         m_mpdu = nullptr;
     }
+}
+
+void
+FrameExchangeManager::StartProtection(const WifiTxParameters& txParams)
+{
+    NS_LOG_FUNCTION(this << &txParams);
+
+    switch (txParams.m_protection->method)
+    {
+    case WifiProtection::RTS_CTS:
+        SendRts(txParams);
+        break;
+    case WifiProtection::CTS_TO_SELF:
+        SendCtsToSelf(txParams);
+        break;
+    case WifiProtection::NONE:
+        ProtectionCompleted();
+        break;
+    default:
+        NS_ABORT_MSG("Unknown protection type: " << txParams.m_protection.get());
+    }
+}
+
+void
+FrameExchangeManager::ProtectionCompleted()
+{
+    NS_LOG_FUNCTION(this);
+    m_protectedStas.merge(m_sentRtsTo);
+    m_sentRtsTo.clear();
+    NS_ASSERT(m_mpdu);
+    SendMpdu();
+}
+
+const std::set<Mac48Address>&
+FrameExchangeManager::GetProtectedStas() const
+{
+    return m_protectedStas;
 }
 
 void
@@ -468,8 +493,7 @@ FrameExchangeManager::SendMpdu()
         // the timeout duration is "aSIFSTime + aSlotTime + aRxPHYStartDelay, starting
         // at the PHY-TXEND.confirm primitive" (section 10.3.2.9 or 10.22.2.2 of 802.11-2016).
         // aRxPHYStartDelay equals the time to transmit the PHY header.
-        WifiNormalAck* normalAcknowledgment =
-            static_cast<WifiNormalAck*>(m_txParams.m_acknowledgment.get());
+        auto normalAcknowledgment = static_cast<WifiNormalAck*>(m_txParams.m_acknowledgment.get());
 
         Time timeout =
             txDuration + m_phy->GetSifs() + m_phy->GetSlot() +
@@ -477,6 +501,7 @@ FrameExchangeManager::SendMpdu()
         NS_ASSERT(!m_txTimer.IsRunning());
         m_txTimer.Set(WifiTxTimer::WAIT_NORMAL_ACK,
                       timeout,
+                      {m_mpdu->GetHeader().GetAddr1()},
                       &FrameExchangeManager::NormalAckTimeout,
                       this,
                       m_mpdu,
@@ -498,7 +523,40 @@ FrameExchangeManager::ForwardMpduDown(Ptr<WifiMpdu> mpdu, WifiTxVector& txVector
 {
     NS_LOG_FUNCTION(this << *mpdu << txVector);
 
-    m_phy->Send(Create<WifiPsdu>(mpdu, false), txVector);
+    auto psdu = Create<WifiPsdu>(mpdu, false);
+    FinalizeMacHeader(psdu);
+    m_allowedWidth = std::min(m_allowedWidth, txVector.GetChannelWidth());
+    m_phy->Send(psdu, txVector);
+}
+
+void
+FrameExchangeManager::FinalizeMacHeader(Ptr<const WifiPsdu> psdu)
+{
+    NS_LOG_FUNCTION(this << psdu);
+
+    if (m_mac->GetTypeOfStation() != STA)
+    {
+        return;
+    }
+
+    auto pmMode = StaticCast<StaWifiMac>(m_mac)->GetPmMode(m_linkId);
+
+    for (const auto& mpdu : *PeekPointer(psdu))
+    {
+        switch (pmMode)
+        {
+        case WIFI_PM_ACTIVE:
+        case WIFI_PM_SWITCHING_TO_ACTIVE:
+            mpdu->GetHeader().SetNoPowerManagement();
+            break;
+        case WIFI_PM_POWERSAVE:
+        case WIFI_PM_SWITCHING_TO_PS:
+            mpdu->GetHeader().SetPowerManagement();
+            break;
+        default:
+            NS_ABORT_MSG("Unknown PM mode: " << +pmMode);
+        }
+    }
 }
 
 void
@@ -530,7 +588,7 @@ FrameExchangeManager::CalculateProtectionTime(WifiProtection* protection) const
     }
     else if (protection->method == WifiProtection::RTS_CTS)
     {
-        WifiRtsCtsProtection* rtsCtsProtection = static_cast<WifiRtsCtsProtection*>(protection);
+        auto rtsCtsProtection = static_cast<WifiRtsCtsProtection*>(protection);
         rtsCtsProtection->protectionTime = m_phy->CalculateTxDuration(GetRtsSize(),
                                                                       rtsCtsProtection->rtsTxVector,
                                                                       m_phy->GetPhyBand()) +
@@ -541,8 +599,7 @@ FrameExchangeManager::CalculateProtectionTime(WifiProtection* protection) const
     }
     else if (protection->method == WifiProtection::CTS_TO_SELF)
     {
-        WifiCtsToSelfProtection* ctsToSelfProtection =
-            static_cast<WifiCtsToSelfProtection*>(protection);
+        auto ctsToSelfProtection = static_cast<WifiCtsToSelfProtection*>(protection);
         ctsToSelfProtection->protectionTime =
             m_phy->CalculateTxDuration(GetCtsSize(),
                                        ctsToSelfProtection->ctsTxVector,
@@ -563,7 +620,7 @@ FrameExchangeManager::CalculateAcknowledgmentTime(WifiAcknowledgment* acknowledg
     }
     else if (acknowledgment->method == WifiAcknowledgment::NORMAL_ACK)
     {
-        WifiNormalAck* normalAcknowledgment = static_cast<WifiNormalAck*>(acknowledgment);
+        auto normalAcknowledgment = static_cast<WifiNormalAck*>(acknowledgment);
         normalAcknowledgment->acknowledgmentTime =
             m_phy->GetSifs() + m_phy->CalculateTxDuration(GetAckSize(),
                                                           normalAcknowledgment->ackTxVector,
@@ -649,8 +706,7 @@ FrameExchangeManager::SendRts(const WifiTxParameters& txParams)
     rts.SetAddr2(m_self);
 
     NS_ASSERT(txParams.m_protection && txParams.m_protection->method == WifiProtection::RTS_CTS);
-    WifiRtsCtsProtection* rtsCtsProtection =
-        static_cast<WifiRtsCtsProtection*>(txParams.m_protection.get());
+    auto rtsCtsProtection = static_cast<WifiRtsCtsProtection*>(txParams.m_protection.get());
 
     NS_ASSERT(txParams.m_txDuration != Time::Min());
     rts.SetDuration(GetRtsDurationId(rtsCtsProtection->rtsTxVector,
@@ -669,11 +725,14 @@ FrameExchangeManager::SendRts(const WifiTxParameters& txParams)
     NS_ASSERT(!m_txTimer.IsRunning());
     m_txTimer.Set(WifiTxTimer::WAIT_CTS,
                   timeout,
+                  {receiver},
                   &FrameExchangeManager::CtsTimeout,
                   this,
                   mpdu,
                   rtsCtsProtection->rtsTxVector);
     m_channelAccessManager->NotifyCtsTimeoutStartNow(timeout);
+    NS_ASSERT(m_sentRtsTo.empty());
+    m_sentRtsTo = {receiver};
 
     ForwardMpduDown(mpdu, rtsCtsProtection->rtsTxVector);
 }
@@ -748,8 +807,7 @@ FrameExchangeManager::SendCtsToSelf(const WifiTxParameters& txParams)
 
     NS_ASSERT(txParams.m_protection &&
               txParams.m_protection->method == WifiProtection::CTS_TO_SELF);
-    WifiCtsToSelfProtection* ctsToSelfProtection =
-        static_cast<WifiCtsToSelfProtection*>(txParams.m_protection.get());
+    auto ctsToSelfProtection = static_cast<WifiCtsToSelfProtection*>(txParams.m_protection.get());
 
     NS_ASSERT(txParams.m_txDuration != Time::Min());
     cts.SetDuration(GetCtsToSelfDurationId(ctsToSelfProtection->ctsTxVector,
@@ -761,7 +819,9 @@ FrameExchangeManager::SendCtsToSelf(const WifiTxParameters& txParams)
     Time ctsDuration = m_phy->CalculateTxDuration(GetCtsSize(),
                                                   ctsToSelfProtection->ctsTxVector,
                                                   m_phy->GetPhyBand());
-    Simulator::Schedule(ctsDuration + m_phy->GetSifs(), &FrameExchangeManager::SendMpdu, this);
+    Simulator::Schedule(ctsDuration + m_phy->GetSifs(),
+                        &FrameExchangeManager::ProtectionCompleted,
+                        this);
 }
 
 void
@@ -845,7 +905,7 @@ FrameExchangeManager::TransmissionSucceeded()
     }
     else
     {
-        m_dcf->NotifyChannelReleased(m_linkId);
+        NotifyChannelReleased(m_dcf);
         m_dcf = nullptr;
     }
 }
@@ -855,8 +915,16 @@ FrameExchangeManager::TransmissionFailed()
 {
     NS_LOG_FUNCTION(this);
     // A non-QoS station always releases the channel upon a transmission failure
-    m_dcf->NotifyChannelReleased(m_linkId);
+    NotifyChannelReleased(m_dcf);
     m_dcf = nullptr;
+}
+
+void
+FrameExchangeManager::NotifyChannelReleased(Ptr<Txop> txop)
+{
+    NS_LOG_FUNCTION(this << txop);
+    txop->NotifyChannelReleased(m_linkId);
+    m_protectedStas.clear();
 }
 
 void
@@ -912,6 +980,7 @@ FrameExchangeManager::DoCtsTimeout(Ptr<WifiPsdu> psdu)
 {
     NS_LOG_FUNCTION(this << *psdu);
 
+    m_sentRtsTo.clear();
     for (const auto& mpdu : *PeekPointer(psdu))
     {
         if (mpdu->IsQueued())
@@ -1236,7 +1305,7 @@ FrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
             m_txTimer.Cancel();
             m_channelAccessManager->NotifyCtsTimeoutResetNow();
-            Simulator::Schedule(m_phy->GetSifs(), &FrameExchangeManager::SendMpdu, this);
+            Simulator::Schedule(m_phy->GetSifs(), &FrameExchangeManager::ProtectionCompleted, this);
         }
         else if (hdr.IsAck() && m_mpdu && m_txTimer.IsRunning() &&
                  m_txTimer.GetReason() == WifiTxTimer::WAIT_NORMAL_ACK)

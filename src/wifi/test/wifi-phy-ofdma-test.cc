@@ -192,7 +192,7 @@ class OfdmaSpectrumWifiPhy : public SpectrumWifiPhy
      *          energy on the medium for a given band will
      *          be higher than the requested threshold.
      */
-    Time GetEnergyDuration(double energyW, WifiSpectrumBand band);
+    Time GetEnergyDuration(double energyW, WifiSpectrumBandInfo band);
 
     /**
      * \return a const pointer to the HE PHY instance
@@ -278,9 +278,9 @@ OfdmaSpectrumWifiPhy::GetCurrentEvent()
 }
 
 Time
-OfdmaSpectrumWifiPhy::GetEnergyDuration(double energyW, WifiSpectrumBand band)
+OfdmaSpectrumWifiPhy::GetEnergyDuration(double energyW, WifiSpectrumBandInfo band)
 {
-    return m_interference->GetEnergyDuration(energyW, band, WHOLE_WIFI_SPECTRUM);
+    return m_interference->GetEnergyDuration(energyW, band);
 }
 
 Ptr<const HePhy>
@@ -2430,9 +2430,8 @@ TestMultipleHeTbPreambles::RxHeTbPpdu(uint64_t uid,
                                       HePpdu::PSD_NON_HE_PORTION);
 
     // Send non-OFDMA part
-    Time nonOfdmaDuration = m_phy->GetHePhy()->CalculateNonOfdmaDurationForHeTb(txVector);
-    uint32_t centerFrequency =
-        m_phy->GetHePhy()->GetCenterFrequencyForNonOfdmaPart(txVector, staId);
+    Time nonOfdmaDuration = m_phy->GetHePhy()->CalculateNonHeDurationForHeTb(txVector);
+    uint32_t centerFrequency = m_phy->GetHePhy()->GetCenterFrequencyForNonHePart(txVector, staId);
     uint16_t ruWidth = HeRu::GetBandwidth(txVector.GetRu(staId).GetRuType());
     uint16_t channelWidth = ruWidth < 20 ? 20 : ruWidth;
     Ptr<SpectrumValue> rxPsd = WifiSpectrumValueHelper::CreateHeOfdmTxPowerSpectralDensity(
@@ -2445,7 +2444,6 @@ TestMultipleHeTbPreambles::RxHeTbPpdu(uint64_t uid,
     rxParams->txPhy = nullptr;
     rxParams->duration = nonOfdmaDuration;
     rxParams->ppdu = ppdu;
-    rxParams->txWidth = channelWidth;
 
     uint16_t length;
     std::tie(length, ppduDuration) =
@@ -2460,19 +2458,18 @@ TestMultipleHeTbPreambles::RxHeTbPpdu(uint64_t uid,
     // Schedule OFDMA part
     Ptr<HePpdu> ppduOfdma = DynamicCast<HePpdu>(ppdu->Copy()); // since flag will be modified
     ppduOfdma->SetTxPsdFlag(HePpdu::PSD_HE_PORTION);
-    WifiSpectrumBand band = m_phy->GetHePhy()->GetRuBandForRx(txVector, staId);
+    const auto band = m_phy->GetHePhy()->GetRuBandForRx(txVector, staId);
     Ptr<SpectrumValue> rxPsdOfdma =
         WifiSpectrumValueHelper::CreateHeMuOfdmTxPowerSpectralDensity(DEFAULT_FREQUENCY,
                                                                       DEFAULT_CHANNEL_WIDTH,
                                                                       txPowerWatts,
                                                                       DEFAULT_GUARD_WIDTH,
-                                                                      band);
+                                                                      band.indices);
     Ptr<WifiSpectrumSignalParameters> rxParamsOfdma = Create<WifiSpectrumSignalParameters>();
     rxParamsOfdma->psd = rxPsd;
     rxParamsOfdma->txPhy = nullptr;
     rxParamsOfdma->duration = ppduDuration - nonOfdmaDuration;
     rxParamsOfdma->ppdu = ppduOfdma;
-    rxParamsOfdma->txWidth = DEFAULT_CHANNEL_WIDTH;
     Simulator::Schedule(nonOfdmaDuration,
                         &TestMultipleHeTbPreambles::RxHeTbPpduOfdmaPart,
                         this,
@@ -3052,20 +3049,20 @@ class TestUlOfdmaPhyTransmission : public TestCase
     /**
      * Check the received power for the non-OFDMA of the HE TB PPDUs over the given band
      * \param phy the PHY
-     * \param band the WifiSpectrumBand over which the power is measured
+     * \param band the indices of the band over which the power is measured
      * \param expectedRxPower the expected received power in W
      */
     void CheckNonOfdmaRxPower(Ptr<OfdmaSpectrumWifiPhy> phy,
-                              WifiSpectrumBand band,
+                              WifiSpectrumBandInfo band,
                               double expectedRxPower);
     /**
      * Check the received power for the OFDMA part of the HE TB PPDUs over the given band
      * \param phy the PHY
-     * \param band the WifiSpectrumBand over which the power is measured
+     * \param band the indices of the band over which the power is measured
      * \param expectedRxPower the expected received power in W
      */
     void CheckOfdmaRxPower(Ptr<OfdmaSpectrumWifiPhy> phy,
-                           WifiSpectrumBand band,
+                           WifiSpectrumBandInfo band,
                            double expectedRxPower);
 
     /**
@@ -3534,25 +3531,25 @@ TestUlOfdmaPhyTransmission::CheckRxFromSta2(uint32_t expectedSuccess,
 
 void
 TestUlOfdmaPhyTransmission::CheckNonOfdmaRxPower(Ptr<OfdmaSpectrumWifiPhy> phy,
-                                                 WifiSpectrumBand band,
+                                                 WifiSpectrumBandInfo band,
                                                  double expectedRxPower)
 {
     Ptr<Event> event = phy->GetCurrentEvent();
     NS_ASSERT(event);
-    double rxPower = event->GetRxPowerW(band);
-    NS_LOG_FUNCTION(this << band.first << band.second << expectedRxPower << rxPower);
+    auto rxPower = event->GetRxPowerW(band);
+    NS_LOG_FUNCTION(this << band << expectedRxPower << rxPower);
     // Since there is out of band emission due to spectrum mask, the tolerance cannot be very low
     NS_TEST_ASSERT_MSG_EQ_TOL(rxPower,
                               expectedRxPower,
                               5e-3,
-                              "RX power " << rxPower << " over (" << band.first << ", "
-                                          << band.second << ") does not match expected power "
-                                          << expectedRxPower << " at " << Simulator::Now());
+                              "RX power " << rxPower << " over (" << band
+                                          << ") does not match expected power " << expectedRxPower
+                                          << " at " << Simulator::Now());
 }
 
 void
 TestUlOfdmaPhyTransmission::CheckOfdmaRxPower(Ptr<OfdmaSpectrumWifiPhy> phy,
-                                              WifiSpectrumBand band,
+                                              WifiSpectrumBandInfo band,
                                               double expectedRxPower)
 {
     /**
@@ -3560,28 +3557,28 @@ TestUlOfdmaPhyTransmission::CheckOfdmaRxPower(Ptr<OfdmaSpectrumWifiPhy> phy,
      * We will have to check if the expected power is indeed the max power returning a positive
      * duration when calling GetEnergyDuration.
      */
-    NS_LOG_FUNCTION(this << band.first << band.second << expectedRxPower);
+    NS_LOG_FUNCTION(this << band << expectedRxPower);
     double step = 5e-3;
     if (expectedRxPower > 0.0)
     {
         NS_TEST_ASSERT_MSG_EQ(
             phy->GetEnergyDuration(expectedRxPower - step, band).IsStrictlyPositive(),
             true,
-            "At least " << expectedRxPower << " W expected for OFDMA part over (" << band.first
-                        << ", " << band.second << ") at " << Simulator::Now());
+            "At least " << expectedRxPower << " W expected for OFDMA part over (" << band << ") at "
+                        << Simulator::Now());
         NS_TEST_ASSERT_MSG_EQ(
             phy->GetEnergyDuration(expectedRxPower + step, band).IsStrictlyPositive(),
             false,
-            "At most " << expectedRxPower << " W expected for OFDMA part over (" << band.first
-                       << ", " << band.second << ") at " << Simulator::Now());
+            "At most " << expectedRxPower << " W expected for OFDMA part over (" << band << ") at "
+                       << Simulator::Now());
     }
     else
     {
         NS_TEST_ASSERT_MSG_EQ(
             phy->GetEnergyDuration(expectedRxPower + step, band).IsStrictlyPositive(),
             false,
-            "At most " << expectedRxPower << " W expected for OFDMA part over (" << band.first
-                       << ", " << band.second << ") at " << Simulator::Now());
+            "At most " << expectedRxPower << " W expected for OFDMA part over (" << band << ") at "
+                       << Simulator::Now());
     }
 }
 
@@ -3982,15 +3979,15 @@ TestUlOfdmaPhyTransmission::SchedulePowerMeasurementChecks(Time delay,
     WifiTxVector txVectorSta1 = GetTxVectorForHeTbPpdu(1, 1, 0);
     WifiTxVector txVectorSta2 = GetTxVectorForHeTbPpdu(2, 2, 0);
     Ptr<const HePhy> hePhy = m_phyAp->GetHePhy();
-    Time nonOfdmaDuration = hePhy->CalculateNonOfdmaDurationForHeTb(txVectorSta2);
-    NS_ASSERT(nonOfdmaDuration == hePhy->CalculateNonOfdmaDurationForHeTb(txVectorSta1));
+    Time nonOfdmaDuration = hePhy->CalculateNonHeDurationForHeTb(txVectorSta2);
+    NS_ASSERT(nonOfdmaDuration == hePhy->CalculateNonHeDurationForHeTb(txVectorSta1));
 
     std::vector<double> rxPowerNonOfdma{rxPowerNonOfdmaRu1, rxPowerNonOfdmaRu2};
-    std::vector<WifiSpectrumBand> nonOfdmaBand{hePhy->GetNonOfdmaBand(txVectorSta1, 1),
-                                               hePhy->GetNonOfdmaBand(txVectorSta2, 2)};
+    std::vector<WifiSpectrumBandInfo> nonOfdmaBand{hePhy->GetNonOfdmaBand(txVectorSta1, 1),
+                                                   hePhy->GetNonOfdmaBand(txVectorSta2, 2)};
     std::vector<double> rxPowerOfdma{rxPowerOfdmaRu1, rxPowerOfdmaRu2};
-    std::vector<WifiSpectrumBand> ofdmaBand{hePhy->GetRuBandForRx(txVectorSta1, 1),
-                                            hePhy->GetRuBandForRx(txVectorSta2, 2)};
+    std::vector<WifiSpectrumBandInfo> ofdmaBand{hePhy->GetRuBandForRx(txVectorSta1, 1),
+                                                hePhy->GetRuBandForRx(txVectorSta2, 2)};
 
     for (uint8_t i = 0; i < 2; ++i)
     {
@@ -4891,7 +4888,7 @@ TestPhyPaddingExclusion::SendHeTbPpdu(uint16_t txStaId,
                                          DEFAULT_CHANNEL_WIDTH,
                                          false,
                                          false,
-                                         1);
+                                         true);
 
     HeRu::RuSpec ru(HeRu::RU_106_TONE, index, false);
     txVector.SetRu(ru, txStaId);
@@ -5187,7 +5184,7 @@ TestPhyPaddingExclusion::SetTrigVector(Time ppduDuration)
                             DEFAULT_CHANNEL_WIDTH,
                             false,
                             false,
-                            1);
+                            true);
     trigVector.SetRu(HeRu::RuSpec(HeRu::RU_106_TONE, 1, false), 1);
     trigVector.SetMode(HePhy::GetHeMcs7(), 1);
     trigVector.SetNss(1, 1);

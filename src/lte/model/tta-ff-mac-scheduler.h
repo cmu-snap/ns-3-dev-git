@@ -21,37 +21,21 @@
 #ifndef TTA_FF_MAC_SCHEDULER_H
 #define TTA_FF_MAC_SCHEDULER_H
 
-#include <ns3/ff-mac-csched-sap.h>
-#include <ns3/ff-mac-sched-sap.h>
-#include <ns3/ff-mac-scheduler.h>
-#include <ns3/lte-amc.h>
-#include <ns3/lte-common.h>
-#include <ns3/lte-ffr-sap.h>
+#include "ff-mac-csched-sap.h"
+#include "ff-mac-sched-sap.h"
+#include "ff-mac-scheduler.h"
+#include "lte-amc.h"
+#include "lte-common.h"
+#include "lte-ffr-sap.h"
+
 #include <ns3/nstime.h>
 
 #include <map>
 #include <set>
 #include <vector>
 
-// value for SINR outside the range defined by FF-API, used to indicate that there
-// is no CQI for this element
-#define NO_SINR -5000
-
-#define HARQ_PROC_NUM 8
-#define HARQ_DL_TIMEOUT 11
-
 namespace ns3
 {
-
-typedef std::vector<uint8_t> DlHarqProcessesStatus_t;
-typedef std::vector<uint8_t> DlHarqProcessesTimer_t;
-typedef std::vector<DlDciListElement_s> DlHarqProcessesDciBuffer_t;
-typedef std::vector<std::vector<RlcPduListElement_s>>
-    RlcPduList_t;                                           // vector of the LCs and layers per UE
-typedef std::vector<RlcPduList_t> DlHarqRlcPduListBuffer_t; // vector of the 8 HARQ processes per UE
-
-typedef std::vector<UlDciListElement_s> UlHarqProcessesDciBuffer_t;
-typedef std::vector<uint8_t> UlHarqProcessesStatus_t;
 
 /**
  * \ingroup ff-api

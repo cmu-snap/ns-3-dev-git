@@ -27,6 +27,8 @@
 
 #include <algorithm>
 #include <iterator>
+#include <numeric>
+#include <set>
 
 namespace ns3
 {
@@ -217,6 +219,7 @@ WifiTxVector::GetNss(uint16_t staId) const
 uint8_t
 WifiTxVector::GetNssMax() const
 {
+    // We do not support mixed OFDMA and MU-MIMO
     uint8_t nss = 0;
     if (IsMu())
     {
@@ -224,6 +227,26 @@ WifiTxVector::GetNssMax() const
         {
             nss = (nss < info.second.nss) ? info.second.nss : nss;
         }
+    }
+    else
+    {
+        nss = m_nss;
+    }
+    return nss;
+}
+
+uint8_t
+WifiTxVector::GetNssTotal() const
+{
+    // We do not support mixed OFDMA and MU-MIMO
+    uint8_t nss = 0;
+    if (IsMu())
+    {
+        nss = std::accumulate(
+            m_muUserInfos.cbegin(),
+            m_muUserInfos.cend(),
+            0,
+            [](uint8_t prevNss, const auto& info) { return prevNss + info.second.nss; });
     }
     else
     {
@@ -259,8 +282,7 @@ WifiTxVector::IsLdpc() const
 bool
 WifiTxVector::IsNonHtDuplicate() const
 {
-    return ((m_channelWidth >= 40) && !IsMu() &&
-            (GetMode().GetModulationClass() < WIFI_MOD_CLASS_HT));
+    return ((m_channelWidth >= 40) && !IsMu() && (GetModulationClass() < WIFI_MOD_CLASS_HT));
 }
 
 void
@@ -440,25 +462,64 @@ WifiTxVector::IsValid() const
     {
         if (m_nss != 3 && m_nss != 6)
         {
-            return (modeName != "VhtMcs9");
+            if (modeName == "VhtMcs9")
+            {
+                return false;
+            }
         }
     }
     else if (m_channelWidth == 80)
     {
         if (m_nss == 3 || m_nss == 7)
         {
-            return (modeName != "VhtMcs6");
+            if (modeName == "VhtMcs6")
+            {
+                return false;
+            }
         }
         else if (m_nss == 6)
         {
-            return (modeName != "VhtMcs9");
+            if (modeName == "VhtMcs9")
+            {
+                return false;
+            }
         }
     }
     else if (m_channelWidth == 160)
     {
         if (m_nss == 3)
         {
-            return (modeName != "VhtMcs9");
+            if (modeName == "VhtMcs9")
+            {
+                return false;
+            }
+        }
+    }
+    for (const auto& userInfo : m_muUserInfos)
+    {
+        if (GetNumStasInRu(userInfo.second.ru) > 8)
+        {
+            return false;
+        }
+    }
+    std::map<HeRu::RuSpec, uint8_t> streamsPerRu{};
+    for (const auto& info : m_muUserInfos)
+    {
+        auto it = streamsPerRu.find(info.second.ru);
+        if (it == streamsPerRu.end())
+        {
+            streamsPerRu[info.second.ru] = info.second.nss;
+        }
+        else
+        {
+            it->second += info.second.nss;
+        }
+    }
+    for (auto& streams : streamsPerRu)
+    {
+        if (streams.second > 8)
+        {
+            return false;
         }
     }
     return true;
@@ -480,6 +541,60 @@ bool
 WifiTxVector::IsUlMu() const
 {
     return ns3::IsUlMu(m_preamble);
+}
+
+bool
+WifiTxVector::IsDlOfdma() const
+{
+    if (!IsDlMu())
+    {
+        return false;
+    }
+    if (IsEht(m_preamble))
+    {
+        return m_ehtPpduType == 0;
+    }
+    if (m_muUserInfos.size() == 1)
+    {
+        return true;
+    }
+    std::set<HeRu::RuSpec> rus{};
+    for (const auto& userInfo : m_muUserInfos)
+    {
+        rus.insert(userInfo.second.ru);
+        if (rus.size() > 1)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool
+WifiTxVector::IsDlMuMimo() const
+{
+    if (!IsDlMu())
+    {
+        return false;
+    }
+    if (IsEht(m_preamble))
+    {
+        return m_ehtPpduType == 2;
+    }
+    if (m_muUserInfos.size() < 2)
+    {
+        return false;
+    }
+    // TODO: mixed OFDMA and MU-MIMO is not supported
+    return !IsDlOfdma();
+}
+
+uint8_t
+WifiTxVector::GetNumStasInRu(const HeRu::RuSpec& ru) const
+{
+    return std::count_if(m_muUserInfos.cbegin(),
+                         m_muUserInfos.cend(),
+                         [&ru](const auto& info) -> bool { return (ru == info.second.ru); });
 }
 
 bool
@@ -534,6 +649,12 @@ WifiTxVector::GetHeMuUserInfoMap()
     NS_ABORT_MSG_IF(!IsMu(), "HE MU user info map only available for MU");
     m_ruAllocation.clear();
     return m_muUserInfos;
+}
+
+bool
+WifiTxVector::IsSigBCompression() const
+{
+    return IsDlMuMimo() && !IsDlOfdma();
 }
 
 void
@@ -647,65 +768,24 @@ HeMuUserInfo::operator!=(const HeMuUserInfo& other) const
     return !(*this == other);
 }
 
-WifiTxVector::OrderedRus
-WifiTxVector::GetOrderedRus(uint8_t p20Index) const
+WifiTxVector::UserInfoMapOrderedByRus
+WifiTxVector::GetUserInfoMapOrderedByRus(uint8_t p20Index) const
 {
     auto heRuComparator = HeRu::RuSpecCompare(m_channelWidth, p20Index);
-    OrderedRus orderedRus{heRuComparator};
-    std::transform(
-        m_muUserInfos.cbegin(),
-        m_muUserInfos.cend(),
-        std::inserter(orderedRus, orderedRus.end()),
-        [](auto&& userInfo) { return std::make_pair(userInfo.second.ru, userInfo.first); });
-    return orderedRus;
-}
-
-HeSigBContentChannels
-WifiTxVector::GetContentChannels(uint8_t p20Index) const
-{
-    HeSigBContentChannels contentChannels{{}};
-
-    if (m_channelWidth > 20)
+    UserInfoMapOrderedByRus orderedMap{heRuComparator};
+    for (const auto& userInfo : m_muUserInfos)
     {
-        contentChannels.emplace_back();
-    }
-
-    const auto& orderedRus = GetOrderedRus(p20Index);
-    for (const auto& [ru, staId] : orderedRus)
-    {
-        auto ruType = ru.GetRuType();
-        auto ruIdx = ru.GetIndex();
-        const auto& userInfo = GetHeMuUserInfo(staId);
-        NS_ASSERT(ru == userInfo.ru);
-
-        if ((ruType == HeRu::RU_484_TONE) || (ruType == HeRu::RU_996_TONE) ||
-            (ruType == HeRu::RU_2x996_TONE))
+        const auto ru = userInfo.second.ru;
+        if (auto it = orderedMap.find(ru); it != orderedMap.end())
         {
-            for (auto i = 0; i < ((ruType == HeRu::RU_2x996_TONE) ? 2 : 1); ++i)
-            {
-                contentChannels[0].push_back({staId, userInfo.nss, userInfo.mcs});
-                contentChannels[1].push_back({staId, userInfo.nss, userInfo.mcs});
-            }
-            continue;
-        }
-
-        size_t numRus{1};
-        if (ruType < HeRu::RU_242_TONE)
-        {
-            numRus = HeRu::m_heRuSubcarrierGroups.at({20, ruType}).size();
-        }
-
-        if (((ruIdx - 1) / numRus) % 2 == 0)
-        {
-            contentChannels[0].push_back({staId, userInfo.nss, userInfo.mcs});
+            it->second.emplace(userInfo.first);
         }
         else
         {
-            contentChannels[1].push_back({staId, userInfo.nss, userInfo.mcs});
+            orderedMap.emplace(userInfo.second.ru, std::set<uint16_t>{userInfo.first});
         }
     }
-
-    return contentChannels;
+    return orderedMap;
 }
 
 RuAllocation
@@ -714,8 +794,8 @@ WifiTxVector::DeriveRuAllocation(uint8_t p20Index) const
     RuAllocation ruAllocations(m_channelWidth / 20, HeRu::EMPTY_242_TONE_RU);
     std::vector<HeRu::RuType> ruTypes{};
     ruTypes.resize(ruAllocations.size());
-    const auto& orderedRus = GetOrderedRus(p20Index);
-    for (const auto& [ru, staId] : orderedRus)
+    const auto& orderedMap = GetUserInfoMapOrderedByRus(p20Index);
+    for (const auto& [ru, staIds] : orderedMap)
     {
         const auto ruType = ru.GetRuType();
         const auto ruBw = HeRu::GetBandwidth(ruType);
