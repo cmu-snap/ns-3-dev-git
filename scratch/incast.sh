@@ -10,10 +10,10 @@ if [ "$#" -ne 1 ]; then
     exit 1
 fi
 
-burstDurationMs=15
-numBursts=11
+burstDurationMs=5
+numBursts=5
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numBurstSenders=100 # $((100 + 1))
+numBurstSenders=200 # $((100 + 1))
 numBackgroundSenders=0
 cca="TcpDctcp"
 nicRateMbps=10000
