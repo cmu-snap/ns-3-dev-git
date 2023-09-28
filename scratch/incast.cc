@@ -489,7 +489,7 @@ main(int argc, char *argv[]) {
   // Set QW = 1 because DCTCP tracks the instantaneous queue length only
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
 
-  // Use ECN for DCTCP
+  // Enable ECN for all queues.
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
 
   // Configure different queues for the small and large links
@@ -873,7 +873,6 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Ideal burst duration: " << idealBurstDurationMs << "ms");
   NS_LOG_INFO("Burst durations (x ideal):");
-
   for (const auto &p : aggregatorApp->GetBurstTimes()) {
     Time burstDuration = p.second - p.first;
     NS_LOG_INFO(

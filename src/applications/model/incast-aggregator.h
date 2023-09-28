@@ -279,15 +279,15 @@ class IncastAggregator : public Application {
   // If m_rwndStrategy=bdp+connections, then this is the bottleneck bandwidth.
   uint32_t m_bandwidthMbps;
 
-  // If m_rwndStrategy=static, then this is the max number of tokens that can
+  // If m_rwndStrategy=scheduled, then this is the max number of tokens that can
   // be claimed at once. Used to reset m_rwndScheduleAvailableTokens.
   uint32_t m_rwndScheduleMaxTokens;
 
-  // If m_rwndStrategy=static, then this is the current number of tokens that
+  // If m_rwndStrategy=scheduled, then this is the current number of tokens that
   // can be claimed.
   uint32_t m_rwndScheduleAvailableTokens;
 
-  // If m_rwndStrategy=static, then this is the set of senders (node ID) that
+  // If m_rwndStrategy=scheduled, then this is the set of senders (node ID) that
   // have claimed a token.
   std::unordered_set<uint32_t> m_burstSendersWithAToken;
 
