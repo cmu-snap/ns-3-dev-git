@@ -22,17 +22,14 @@
 #include "icmpv6-l4-protocol.h"
 #include "ipv6-extension-demux.h"
 #include "ipv6-extension-header.h"
+#include "ipv6-header.h"
+#include "ipv6-l3-protocol.h"
 #include "ipv6-option-demux.h"
 #include "ipv6-option.h"
-#include "udp-header.h"
+#include "ipv6-route.h"
 
 #include "ns3/assert.h"
 #include "ns3/ipv6-address.h"
-#include "ns3/ipv6-header.h"
-#include "ns3/ipv6-l3-protocol.h"
-#include "ns3/ipv6-list-routing.h"
-#include "ns3/ipv6-route.h"
-#include "ns3/ipv6-static-routing.h"
 #include "ns3/log.h"
 #include "ns3/object-vector.h"
 #include "ns3/trace-source-accessor.h"
@@ -112,7 +109,7 @@ Ipv6Extension::ProcessOptions(Ptr<Packet>& packet,
 
     uint8_t processedSize = 0;
     uint32_t size = p->GetSize();
-    uint8_t* data = new uint8_t[size];
+    auto data = new uint8_t[size];
     p->CopyData(data, size);
 
     uint8_t optionType = 0;
@@ -357,7 +354,7 @@ Ipv6ExtensionFragment::DoDispose()
 {
     NS_LOG_FUNCTION(this);
 
-    for (MapFragments_t::iterator it = m_fragments.begin(); it != m_fragments.end(); it++)
+    for (auto it = m_fragments.begin(); it != m_fragments.end(); it++)
     {
         it->second = nullptr;
     }
@@ -411,7 +408,7 @@ Ipv6ExtensionFragment::Process(Ptr<Packet>& packet,
     Ipv6Header ipHeader = ipv6Header;
     ipHeader.SetNextHeader(fragmentHeader.GetNextHeader());
 
-    MapFragments_t::iterator it = m_fragments.find(fragmentKey);
+    auto it = m_fragments.find(fragmentKey);
     if (it == m_fragments.end())
     {
         fragments = Create<Fragments>();
@@ -419,7 +416,7 @@ Ipv6ExtensionFragment::Process(Ptr<Packet>& packet,
         NS_LOG_DEBUG("Insert new fragment key: src: "
                      << src << " IP hdr id " << identification << " m_fragments.size() "
                      << m_fragments.size() << " offset " << fragmentOffset);
-        FragmentsTimeoutsListI_t iter = SetTimeout(fragmentKey, ipHeader);
+        auto iter = SetTimeout(fragmentKey, ipHeader);
         fragments->SetTimeoutIter(iter);
     }
     else
@@ -490,7 +487,7 @@ Ipv6ExtensionFragment::GetFragments(Ptr<Packet> packet,
     {
         if (nextHeader == Ipv6Header::IPV6_EXT_HOP_BY_HOP)
         {
-            Ipv6ExtensionHopByHopHeader* hopbyhopHeader = new Ipv6ExtensionHopByHopHeader();
+            auto hopbyhopHeader = new Ipv6ExtensionHopByHopHeader();
             p->RemoveHeader(*hopbyhopHeader);
 
             nextHeader = hopbyhopHeader->GetNextHeader();
@@ -544,8 +541,7 @@ Ipv6ExtensionFragment::GetFragments(Ptr<Packet> packet,
         }
         else if (nextHeader == Ipv6Header::IPV6_EXT_DESTINATION)
         {
-            Ipv6ExtensionDestinationHeader* destinationHeader =
-                new Ipv6ExtensionDestinationHeader();
+            auto destinationHeader = new Ipv6ExtensionDestinationHeader();
             p->RemoveHeader(*destinationHeader);
 
             nextHeader = destinationHeader->GetNextHeader();
@@ -575,7 +571,7 @@ Ipv6ExtensionFragment::GetFragments(Ptr<Packet> packet,
     uint32_t currentFragmentablePartSize = 0;
 
     bool moreFragment = true;
-    uint32_t identification = (uint32_t)m_uvar->GetValue(0, (uint32_t)-1);
+    auto identification = (uint32_t)m_uvar->GetValue(0, (uint32_t)-1);
     uint16_t offset = 0;
 
     do
@@ -602,29 +598,23 @@ Ipv6ExtensionFragment::GetFragments(Ptr<Packet> packet,
 
         fragment->AddHeader(fragmentHeader);
 
-        for (std::list<std::pair<Ipv6ExtensionHeader*, uint8_t>>::iterator it =
-                 unfragmentablePart.begin();
-             it != unfragmentablePart.end();
-             it++)
+        for (auto it = unfragmentablePart.begin(); it != unfragmentablePart.end(); it++)
         {
             if (it->second == Ipv6Header::IPV6_EXT_HOP_BY_HOP)
             {
-                Ipv6ExtensionHopByHopHeader* p =
-                    dynamic_cast<Ipv6ExtensionHopByHopHeader*>(it->first);
+                auto p = dynamic_cast<Ipv6ExtensionHopByHopHeader*>(it->first);
                 NS_ASSERT(p != nullptr);
                 fragment->AddHeader(*p);
             }
             else if (it->second == Ipv6Header::IPV6_EXT_ROUTING)
             {
-                Ipv6ExtensionLooseRoutingHeader* p =
-                    dynamic_cast<Ipv6ExtensionLooseRoutingHeader*>(it->first);
+                auto p = dynamic_cast<Ipv6ExtensionLooseRoutingHeader*>(it->first);
                 NS_ASSERT(p != nullptr);
                 fragment->AddHeader(*p);
             }
             else if (it->second == Ipv6Header::IPV6_EXT_DESTINATION)
             {
-                Ipv6ExtensionDestinationHeader* p =
-                    dynamic_cast<Ipv6ExtensionDestinationHeader*>(it->first);
+                auto p = dynamic_cast<Ipv6ExtensionDestinationHeader*>(it->first);
                 NS_ASSERT(p != nullptr);
                 fragment->AddHeader(*p);
             }
@@ -639,10 +629,7 @@ Ipv6ExtensionFragment::GetFragments(Ptr<Packet> packet,
         listFragments.emplace_back(fragment, ipv6Header);
     } while (moreFragment);
 
-    for (std::list<std::pair<Ipv6ExtensionHeader*, uint8_t>>::iterator it =
-             unfragmentablePart.begin();
-         it != unfragmentablePart.end();
-         it++)
+    for (auto it = unfragmentablePart.begin(); it != unfragmentablePart.end(); it++)
     {
         delete it->first;
     }
@@ -656,7 +643,7 @@ Ipv6ExtensionFragment::HandleFragmentsTimeout(FragmentKey_t fragmentKey, Ipv6Hea
     NS_LOG_FUNCTION(this << fragmentKey.first << fragmentKey.second << ipHeader);
     Ptr<Fragments> fragments;
 
-    MapFragments_t::iterator it = m_fragments.find(fragmentKey);
+    auto it = m_fragments.find(fragmentKey);
     NS_ASSERT_MSG(it != m_fragments.end(),
                   "IPv6 Fragment timeout reached for non-existent fragment");
     fragments = it->second;
@@ -697,7 +684,7 @@ Ipv6ExtensionFragment::SetTimeout(FragmentKey_t key, Ipv6Header ipHeader)
                  << key.second);
     m_timeoutEventList.emplace_back(Simulator::Now() + m_fragmentExpirationTimeout, key, ipHeader);
 
-    Ipv6ExtensionFragment::FragmentsTimeoutsListI_t iter = --m_timeoutEventList.end();
+    auto iter = --m_timeoutEventList.end();
 
     return (iter);
 }
@@ -733,7 +720,7 @@ Ipv6ExtensionFragment::HandleTimeout()
 }
 
 Ipv6ExtensionFragment::Fragments::Fragments()
-    : m_moreFragment(0)
+    : m_moreFragment(false)
 {
 }
 
@@ -781,10 +768,7 @@ Ipv6ExtensionFragment::Fragments::IsEntire() const
     {
         uint16_t lastEndOffset = 0;
 
-        for (std::list<std::pair<Ptr<Packet>, uint16_t>>::const_iterator it =
-                 m_packetFragments.begin();
-             it != m_packetFragments.end();
-             it++)
+        for (auto it = m_packetFragments.begin(); it != m_packetFragments.end(); it++)
         {
             if (lastEndOffset != it->second)
             {
@@ -804,9 +788,7 @@ Ipv6ExtensionFragment::Fragments::GetPacket() const
 {
     Ptr<Packet> p = m_unfragmentable->Copy();
 
-    for (std::list<std::pair<Ptr<Packet>, uint16_t>>::const_iterator it = m_packetFragments.begin();
-         it != m_packetFragments.end();
-         it++)
+    for (auto it = m_packetFragments.begin(); it != m_packetFragments.end(); it++)
     {
         p->AddAtEnd(it->first);
     }
@@ -830,9 +812,7 @@ Ipv6ExtensionFragment::Fragments::GetPartialPacket() const
 
     uint16_t lastEndOffset = 0;
 
-    for (std::list<std::pair<Ptr<Packet>, uint16_t>>::const_iterator it = m_packetFragments.begin();
-         it != m_packetFragments.end();
-         it++)
+    for (auto it = m_packetFragments.begin(); it != m_packetFragments.end(); it++)
     {
         if (lastEndOffset != it->second)
         {
@@ -996,9 +976,7 @@ void
 Ipv6ExtensionRoutingDemux::DoDispose()
 {
     NS_LOG_FUNCTION(this);
-    for (Ipv6ExtensionRoutingList_t::iterator it = m_extensionsRouting.begin();
-         it != m_extensionsRouting.end();
-         it++)
+    for (auto it = m_extensionsRouting.begin(); it != m_extensionsRouting.end(); it++)
     {
         (*it)->Dispose();
         *it = nullptr;
@@ -1313,7 +1291,7 @@ Ipv6ExtensionAH::Process(Ptr<Packet>& packet,
 
     /** \todo */
 
-    return true;
+    return 1;
 }
 
 } /* namespace ns3 */

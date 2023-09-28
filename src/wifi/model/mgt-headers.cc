@@ -22,6 +22,7 @@
 #include "mgt-headers.h"
 
 #include "ns3/address-utils.h"
+#include "ns3/packet.h"
 #include "ns3/simulator.h"
 
 namespace ns3
@@ -643,6 +644,10 @@ WifiActionHeader::SetAction(WifiActionHeader::CategoryValue type,
         m_actionValue = static_cast<uint8_t>(action.unprotectedDmgAction);
         break;
     }
+    case PROTECTED_EHT: {
+        m_actionValue = static_cast<uint8_t>(action.protectedEhtAction);
+        break;
+    }
     case VENDOR_SPECIFIC_ACTION: {
         break;
     }
@@ -674,6 +679,8 @@ WifiActionHeader::GetCategory() const
         return FST;
     case UNPROTECTED_DMG:
         return UNPROTECTED_DMG;
+    case PROTECTED_EHT:
+        return PROTECTED_EHT;
     case VENDOR_SPECIFIC_ACTION:
         return VENDOR_SPECIFIC_ACTION;
     default:
@@ -984,6 +991,46 @@ WifiActionHeader::GetAction() const
         }
         break;
 
+    case PROTECTED_EHT:
+        switch (m_actionValue)
+        {
+        case PROTECTED_EHT_TID_TO_LINK_MAPPING_REQUEST:
+            retval.protectedEhtAction = PROTECTED_EHT_TID_TO_LINK_MAPPING_REQUEST;
+            break;
+        case PROTECTED_EHT_TID_TO_LINK_MAPPING_RESPONSE:
+            retval.protectedEhtAction = PROTECTED_EHT_TID_TO_LINK_MAPPING_RESPONSE;
+            break;
+        case PROTECTED_EHT_TID_TO_LINK_MAPPING_TEARDOWN:
+            retval.protectedEhtAction = PROTECTED_EHT_TID_TO_LINK_MAPPING_TEARDOWN;
+            break;
+        case PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_REQUEST:
+            retval.protectedEhtAction = PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_REQUEST;
+            break;
+        case PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_RESPONSE:
+            retval.protectedEhtAction = PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_RESPONSE;
+            break;
+        case PROTECTED_EHT_EPCS_PRIORITY_ACCESS_TEARDOWN:
+            retval.protectedEhtAction = PROTECTED_EHT_EPCS_PRIORITY_ACCESS_TEARDOWN;
+            break;
+        case PROTECTED_EHT_EML_OPERATING_MODE_NOTIFICATION:
+            retval.protectedEhtAction = PROTECTED_EHT_EML_OPERATING_MODE_NOTIFICATION;
+            break;
+        case PROTECTED_EHT_LINK_RECOMMENDATION:
+            retval.protectedEhtAction = PROTECTED_EHT_LINK_RECOMMENDATION;
+            break;
+        case PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_REQUEST:
+            retval.protectedEhtAction = PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_REQUEST;
+            break;
+        case PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_RESPONSE:
+            retval.protectedEhtAction = PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_RESPONSE;
+            break;
+        default:
+            NS_FATAL_ERROR("Unknown Protected EHT action code");
+            retval.protectedEhtAction =
+                PROTECTED_EHT_TID_TO_LINK_MAPPING_REQUEST; /* quiet compiler */
+        }
+        break;
+
     default:
         NS_FATAL_ERROR("Unsupported action");
         retval.selfProtectedAction = PEER_LINK_OPEN; /* quiet compiler */
@@ -1007,76 +1054,205 @@ WifiActionHeader::GetInstanceTypeId() const
     return GetTypeId();
 }
 
-std::string
-WifiActionHeader::CategoryValueToString(CategoryValue value) const
+std::pair<WifiActionHeader::CategoryValue, WifiActionHeader::ActionValue>
+WifiActionHeader::Peek(Ptr<const Packet> pkt)
 {
-    switch (value)
-    {
-    case QOS:
-        return "QoS";
-    case BLOCK_ACK:
-        return "BlockAck";
-    case PUBLIC:
-        return "Public";
-    case RADIO_MEASUREMENT:
-        return "RadioMeasurement";
-    case MESH:
-        return "Mesh";
-    case MULTIHOP:
-        return "Multihop";
-    case SELF_PROTECTED:
-        return "SelfProtected";
-    case DMG:
-        return "Dmg";
-    case FST:
-        return "Fst";
-    case UNPROTECTED_DMG:
-        return "UnprotectedDmg";
-    case VENDOR_SPECIFIC_ACTION:
-        return "VendorSpecificAction";
-    default:
-        std::ostringstream convert;
-        convert << value;
-        return convert.str();
-    }
+    WifiActionHeader actionHdr;
+    pkt->PeekHeader(actionHdr);
+    return {actionHdr.GetCategory(), actionHdr.GetAction()};
 }
 
-std::string
-WifiActionHeader::SelfProtectedActionValueToString(SelfProtectedActionValue value) const
+std::pair<WifiActionHeader::CategoryValue, WifiActionHeader::ActionValue>
+WifiActionHeader::Remove(Ptr<Packet> pkt)
 {
-    if (value == PEER_LINK_OPEN)
-    {
-        return "PeerLinkOpen";
-    }
-    else if (value == PEER_LINK_CONFIRM)
-    {
-        return "PeerLinkConfirm";
-    }
-    else if (value == PEER_LINK_CLOSE)
-    {
-        return "PeerLinkClose";
-    }
-    else if (value == GROUP_KEY_INFORM)
-    {
-        return "GroupKeyInform";
-    }
-    else if (value == GROUP_KEY_ACK)
-    {
-        return "GroupKeyAck";
-    }
-    else
-    {
-        std::ostringstream convert;
-        convert << value;
-        return convert.str();
-    }
+    WifiActionHeader actionHdr;
+    pkt->RemoveHeader(actionHdr);
+    return {actionHdr.GetCategory(), actionHdr.GetAction()};
 }
 
 void
 WifiActionHeader::Print(std::ostream& os) const
 {
-    os << "category=" << CategoryValueToString((CategoryValue)m_category)
-       << ", value=" << SelfProtectedActionValueToString((SelfProtectedActionValue)m_actionValue);
+#define CASE_ACTION_VALUE(x)                                                                       \
+    case x:                                                                                        \
+        os << #x << "]";                                                                           \
+        break;
+
+    switch (m_category)
+    {
+    case QOS:
+        os << "QOS[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(ADDTS_REQUEST);
+            CASE_ACTION_VALUE(ADDTS_RESPONSE);
+            CASE_ACTION_VALUE(DELTS);
+            CASE_ACTION_VALUE(SCHEDULE);
+            CASE_ACTION_VALUE(QOS_MAP_CONFIGURE);
+        default:
+            NS_FATAL_ERROR("Unknown qos action code");
+        }
+        break;
+    case BLOCK_ACK:
+        os << "BLOCK_ACK[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(BLOCK_ACK_ADDBA_REQUEST);
+            CASE_ACTION_VALUE(BLOCK_ACK_ADDBA_RESPONSE);
+            CASE_ACTION_VALUE(BLOCK_ACK_DELBA);
+        default:
+            NS_FATAL_ERROR("Unknown block ack action code");
+        }
+        break;
+    case PUBLIC:
+        os << "PUBLIC[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(QAB_REQUEST);
+            CASE_ACTION_VALUE(QAB_RESPONSE);
+        default:
+            NS_FATAL_ERROR("Unknown public action code");
+        }
+        break;
+    case RADIO_MEASUREMENT:
+        os << "RADIO_MEASUREMENT[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(RADIO_MEASUREMENT_REQUEST);
+            CASE_ACTION_VALUE(RADIO_MEASUREMENT_REPORT);
+            CASE_ACTION_VALUE(LINK_MEASUREMENT_REQUEST);
+            CASE_ACTION_VALUE(LINK_MEASUREMENT_REPORT);
+            CASE_ACTION_VALUE(NEIGHBOR_REPORT_REQUEST);
+            CASE_ACTION_VALUE(NEIGHBOR_REPORT_RESPONSE);
+        default:
+            NS_FATAL_ERROR("Unknown radio measurement action code");
+        }
+        break;
+    case MESH:
+        os << "MESH[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(LINK_METRIC_REPORT);
+            CASE_ACTION_VALUE(PATH_SELECTION);
+            CASE_ACTION_VALUE(PORTAL_ANNOUNCEMENT);
+            CASE_ACTION_VALUE(CONGESTION_CONTROL_NOTIFICATION);
+            CASE_ACTION_VALUE(MDA_SETUP_REQUEST);
+            CASE_ACTION_VALUE(MDA_SETUP_REPLY);
+            CASE_ACTION_VALUE(MDAOP_ADVERTISEMENT_REQUEST);
+            CASE_ACTION_VALUE(MDAOP_ADVERTISEMENTS);
+            CASE_ACTION_VALUE(MDAOP_SET_TEARDOWN);
+            CASE_ACTION_VALUE(TBTT_ADJUSTMENT_REQUEST);
+            CASE_ACTION_VALUE(TBTT_ADJUSTMENT_RESPONSE);
+        default:
+            NS_FATAL_ERROR("Unknown mesh peering management action code");
+        }
+        break;
+    case MULTIHOP:
+        os << "MULTIHOP[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(PROXY_UPDATE);              // not used so far
+            CASE_ACTION_VALUE(PROXY_UPDATE_CONFIRMATION); // not used so far
+        default:
+            NS_FATAL_ERROR("Unknown mesh peering management action code");
+        }
+        break;
+    case SELF_PROTECTED:
+        os << "SELF_PROTECTED[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(PEER_LINK_OPEN);
+            CASE_ACTION_VALUE(PEER_LINK_CONFIRM);
+            CASE_ACTION_VALUE(PEER_LINK_CLOSE);
+            CASE_ACTION_VALUE(GROUP_KEY_INFORM);
+            CASE_ACTION_VALUE(GROUP_KEY_ACK);
+        default:
+            NS_FATAL_ERROR("Unknown mesh peering management action code");
+        }
+        break;
+    case DMG:
+        os << "DMG[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(DMG_POWER_SAVE_CONFIGURATION_REQUEST);
+            CASE_ACTION_VALUE(DMG_POWER_SAVE_CONFIGURATION_RESPONSE);
+            CASE_ACTION_VALUE(DMG_INFORMATION_REQUEST);
+            CASE_ACTION_VALUE(DMG_INFORMATION_RESPONSE);
+            CASE_ACTION_VALUE(DMG_HANDOVER_REQUEST);
+            CASE_ACTION_VALUE(DMG_HANDOVER_RESPONSE);
+            CASE_ACTION_VALUE(DMG_DTP_REQUEST);
+            CASE_ACTION_VALUE(DMG_DTP_RESPONSE);
+            CASE_ACTION_VALUE(DMG_RELAY_SEARCH_REQUEST);
+            CASE_ACTION_VALUE(DMG_RELAY_SEARCH_RESPONSE);
+            CASE_ACTION_VALUE(DMG_MULTI_RELAY_CHANNEL_MEASUREMENT_REQUEST);
+            CASE_ACTION_VALUE(DMG_MULTI_RELAY_CHANNEL_MEASUREMENT_REPORT);
+            CASE_ACTION_VALUE(DMG_RLS_REQUEST);
+            CASE_ACTION_VALUE(DMG_RLS_RESPONSE);
+            CASE_ACTION_VALUE(DMG_RLS_ANNOUNCEMENT);
+            CASE_ACTION_VALUE(DMG_RLS_TEARDOWN);
+            CASE_ACTION_VALUE(DMG_RELAY_ACK_REQUEST);
+            CASE_ACTION_VALUE(DMG_RELAY_ACK_RESPONSE);
+            CASE_ACTION_VALUE(DMG_TPA_REQUEST);
+            CASE_ACTION_VALUE(DMG_TPA_RESPONSE);
+            CASE_ACTION_VALUE(DMG_ROC_REQUEST);
+            CASE_ACTION_VALUE(DMG_ROC_RESPONSE);
+        default:
+            NS_FATAL_ERROR("Unknown DMG management action code");
+        }
+        break;
+    case FST:
+        os << "FST[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(FST_SETUP_REQUEST);
+            CASE_ACTION_VALUE(FST_SETUP_RESPONSE);
+            CASE_ACTION_VALUE(FST_TEAR_DOWN);
+            CASE_ACTION_VALUE(FST_ACK_REQUEST);
+            CASE_ACTION_VALUE(FST_ACK_RESPONSE);
+            CASE_ACTION_VALUE(ON_CHANNEL_TUNNEL_REQUEST);
+        default:
+            NS_FATAL_ERROR("Unknown FST management action code");
+        }
+        break;
+    case UNPROTECTED_DMG:
+        os << "UNPROTECTED_DMG[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(UNPROTECTED_DMG_ANNOUNCE);
+            CASE_ACTION_VALUE(UNPROTECTED_DMG_BRP);
+            CASE_ACTION_VALUE(UNPROTECTED_MIMO_BF_SETUP);
+            CASE_ACTION_VALUE(UNPROTECTED_MIMO_BF_POLL);
+            CASE_ACTION_VALUE(UNPROTECTED_MIMO_BF_FEEDBACK);
+            CASE_ACTION_VALUE(UNPROTECTED_MIMO_BF_SELECTION);
+        default:
+            NS_FATAL_ERROR("Unknown Unprotected DMG action code");
+        }
+        break;
+    case PROTECTED_EHT:
+        os << "PROTECTED_EHT[";
+        switch (m_actionValue)
+        {
+            CASE_ACTION_VALUE(PROTECTED_EHT_TID_TO_LINK_MAPPING_REQUEST);
+            CASE_ACTION_VALUE(PROTECTED_EHT_TID_TO_LINK_MAPPING_RESPONSE);
+            CASE_ACTION_VALUE(PROTECTED_EHT_TID_TO_LINK_MAPPING_TEARDOWN);
+            CASE_ACTION_VALUE(PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_REQUEST);
+            CASE_ACTION_VALUE(PROTECTED_EHT_EPCS_PRIORITY_ACCESS_ENABLE_RESPONSE);
+            CASE_ACTION_VALUE(PROTECTED_EHT_EPCS_PRIORITY_ACCESS_TEARDOWN);
+            CASE_ACTION_VALUE(PROTECTED_EHT_EML_OPERATING_MODE_NOTIFICATION);
+            CASE_ACTION_VALUE(PROTECTED_EHT_LINK_RECOMMENDATION);
+            CASE_ACTION_VALUE(PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_REQUEST);
+            CASE_ACTION_VALUE(PROTECTED_EHT_MULTI_LINK_OPERATION_UPDATE_RESPONSE);
+        default:
+            NS_FATAL_ERROR("Unknown Protected EHT action code");
+        }
+        break;
+    case VENDOR_SPECIFIC_ACTION:
+        os << "VENDOR_SPECIFIC_ACTION";
+        break;
+    default:
+        NS_FATAL_ERROR("Unknown action value");
+    }
+#undef CASE_ACTION_VALUE
 }
 
 uint32_t
@@ -1512,7 +1688,7 @@ uint8_t
 MgtDelBaHeader::GetTid() const
 {
     NS_ASSERT(m_tid < 16);
-    uint8_t tid = static_cast<uint8_t>(m_tid);
+    auto tid = static_cast<uint8_t>(m_tid);
     return tid;
 }
 
@@ -1549,6 +1725,164 @@ MgtDelBaHeader::SetParameterSet(uint16_t params)
 {
     m_initiator = (params >> 11) & 0x01;
     m_tid = (params >> 12) & 0x0f;
+}
+
+/***************************************************
+ *     EMLSR Operating Mode Notification
+ ****************************************************/
+
+NS_OBJECT_ENSURE_REGISTERED(MgtEmlOmn);
+
+TypeId
+MgtEmlOmn::GetTypeId()
+{
+    static TypeId tid = TypeId("ns3::MgtEmlOperatingModeNotification")
+                            .SetParent<Header>()
+                            .SetGroupName("Wifi")
+                            .AddConstructor<MgtEmlOmn>();
+    return tid;
+}
+
+TypeId
+MgtEmlOmn::GetInstanceTypeId() const
+{
+    return GetTypeId();
+}
+
+void
+MgtEmlOmn::Print(std::ostream& os) const
+{
+    os << "EMLSR Mode=" << +m_emlControl.emlsrMode << " EMLMR Mode=" << +m_emlControl.emlmrMode
+       << " EMLSR Parameter Update Control=" << +m_emlControl.emlsrParamUpdateCtrl;
+    if (m_emlControl.linkBitmap)
+    {
+        os << " Link bitmap=" << std::hex << *m_emlControl.linkBitmap << std::dec;
+    }
+    if (m_emlsrParamUpdate)
+    {
+        os << " EMLSR Padding Delay="
+           << CommonInfoBasicMle::DecodeEmlsrPaddingDelay(m_emlsrParamUpdate->paddingDelay)
+                  .As(Time::US)
+           << " EMLSR Transition Delay="
+           << CommonInfoBasicMle::DecodeEmlsrTransitionDelay(m_emlsrParamUpdate->transitionDelay)
+                  .As(Time::US);
+    }
+}
+
+uint32_t
+MgtEmlOmn::GetSerializedSize() const
+{
+    uint32_t size = 2; // Dialog Token (1) + first byte of EML Control
+    if (m_emlControl.linkBitmap)
+    {
+        size += 2;
+    }
+    if (m_emlControl.mcsMapCountCtrl)
+    {
+        size += 1;
+    }
+    // TODO add size of EMLMR Supported MCS And NSS Set subfield when implemented
+    if (m_emlsrParamUpdate)
+    {
+        size += 1; // EMLSR Parameter Update field
+    }
+    return size;
+}
+
+void
+MgtEmlOmn::Serialize(Buffer::Iterator start) const
+{
+    start.WriteU8(m_dialogToken);
+
+    NS_ABORT_MSG_IF(m_emlControl.emlsrMode == 1 && m_emlControl.emlmrMode == 1,
+                    "EMLSR Mode and EMLMR Mode cannot be both set to 1");
+    uint8_t val = m_emlControl.emlsrMode | (m_emlControl.emlmrMode << 1) |
+                  (m_emlControl.emlsrParamUpdateCtrl << 2);
+    start.WriteU8(val);
+
+    NS_ABORT_MSG_IF(m_emlControl.linkBitmap.has_value() !=
+                        (m_emlControl.emlsrMode == 1 || m_emlControl.emlmrMode == 1),
+                    "The EMLSR/EMLMR Link Bitmap is present if and only if either of the EMLSR "
+                    "Mode and EMLMR Mode subfields are set to 1");
+    if (m_emlControl.linkBitmap)
+    {
+        start.WriteHtolsbU16(*m_emlControl.linkBitmap);
+    }
+    // TODO serialize MCS Map Count Control and EMLMR Supported MCS And NSS Set subfields
+    // when implemented
+
+    NS_ABORT_MSG_IF(m_emlsrParamUpdate.has_value() != (m_emlControl.emlsrParamUpdateCtrl == 1),
+                    "The EMLSR Parameter Update field is present "
+                        << std::boolalpha << m_emlsrParamUpdate.has_value()
+                        << " if and only if the EMLSR "
+                           "Parameter Update Control subfield is set to 1 "
+                        << +m_emlControl.emlsrParamUpdateCtrl);
+    if (m_emlsrParamUpdate)
+    {
+        val = m_emlsrParamUpdate->paddingDelay | (m_emlsrParamUpdate->transitionDelay << 3);
+        start.WriteU8(val);
+    }
+}
+
+uint32_t
+MgtEmlOmn::Deserialize(Buffer::Iterator start)
+{
+    Buffer::Iterator i = start;
+
+    m_dialogToken = i.ReadU8();
+
+    uint8_t val = i.ReadU8();
+    m_emlControl.emlsrMode = val & 0x01;
+    m_emlControl.emlmrMode = (val >> 1) & 0x01;
+    m_emlControl.emlsrParamUpdateCtrl = (val >> 2) & 0x01;
+
+    NS_ABORT_MSG_IF(m_emlControl.emlsrMode == 1 && m_emlControl.emlmrMode == 1,
+                    "EMLSR Mode and EMLMR Mode cannot be both set to 1");
+
+    if (m_emlControl.emlsrMode == 1 || m_emlControl.emlmrMode == 1)
+    {
+        m_emlControl.linkBitmap = i.ReadLsbtohU16();
+    }
+    // TODO deserialize MCS Map Count Control and EMLMR Supported MCS And NSS Set subfields
+    // when implemented
+
+    if (m_emlControl.emlsrParamUpdateCtrl == 1)
+    {
+        val = i.ReadU8();
+        m_emlsrParamUpdate = EmlsrParamUpdate{};
+        m_emlsrParamUpdate->paddingDelay = val & 0x07;
+        m_emlsrParamUpdate->transitionDelay = (val >> 3) & 0x07;
+    }
+
+    return i.GetDistanceFrom(start);
+}
+
+void
+MgtEmlOmn::SetLinkIdInBitmap(uint8_t linkId)
+{
+    NS_ABORT_MSG_IF(linkId > 15, "Link ID must not exceed 15");
+    if (!m_emlControl.linkBitmap)
+    {
+        m_emlControl.linkBitmap = 0;
+    }
+    m_emlControl.linkBitmap = *m_emlControl.linkBitmap | (1 << linkId);
+}
+
+std::list<uint8_t>
+MgtEmlOmn::GetLinkBitmap() const
+{
+    std::list<uint8_t> list;
+    NS_ASSERT_MSG(m_emlControl.linkBitmap.has_value(), "No link bitmap");
+    uint16_t bitmap = *m_emlControl.linkBitmap;
+    for (uint8_t linkId = 0; linkId < 16; linkId++)
+    {
+        if ((bitmap & 0x0001) == 1)
+        {
+            list.push_back(linkId);
+        }
+        bitmap >>= 1;
+    }
+    return list;
 }
 
 } // namespace ns3

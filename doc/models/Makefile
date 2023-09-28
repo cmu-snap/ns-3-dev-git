@@ -98,7 +98,6 @@ SOURCES = \
 	$(SRC)/spectrum/doc/spectrum.rst \
 	$(SRC)/netanim/doc/animation.rst \
 	$(SRC)/flow-monitor/doc/flow-monitor.rst \
-	$(SRC)/wave/doc/wave.rst \
 	$(SRC)/sixlowpan/doc/sixlowpan.rst \
 	$(SRC)/lr-wpan/doc/lr-wpan.rst \
 
@@ -161,6 +160,10 @@ SOURCEFIGS = \
 	$(SRC)/wifi/doc/source/figures/wifi-11g-p-1500-infrastructure-r-6-min-5-max-50-step-5-throughput.eps \
 	$(SRC)/wifi/doc/source/figures/default-table-based-error-model-validation.eps \
 	$(SRC)/wifi/doc/source/figures/error-models-comparison.eps \
+	$(SRC)/wifi/doc/source/figures/spectrum-wifi-phy-multiple-interfaces.pdf \
+	$(SRC)/wifi/doc/source/figures/spectrum-wifi-phy-multiple-interfaces.png \
+	$(SRC)/wifi/doc/source/figures/cca-channel-switching-multiple-interfaces.pdf \
+	$(SRC)/wifi/doc/source/figures/cca-channel-switching-multiple-interfaces.png \
 	$(SRC)/wimax/doc/WimaxArchitecture.dia \
 	$(SRC)/lte/doc/source/figures/epc-ctrl-arch.dia \
 	$(SRC)/lte/doc/source/figures/epc-data-flow-dl.dia \
@@ -357,7 +360,13 @@ SOURCEFIGS = \
 	$(SRC)/lr-wpan/doc/lr-wpan-primitives.dia \
 	$(SRC)/lr-wpan/doc/802-15-4-ber.eps \
 	$(SRC)/lr-wpan/doc/802-15-4-per-sens.eps \
-	$(SRC)/lr-wpan/doc/802-15-4-psr-distance.eps
+	$(SRC)/lr-wpan/doc/802-15-4-psr-distance.eps \
+	$(SRC)/energy/doc/figures/dischargeCurve.png \
+	$(SRC)/energy/doc/figures/energyFramework.dia \
+	$(SRC)/energy/doc/figures/leadacid.png \
+	$(SRC)/energy/doc/figures/liion.png \
+	$(SRC)/energy/doc/figures/nicd.png \
+	$(SRC)/energy/doc/figures/nimh.png
 
 # specify figures from which .png and .pdf figures need to be
 # generated (all dia and eps figures)
@@ -454,6 +463,7 @@ IMAGES_EPS = \
 	$(FIGURES)/802-15-4-ber.eps \
 	$(FIGURES)/802-15-4-per-sens.eps \
 	$(FIGURES)/802-15-4-psr-distance.eps \
+	$(FIGURES)/energyFramework.eps \
 	$(FIGURES)/clear-channel.eps \
 	$(FIGURES)/assoc-manager.eps \
 	$(FIGURES)/nist-frame-success-rate.eps \

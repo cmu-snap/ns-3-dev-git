@@ -28,10 +28,14 @@
 
 #include <list>
 #include <optional>
+#include <set>
 #include <vector>
 
 namespace ns3
 {
+
+/// STA_ID for a RU that is intended for no user (Section 26.11.1 802.11ax-2021)
+static constexpr uint16_t NO_USER_STA_ID = 2046;
 
 /// HE MU specific user transmission parameters.
 struct HeMuUserInfo
@@ -55,17 +59,6 @@ struct HeMuUserInfo
      */
     bool operator!=(const HeMuUserInfo& other) const;
 };
-
-/// User Specific Fields in HE-SIG-Bs.
-struct HeSigBUserSpecificField
-{
-    uint16_t staId : 11; ///< STA-ID
-    uint8_t nss : 4;     ///< number of spatial streams
-    uint8_t mcs : 4;     ///< MCS index
-};
-
-/// HE SIG-B Content Channels
-using HeSigBContentChannels = std::vector<std::vector<HeSigBUserSpecificField>>;
 
 /// 8 bit RU_ALLOCATION per 20 MHz
 using RuAllocation = std::vector<uint8_t>;
@@ -256,9 +249,13 @@ class WifiTxVector
      */
     uint8_t GetNss(uint16_t staId = SU_STA_ID) const;
     /**
-     * \returns the maximum number of Nss (namely if MU)
+     * \returns the maximum number of Nss over all RUs of an HE MU (used for OFDMA)
      */
     uint8_t GetNssMax() const;
+    /**
+     * \returns the total number of Nss for a given RU of an HE MU (used for full bandwidth MU-MIMO)
+     */
+    uint8_t GetNssTotal() const;
     /**
      * Sets the number of Nss
      *
@@ -379,6 +376,18 @@ class WifiTxVector
      */
     bool IsUlMu() const;
     /**
+     * Return true if this TX vector is used for a downlink multi-user transmission using OFDMA.
+     *
+     * \return true if this TX vector is used for a downlink multi-user transmission using OFDMA
+     */
+    bool IsDlOfdma() const;
+    /**
+     * Return true if this TX vector is used for a downlink multi-user transmission using MU-MIMO.
+     *
+     * \return true if this TX vector is used for a downlink multi-user transmission using MU-MIMO
+     */
+    bool IsDlMuMimo() const;
+    /**
      * Check if STA ID is allocated
      * \param staId STA ID
      * \return true if allocated, false otherwise
@@ -431,6 +440,24 @@ class WifiTxVector
      */
     HeMuUserInfoMap& GetHeMuUserInfoMap();
 
+    /// map of specific user info parameters ordered per increasing frequency RUs
+    using UserInfoMapOrderedByRus = std::map<HeRu::RuSpec, std::set<uint16_t>, HeRu::RuSpecCompare>;
+
+    /**
+     * Get the map of specific user info parameters ordered per increasing frequency RUs.
+     *
+     * \param p20Index the index of the primary20 channel
+     * \return the map of specific user info parameters ordered per increasing frequency RUs
+     */
+    UserInfoMapOrderedByRus GetUserInfoMapOrderedByRus(uint8_t p20Index) const;
+
+    /**
+     * Indicate whether the Common field is present in the HE-SIG-B field.
+     *
+     * \return true if the Common field is present in the HE-SIG-B, false otherwise
+     */
+    bool IsSigBCompression() const;
+
     /**
      * Set the 20 MHz subchannels that are punctured.
      *
@@ -473,14 +500,6 @@ class WifiTxVector
      * \param p20Index the index of the primary20 channel
      */
     const RuAllocation& GetRuAllocation(uint8_t p20Index) const;
-
-    /**
-     * Get the HE SIG-B content channels
-     * IEEE 802.11ax-2021 27.3.11.8.2 HE-SIG-B content channels
-     * \param p20Index the index of the primary20 channel
-     * \return HE-SIG-B content channels
-     */
-    HeSigBContentChannels GetContentChannels(uint8_t p20Index) const;
 
     /**
      * Set CENTER_26_TONE_RU field
@@ -528,16 +547,13 @@ class WifiTxVector
      */
     Center26ToneRuIndication DeriveCenter26ToneRuIndication() const;
 
-    /// Ordered RUs per increasing frequency
-    using OrderedRus = std::map<HeRu::RuSpec, uint16_t, HeRu::RuSpecCompare>;
-
     /**
-     * Get the ordered RUs with their associated STA-IDs per increasing frequency.
+     * Get the number of STAs in a given RU.
      *
-     * \param p20Index the index of the primary20 channel
-     * \return the ordered RUs with their associated STA-IDs
+     * \param ru the RU specification
+     * \return the number of STAs in the RU
      */
-    OrderedRus GetOrderedRus(uint8_t p20Index) const;
+    uint8_t GetNumStasInRu(const HeRu::RuSpec& ru) const;
 
     WifiMode m_mode;          /**< The DATARATE parameter in Table 15-4.
                               It is the value that will be passed

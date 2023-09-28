@@ -11,16 +11,16 @@ if [ "$#" -ne 1 ]; then
 fi
 
 burstDurationMs=15
-numBursts=3
+numBursts=11
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numBurstSenders=200 # $((200 + 1))
+numBurstSenders=100 # $((100 + 1))
 numBackgroundSenders=0
 cca="TcpDctcp"
-nicRateMbps=12500
+nicRateMbps=10000
 uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
-queueSizeBytes=1800000
+queueSizeBytes=2000000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
@@ -28,7 +28,7 @@ bytesPerBurstSender="$(python -c "import math; print(math.ceil(($burstDurationMs
 icwnd=10
 firstFlowOffsetMs=0
 rwndStrategy="none"
-staticRwndBytes=1000000
+staticRwndBytes=65536
 rwndScheduleMaxConns=20
 delAckCount=1
 delAckTimeoutMs=0
@@ -53,7 +53,7 @@ dctcpShiftGExp="$(python -c "import math; print(math.ceil($dctcpShiftGExpRaw))")
 dctcpShiftG="$(python -c "print(1 / 2**$dctcpShiftGExp)")"
 
 out_dir="$1"
-dir_name="${burstDurationMs}ms-$numBurstSenders-$numBackgroundSenders-$numBursts-$cca-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
+dir_name="${burstDurationMs}ms-$numBurstSenders-$numBackgroundSenders-$numBursts-$cca-${nicRateMbps}mbps-${queueSizeBytes}B-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
 # We will store in-progress results in a tmpfs and move them to the final
 # location later.
 tmpfs="$out_dir"/tmpfs

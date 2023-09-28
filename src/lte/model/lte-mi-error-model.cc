@@ -28,15 +28,15 @@
  *      Marco Miozzo <marco.miozzo@cttc.es>
  */
 
-#include "stdlib.h"
+#include "lte-mi-error-model.h"
 
 #include <ns3/log.h>
-#include <ns3/lte-mi-error-model.h>
 #include <ns3/pointer.h>
 
 #include <cmath>
 #include <list>
 #include <stdint.h>
+#include <stdlib.h>
 #include <vector>
 
 namespace ns3
@@ -1042,7 +1042,7 @@ LteMiErrorModel::GetPcfichPdcchError(const SpectrumValue& sinr)
     NS_LOG_FUNCTION(sinr);
     double MI;
     double MIsum = 0.0;
-    Values::const_iterator sinrIt = sinr.ConstValuesBegin();
+    auto sinrIt = sinr.ConstValuesBegin();
     uint16_t rb = 0;
     NS_ASSERT(sinrIt != sinr.ConstValuesEnd());
     while (sinrIt != sinr.ConstValuesEnd())
