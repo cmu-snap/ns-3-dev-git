@@ -13,7 +13,7 @@ fi
 burstDurationMs=15
 numBursts=11
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numSenders=100 # $((100 + 1))
+numSenders=200 # $((100 + 1))
 cca="TcpDctcp"
 nicRateMbps=10000
 uplinkRateMbps=100000
