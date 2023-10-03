@@ -171,6 +171,11 @@ NetDeviceQueue::GetQueueLimits()
     return m_queueLimits;
 }
 
+Ptr<NetDevice> NetDeviceQueue::GetNetDevice() {
+  NS_LOG_FUNCTION(this);
+  return m_device;
+}
+
 NS_OBJECT_ENSURE_REGISTERED(NetDeviceQueueInterface);
 
 TypeId

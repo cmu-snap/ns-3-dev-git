@@ -65,6 +65,11 @@ Ipv4L3Protocol::GetTypeId()
                           UintegerValue(64),
                           MakeUintegerAccessor(&Ipv4L3Protocol::m_defaultTtl),
                           MakeUintegerChecker<uint8_t>())
+            .AddAttribute ("MayFragment",
+                            "Whether fragmentation is allowed or not via don't fragment flag",
+                            BooleanValue(false),
+                            MakeBooleanAccessor (&Ipv4L3Protocol::m_mayFragment),
+                            MakeBooleanChecker ())                          
             .AddAttribute("FragmentExpirationTimeout",
                           "When this timeout expires, the fragments "
                           "will be cleared from the buffer.",
@@ -764,8 +769,6 @@ Ipv4L3Protocol::Send(Ptr<Packet> packet,
 {
     NS_LOG_FUNCTION(this << packet << source << destination << uint32_t(protocol) << route);
 
-    bool mayFragment = true;
-
     // we need a copy of the packet with its tags in case we need to invoke recursion.
     Ptr<Packet> pktCopyWithTags = packet->Copy();
 
@@ -787,7 +790,7 @@ Ipv4L3Protocol::Send(Ptr<Packet> packet,
 
     // can construct the header here
     Ipv4Header ipHeader =
-        BuildHeader(source, destination, protocol, packet->GetSize(), ttl, tos, mayFragment);
+        BuildHeader(source, destination, protocol, packet->GetSize(), ttl, tos, m_mayFragment);
 
     // Handle a few cases:
     // 1) packet is passed in with a route entry

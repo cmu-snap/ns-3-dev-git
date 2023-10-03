@@ -344,6 +344,14 @@ class QueueDisc : public Object
     const Stats& GetStats();
 
     /**
+     * \param droppedBytes The amount of bytes that are dropped
+     *
+     * This function is used by the PfifoNdpQueueDisc class to allow
+     * NDP transport protocol operations to be done.
+     */
+    void IncreaseDroppedBytesBeforeEnqueueStats(uint64_t droppedBytes);    
+
+    /**
      * \param ndqi the NetDeviceQueueInterface aggregated to the receiving object.
      *
      * Set the pointer to the NetDeviceQueueInterface object aggregated to the

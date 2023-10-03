@@ -766,6 +766,8 @@ class Packet : public SimpleRefCount<Packet>
      */
     typedef void (*SinrTracedCallback)(Ptr<const Packet> packet, double sinr);
 
+    uint8_t* GetBuffer() const; 
+
   private:
     /**
      * \brief Constructor

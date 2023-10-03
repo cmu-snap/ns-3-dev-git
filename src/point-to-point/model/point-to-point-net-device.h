@@ -100,6 +100,13 @@ class PointToPointNetDevice : public NetDevice
     void SetDataRate(DataRate bps);
 
     /**
+     * Get the Data Rate used for transmission of packets.  The data rate is
+     * set in the Attach () method from the corresponding field in the channel
+     * to which the device is attached.
+     */
+    DataRate GetDataRate();    
+
+    /**
      * Set the interframe gap used to separate packets.  The interframe gap
      * defines the minimum space required between packets sent by this device.
      *
@@ -153,6 +160,13 @@ class PointToPointNetDevice : public NetDevice
      * \param p Ptr to the received packet.
      */
     void Receive(Ptr<Packet> p);
+
+    /**
+     * \brief Make the link down and stop sending anything
+     *
+     * It calls also the linkChange callback.
+     */
+    void SetLinkDown(void);
 
     // The remaining methods are documented in ns3::NetDevice*
 

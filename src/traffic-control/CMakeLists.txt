@@ -18,6 +18,7 @@ build_lib(
     model/red-queue-disc.cc
     model/tbf-queue-disc.cc
     model/traffic-control-layer.cc
+    model/pfifo-bolt-queue-disc.cc
   HEADER_FILES
     helper/queue-disc-container.h
     helper/traffic-control-helper.h
@@ -36,6 +37,7 @@ build_lib(
     model/red-queue-disc.h
     model/tbf-queue-disc.h
     model/traffic-control-layer.h
+    model/pfifo-bolt-queue-disc.h
   LIBRARIES_TO_LINK
     ${libnetwork}
     ${libcore}

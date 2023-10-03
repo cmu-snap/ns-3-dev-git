@@ -226,6 +226,13 @@ PointToPointNetDevice::SetDataRate(DataRate bps)
     m_bps = bps;
 }
 
+DataRate
+PointToPointNetDevice::GetDataRate ()
+{
+  NS_LOG_FUNCTION (this);
+  return m_bps;
+}
+
 void
 PointToPointNetDevice::SetInterframeGap(Time t)
 {
@@ -397,6 +404,12 @@ PointToPointNetDevice::NotifyLinkUp()
     NS_LOG_FUNCTION(this);
     m_linkUp = true;
     m_linkChangeCallbacks();
+}
+
+void PointToPointNetDevice::SetLinkDown(void) {
+  NS_LOG_FUNCTION(this);
+  m_linkUp = false;
+  m_linkChangeCallbacks();
 }
 
 void

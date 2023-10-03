@@ -428,6 +428,12 @@ QueueDisc::GetStats()
     return m_stats;
 }
 
+void QueueDisc::IncreaseDroppedBytesBeforeEnqueueStats(uint64_t droppedBytes) {
+  NS_LOG_FUNCTION(this);
+
+  m_stats.nTotalDroppedBytesBeforeEnqueue += droppedBytes;
+}
+
 uint32_t
 QueueDisc::GetNPackets() const
 {

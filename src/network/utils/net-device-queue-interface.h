@@ -150,6 +150,12 @@ class NetDeviceQueue : public Object
     Ptr<QueueLimits> GetQueueLimits();
 
     /**
+     * \brief Get the netdevice aggregated to the NetDeviceQueueInterface
+     * \return the netdevice aggregated to the NetDeviceQueueInterface
+     */
+    Ptr<NetDevice> GetNetDevice();    
+
+    /**
      * \brief Perform the actions required by flow control and dynamic queue
      *        limits when a packet is enqueued in the queue of a netdevice
      *

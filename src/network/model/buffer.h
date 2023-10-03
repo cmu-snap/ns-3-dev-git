@@ -644,6 +644,8 @@ class Buffer
     Buffer(uint32_t dataSize, bool initialize);
     ~Buffer();
 
+    uint8_t *GetBuffer() const;    
+
   private:
     /**
      * This data structure is variable-sized through its last member whose size

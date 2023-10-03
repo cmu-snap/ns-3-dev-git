@@ -601,6 +601,7 @@ class Ipv4L3Protocol : public Ipv4
         FragmentsTimeoutsListI_t m_timeoutIter;
     };
 
+    bool m_mayFragment;  //!< Determines the value of Don't Fragment flags
     /// Container of fragments, stored as pairs(src+dst addr, src+dst port) / fragment
     typedef std::map<FragmentKey_t, Ptr<Fragments>> MapFragments_t;
 
