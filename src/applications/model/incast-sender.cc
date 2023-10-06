@@ -271,13 +271,16 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   socket->TraceConnectWithoutContext(
       "RTT", MakeCallback(&IncastSender::LogRtt, this));
 
-  // Enable tracing for packet transmit times.
-  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-  tcpSocket->TraceConnectWithoutContext(
-      "Tx", MakeCallback(&IncastSender::LogTx, this));
+  if (m_cca.GetName() != "ns3::BoltSocketFactory") {
+    // Enable tracing for packet transmit times.
+    Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
+    tcpSocket->TraceConnectWithoutContext(
+        "Tx", MakeCallback(&IncastSender::LogTx, this));
+  }
 
   if (m_cca.GetName() == "ns3::TcpDctcp") {
     PointerValue congOpsValue;
+    Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
     tcpSocket->GetAttribute("CongestionOps", congOpsValue);
     Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
     Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);

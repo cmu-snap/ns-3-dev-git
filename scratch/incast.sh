@@ -15,7 +15,7 @@ numBursts=5
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
 numBurstSenders=200 # $((100 + 1))
 numBackgroundSenders=0
-cca="TcpDctcp"
+cca="Swift"
 nicRateMbps=10000
 uplinkRateMbps=100000
 delayPerLinkUs=5
@@ -90,9 +90,9 @@ rm -rfv "${tmpfs_results_dir:?}" "${results_dir:?}"
 mkdir -p "$tmpfs_results_dir/"{logs,pcap}
 
 # Run simulation.
-"$ns3_dir/ns3" configure --build-profile=default
+"$ns3_dir/ns3" configure --build-profile=debug
 "$ns3_dir/ns3" build "scratch/incast"
-time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
+time "$ns3_dir"/build/scratch/ns3-dev-incast-debug \
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
     --numBurstSenders=$numBurstSenders \

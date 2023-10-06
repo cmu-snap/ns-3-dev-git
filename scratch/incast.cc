@@ -152,6 +152,7 @@ LogAggregatorRx(Ptr<const Packet> packet) {
 
 int
 main(int argc, char *argv[]) {
+  Time::SetResolution(Time::NS);
   // Define log configurations
   LogLevel logConfigInfo =
       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE | LOG_LEVEL_INFO);
@@ -492,6 +493,61 @@ main(int argc, char *argv[]) {
   // Enable ECN for all queues.
   Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
 
+  // Configure Bolt/Swift.
+  if (tcpTypeId == "Swift") {
+    bool enableMsgAgg = false;
+    uint32_t bdpBytes = 62420;            // in bytes
+    double rttSmoothingAlpha = 0.75;    // Default: 0.75
+    uint16_t topoScalingPerHop = 1000;  // Default: 1000 ns
+    double maxFlowScaling = 100000.0;   // Default: 100000.0
+    double maxFlowScalingCwnd = 256.0;  // Default: 256.0 pkts
+    double minFlowScalingCwnd = 0.1;    // Default: 0.1 pkts
+    uint64_t baseDelay = 10000;         // Default: 25000 us (25 usec)
+    double aiFactor = 1.0;              // Default: 1.0
+    double mdFactor = 0.8;              // Default: 0.8
+    double maxMd = 0.5;                 // Default: 0.5
+    uint32_t maxCwnd = bdpBytes;        // Default: 373760 Bytes
+    bool usePerHopDelayForCc = false;   // Default: false
+    uint64_t inboundRtxTimeout = 25000000;   // in usec to prevent any timeout
+    uint64_t outboundRtxTimeout = 10000000;  // in usec to prevent any timeout
+
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::AggregateMsgsIfPossible",
+        BooleanValue(enableMsgAgg));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::BandwidthDelayProduct", UintegerValue(bdpBytes));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::InbndRtxTimeout",
+        TimeValue(MicroSeconds(inboundRtxTimeout)));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::OutbndRtxTimeout",
+        TimeValue(MicroSeconds(outboundRtxTimeout)));
+    Config::SetDefault("ns3::BoltL4Protocol::CcMode", StringValue("SWIFT"));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::RttSmoothingAlpha",
+        DoubleValue(rttSmoothingAlpha));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::TopoScalingPerHop",
+        UintegerValue(topoScalingPerHop));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::MaxFlowScaling", DoubleValue(maxFlowScaling));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::MaxFlowScalingCwnd",
+        DoubleValue(maxFlowScalingCwnd));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::MinFlowScalingCwnd",
+        DoubleValue(minFlowScalingCwnd));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::BaseDelay", UintegerValue(baseDelay));
+    Config::SetDefault("ns3::BoltL4Protocol::AiFactor", DoubleValue(aiFactor));
+    Config::SetDefault("ns3::BoltL4Protocol::MdFactor", DoubleValue(mdFactor));
+    Config::SetDefault("ns3::BoltL4Protocol::MaxMd", DoubleValue(maxMd));
+    Config::SetDefault("ns3::BoltL4Protocol::MaxCwnd", UintegerValue(maxCwnd));
+    Config::SetDefault(
+        "ns3::BoltL4Protocol::UsePerHopDelayForCc",
+        BooleanValue(usePerHopDelayForCc));
+  }
+
   // Configure different queues for the small and large links
   TrafficControlHelper smallLinkQueueHelper;
   smallLinkQueueHelper.SetRootQueueDisc(
@@ -605,14 +661,19 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetCurrentBurstCount(&currentBurstCount);
   aggregatorApp->SetFlowTimesRecord(&flowTimes);
   aggregatorApp->SetStartTime(Seconds(1.0));
+  if (tcpTypeId == "Swift") {
+    aggregatorApp->SetAttribute("Protocol", TypeIdValue(BoltSocketFactory::GetTypeId()));
+    aggregatorApp->SetAttribute("CCA", TypeIdValue(BoltSocketFactory::GetTypeId()));
+  } else {
+    aggregatorApp->SetAttribute(
+        "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
+  }
   aggregatorApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
   aggregatorApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
   aggregatorApp->SetAttribute(
       "BytesPerBurstSender", UintegerValue(bytesPerBurstSender));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
-  aggregatorApp->SetAttribute(
-      "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
   aggregatorApp->SetAttribute("RwndStrategy", StringValue(rwndStrategy));
   aggregatorApp->SetAttribute(
       "StaticRwndBytes", UintegerValue(staticRwndBytes));
@@ -641,8 +702,13 @@ main(int argc, char *argv[]) {
         "Aggregator",
         Ipv4AddressValue(burstDumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
-    senderApp->SetAttribute(
-        "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
+    if (tcpTypeId == "Swift") {
+        senderApp->SetAttribute("Protocol", TypeIdValue(BoltSocketFactory::GetTypeId()));
+        senderApp->SetAttribute("CCA", TypeIdValue(BoltSocketFactory::GetTypeId()));
+    } else {
+        senderApp->SetAttribute(
+            "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
+    }
     senderApp->SetStartTime(Seconds(1.0));
     senderApp->SetAttribute("DctcpShiftG", DoubleValue(dctcpShiftG));
     burstDumbbellHelper.GetRight(i)->AddApplication(senderApp);

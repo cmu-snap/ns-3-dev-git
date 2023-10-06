@@ -224,7 +224,7 @@ IncastAggregator::SetupConnection(
   Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
   // Config::SetDefault(
   //     "ns3::TcpSocketBase::UseEcn", EnumValue(TcpSocketState::On));
-  NS_ASSERT(socket->GetSocketType() == Socket::NS3_SOCK_STREAM);
+  // NS_ASSERT(socket->GetSocketType() == Socket::NS3_SOCK_STREAM);
 
   if (useEcn) {
     // Enable support for this connection.
@@ -271,9 +271,6 @@ IncastAggregator::SetupConnection(
   NS_ASSERT(nid != 0);
   (*toSet)[socket] = nid;
 
-  // Set the congestion control algorithm
-  Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-
   // Enable tracing for the CWND
   socket->TraceConnectWithoutContext(
       "CongestionWindow", MakeCallback(&IncastAggregator::LogCwnd, this));
@@ -286,8 +283,14 @@ IncastAggregator::SetupConnection(
   socket->TraceConnectWithoutContext(
       "BytesInAck", MakeCallback(&IncastAggregator::LogBytesInAck, this));
 
-  // Enable TCP timestamp option
-  tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
+  if (m_burstSenderCca.GetName() != "ns3::BoltSocketFactory") {
+    NS_LOG_INFO(m_burstSenderCca.GetName());
+    // Set the congestion control algorithm
+    // TODO: Is something missing here?
+    Ptr<TcpSocketBase> tcpSocket = (socket);
+    // Enable TCP timestamp option
+    tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
+  }
 
   if (canSchedule) {
     // Kick off the simulation by scheduling the background flows and first
@@ -552,14 +555,16 @@ IncastAggregator::SendRequest(
       return;
     }
 
-    // If we are doing scheduled RWND tuning and this sender has not been
-    // assigned a token, then we need to set the RWND to 0
-    if (m_rwndStrategy == "scheduled" &&
-        m_burstSendersWithAToken.find(m_burstSockets[socket]) ==
-            m_burstSendersWithAToken.end()) {
-      SafelySetRwnd(DynamicCast<TcpSocketBase>(socket), 0, true);
-    } else {
-      StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
+    if (m_burstSenderCca.GetName() != "ns3::BoltSocketFactory") {
+      // If we are doing scheduled RWND tuning and this sender has not been
+      // assigned a token, then we need to set the RWND to 0
+      if (m_rwndStrategy == "scheduled" &&
+          m_burstSendersWithAToken.find(m_burstSockets[socket]) ==
+              m_burstSendersWithAToken.end()) {
+        SafelySetRwnd(DynamicCast<TcpSocketBase>(socket), 0, true);
+      } else {
+        StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
+      }
     }
 
     NS_LOG_LOGIC(
@@ -592,11 +597,15 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     m_totalBytesSoFar += size;
     m_bytesReceived[socket] += size;
 
-    DynamicRwndTuning(DynamicCast<TcpSocketBase>(socket));
+    if (m_burstSenderCca.GetName() != "ns3::BoltSocketFactory") {
+      DynamicRwndTuning(DynamicCast<TcpSocketBase>(socket));
+    }
   }
 
   bool socketDone = m_bytesReceived[socket] >= m_bytesPerBurstSender;
-  ScheduledRwndTuning(DynamicCast<TcpSocketBase>(socket), socketDone);
+  if (m_burstSenderCca.GetName() != "ns3::BoltSocketFactory") {
+    ScheduledRwndTuning(DynamicCast<TcpSocketBase>(socket), socketDone);
+  }
 
   if (socketDone) {
     ++m_burstSendersFinished;
@@ -909,8 +918,10 @@ IncastAggregator::ScheduledRwndTuning(
     m_rwndScheduleAvailableTokens--;
     m_burstSendersWithAToken.insert(m_burstSockets[p.first]);
     // Set the socket's RWND to the configured value.
-    SafelySetRwnd(
-        DynamicCast<TcpSocketBase>(p.first), m_staticRwndBytes, false);
+    if (m_burstSenderCca.GetName() != "ns3::BoltSocketFactory") {
+      SafelySetRwnd(
+          DynamicCast<TcpSocketBase>(p.first), m_staticRwndBytes, false);
+    }
 
     NS_LOG_LOGIC(
         "Aggregator: Assigned token to sender "
