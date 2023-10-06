@@ -4,16 +4,16 @@
 
 set -eoux pipefail
 
-# Enforce that there is a single argument.
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <output directory>"
+# Enforce that there are four arguments.
+if [ "$#" -ne 4 ]; then
+    echo "Usage: $0 <output directory> <num senders> <RWND policy> <static RWND clamp>"
     exit 1
 fi
 
-burstDurationMs=5
-numBursts=5
+burstDurationMs=15
+numBursts=11
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numBurstSenders=200 # $((100 + 1))
+numBurstSenders="$2" # $((100 + 1))
 numBackgroundSenders=0
 cca="TcpDctcp"
 nicRateMbps=10000
@@ -27,8 +27,8 @@ queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $b
 bytesPerBurstSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numBurstSenders))")"
 icwnd=10
 firstFlowOffsetMs=0
-rwndStrategy="none"
-staticRwndBytes=65536
+rwndStrategy="$3"
+staticRwndBytes="$4"
 rwndScheduleMaxConns=20
 delAckCount=1
 delAckTimeoutMs=0
@@ -95,29 +95,29 @@ mkdir -p "$tmpfs_results_dir/"{logs,pcap}
 time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
-    --numBurstSenders=$numBurstSenders \
-    --numBackgroundSenders=$numBackgroundSenders \
+    --numBurstSenders="$numBurstSenders" \
+    --numBackgroundSenders="$numBackgroundSenders" \
     --bytesPerBurstSender="$bytesPerBurstSender" \
-    --numBursts=$numBursts \
-    --delayPerLinkUs=$delayPerLinkUs \
-    --jitterUs=$jitterUs \
-    --smallLinkBandwidthMbps=$nicRateMbps \
-    --largeBurstLinkBandwidthMbps=$uplinkRateMbps \
-    --cca=$cca \
+    --numBursts="$numBursts" \
+    --delayPerLinkUs="$delayPerLinkUs" \
+    --jitterUs="$jitterUs" \
+    --smallLinkBandwidthMbps="$nicRateMbps" \
+    --largeBurstLinkBandwidthMbps="$uplinkRateMbps" \
+    --cca="$cca" \
     --smallQueueSizePackets="$queueSizePackets" \
     --largeBurstQueueSizePackets="$queueSizePackets" \
     --smallQueueMinThresholdPackets="$thresholdPackets" \
     --smallQueueMaxThresholdPackets="$thresholdPackets" \
     --largeBurstQueueMinThresholdPackets="$thresholdPackets" \
     --largeBurstQueueMaxThresholdPackets="$thresholdPackets" \
-    --initialCwnd=$icwnd \
-    --firstFlowOffsetMs=$firstFlowOffsetMs \
-    --rwndStrategy=$rwndStrategy \
-    --staticRwndBytes=$staticRwndBytes \
-    --rwndScheduleMaxConns=$rwndScheduleMaxConns \
+    --initialCwnd="$icwnd" \
+    --firstFlowOffsetMs="$firstFlowOffsetMs" \
+    --rwndStrategy="$rwndStrategy" \
+    --staticRwndBytes="$staticRwndBytes" \
+    --rwndScheduleMaxConns="$rwndScheduleMaxConns" \
     --dctcpShiftG="$dctcpShiftG" \
-    --delAckCount=$delAckCount \
-    --delAckTimeoutMs=$delAckTimeoutMs
+    --delAckCount="$delAckCount" \
+    --delAckTimeoutMs="$delAckTimeoutMs"
 #  \
 # --enableSenderPcap
 
