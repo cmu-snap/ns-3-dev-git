@@ -90,8 +90,10 @@ rm -rfv "${tmpfs_results_dir:?}" "${results_dir:?}"
 mkdir -p "$tmpfs_results_dir/"{logs,pcap}
 
 # Run simulation.
+# "$ns3_dir/ns3" configure --build-profile=debug
 "$ns3_dir/ns3" configure --build-profile=default
 "$ns3_dir/ns3" build "scratch/incast"
+# time "$ns3_dir"/build/scratch/ns3-dev-incast-debug \
 time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \

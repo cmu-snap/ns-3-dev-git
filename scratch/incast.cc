@@ -160,6 +160,9 @@ main(int argc, char *argv[]) {
   LogComponentEnable("BurstSender", logConfigInfo);
   LogComponentEnable("IncastSender", logConfigInfo);
   LogComponentEnable("BackgroundSender", logConfigInfo);
+//   LogComponentEnable("TcpRateOps", logConfigInfo);
+//   LogComponentEnable("TcpSocketBase", logConfigInfo);
+//   LogComponentEnable("TcpTxBuffer", logConfigInfo);
   //   LogLevel logConfigWarn =
   //       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE |
   //       LOG_LEVEL_WARN);
