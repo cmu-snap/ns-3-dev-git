@@ -4256,7 +4256,7 @@ TcpSocketBase::CalculateWScale() const
 {
     NS_LOG_FUNCTION(this);
     // uint32_t maxSpace = m_tcb->m_rxBuffer->MaxBufferSize();
-    uint8_t scale = 11;
+    uint8_t scale = 10;
 
     // while (maxSpace > m_maxWinSize)
     // {
