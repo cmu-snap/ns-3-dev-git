@@ -96,6 +96,14 @@ class IncastSender : public Application {
   void LogCwnd(uint32_t oldCwnd, uint32_t newCwnd);
 
   /**
+   * Callback to log changes in bytes in flight
+   *
+   * \param oldBytesInFlight old congestion window
+   * \param newBytesInFlight new congestion window
+   */
+  void LogBytesInFlight(uint32_t oldBytesInFlight, uint32_t newBytesInFlight);
+
+  /**
    * Callback to log round-trip time changes
    *
    * \param oldRtt old round-trip time
@@ -173,6 +181,7 @@ class IncastSender : public Application {
 
   // Log streams
   std::vector<std::pair<Time, uint32_t>> m_cwndLog;
+  std::vector<std::pair<Time, uint32_t>> m_bytesInFlightLog;
   std::vector<std::pair<Time, Time>> m_rttLog;
   std::vector<struct congEstEntry> m_congEstLog;
   std::vector<Time> m_txLog;

@@ -125,6 +125,20 @@ IncastSender::WriteLogs() {
 
   cwndOut.close();
 
+  std::ofstream bytesInFlightOut;
+  bytesInFlightOut.open(
+      m_outputDirectory + "/" + m_traceDirectory + "/logs/sender" +
+          std::to_string(GetNode()->GetId()) + "_bytes_in_flight.log",
+      std::ios::out);
+  bytesInFlightOut << std::fixed << std::setprecision(12)
+                   << "# Time (s) Bytes in flight (bytes)" << std::endl;
+
+  for (const auto &p : m_bytesInFlightLog) {
+    bytesInFlightOut << p.first.GetSeconds() << " " << p.second << std::endl;
+  }
+
+  bytesInFlightOut.close();
+
   std::ofstream rttOut;
   rttOut.open(
       m_outputDirectory + "/" + m_traceDirectory + "/logs/sender" +
@@ -223,6 +237,15 @@ IncastSender::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
 }
 
 void
+IncastSender::LogBytesInFlight(
+    uint32_t oldBytesInFlight, uint32_t newBytesInFlight) {
+  NS_LOG_FUNCTION(
+      this << " old: " << oldBytesInFlight << " new: " << newBytesInFlight);
+
+  m_bytesInFlightLog.push_back({Simulator::Now(), newBytesInFlight});
+}
+
+void
 IncastSender::LogRtt(Time oldRtt, Time newRtt) {
   NS_LOG_FUNCTION(this << " old: " << oldRtt << " new: " << newRtt);
 
@@ -267,6 +290,9 @@ IncastSender::HandleAccept(Ptr<Socket> socket, const Address &from) {
   // Enable tracing for the CWND
   socket->TraceConnectWithoutContext(
       "CongestionWindow", MakeCallback(&IncastSender::LogCwnd, this));
+  // Enable tracing for the bytes in flight
+  socket->TraceConnectWithoutContext(
+      "BytesInFlight", MakeCallback(&IncastSender::LogBytesInFlight, this));
   // Enable tracing for the RTT
   socket->TraceConnectWithoutContext(
       "RTT", MakeCallback(&IncastSender::LogRtt, this));
