@@ -5,17 +5,20 @@
 set -eoux pipefail
 
 # Enforce that there are four arguments.
-if [ "$#" -ne 4 ]; then
-    echo "Usage: $0 <output directory> <num senders> <RWND policy> <static RWND clamp>"
+if [ "$#" -ne 6 ]; then
+    echo "Usage: $0 <output directory> <num senders> <RWND policy> <static RWND clamp> <dur_ms> <skip build>"
     exit 1
 fi
 
-burstDurationMs=15
-numBursts=11
+skip_build="$6"
+burstDurationMs="$5"
+numBursts=1
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
 numBurstSenders="$2" # $((100 + 1))
 numBackgroundSenders=0
 cca="TcpDctcp"
+# nicRateMbps=100000
+# uplinkRateMbps=400000
 nicRateMbps=10000
 uplinkRateMbps=100000
 delayPerLinkUs=5
@@ -66,8 +69,7 @@ out_dir="$1/$git_branch"
 dir_name="${burstDurationMs}ms-$numBurstSenders-$numBackgroundSenders-$numBursts-$cca-${nicRateMbps}mbps-${queueSizeBytes}B-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
 # We will store in-progress results in a tmpfs and move them to the final
 # location later.
-tmpfs="$out_dir"/tmpfs
-tmpfs_results_dir="$tmpfs/$dir_name"
+tmpfs="$out_dir"/tmpfs/${dir_name}_tmpfs
 results_dir="$out_dir/$dir_name"
 
 # If tmpfs exists, then clean it up.
@@ -83,16 +85,20 @@ fi
 # Prepare tmpfs.
 rm -rf "$tmpfs"
 mkdir -pv "$tmpfs"
-sudo mount -v -t tmpfs none "$tmpfs" -o size=10G
+sudo mount -v -t tmpfs none "$tmpfs" -o size=5G
 
 # Clean up previous results.
-rm -rfv "${tmpfs_results_dir:?}" "${results_dir:?}"
-mkdir -p "$tmpfs_results_dir/"{logs,pcap}
+rm -rfv "${tmpfs:?}/"* "${results_dir:?}"
+# mkdir -p "$tmpfs/"{logs,pcap}
+
+mkdir -pv "$tmpfs/$dir_name/"{logs,pcap}
 
 # Run simulation.
-# "$ns3_dir/ns3" configure --build-profile=debug
-"$ns3_dir/ns3" configure --build-profile=default
-"$ns3_dir/ns3" build "scratch/incast"
+if [ "$skip_build" != "yes" ]; then
+    # "$ns3_dir/ns3" configure --build-profile=debug
+    "$ns3_dir/ns3" configure --build-profile=default
+    "$ns3_dir/ns3" build "scratch/incast"
+fi
 # time "$ns3_dir"/build/scratch/ns3-dev-incast-debug \
 time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
@@ -123,9 +129,9 @@ time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
 #  \
 # --enableSenderPcap
 
-# Move results to out_dir.
-mkdir -pv "$out_dir"
-mv -f "$tmpfs_results_dir" "$results_dir"
+# Move results to results_dir.
+mkdir -pv "$results_dir"
+mv -f "$tmpfs/"* "$results_dir/"
 
 # Clean up tmpfs.
 rm -rf "${tmpfs:?}"/*
