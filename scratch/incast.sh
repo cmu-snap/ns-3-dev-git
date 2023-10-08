@@ -12,15 +12,15 @@ fi
 
 skip_build="$6"
 burstDurationMs="$5"
-numBursts=1
+numBursts=6
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
 numBurstSenders="$2" # $((100 + 1))
 numBackgroundSenders=0
 cca="TcpDctcp"
-# nicRateMbps=100000
-# uplinkRateMbps=400000
-nicRateMbps=10000
-uplinkRateMbps=100000
+nicRateMbps=100000
+uplinkRateMbps=400000
+# nicRateMbps=10000
+# uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
 queueSizeBytes=2000000
@@ -131,7 +131,7 @@ time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
 
 # Move results to results_dir.
 mkdir -pv "$results_dir"
-mv -f "$tmpfs/"* "$results_dir/"
+mv -f "$tmpfs/$dir_name/"* "$results_dir/"
 
 # Clean up tmpfs.
 rm -rf "${tmpfs:?}"/*
