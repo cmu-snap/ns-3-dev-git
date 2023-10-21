@@ -10,7 +10,7 @@ if [ "$#" -ne 1 ]; then
     exit 1
 fi
 out_dir="$1"
-dur_ms=15
+dur_ms=2
 
 # Build once, instead of in each instance.
 scratch_dir="$(realpath "$(dirname "$0")")"
@@ -18,15 +18,16 @@ ns3_dir="$scratch_dir/.."
 "$ns3_dir/ns3" configure --build-profile=default
 "$ns3_dir/ns3" build "scratch/incast"
 
-connss=(50 100 150 200 500)
+connss=(25 50 75 100 125 150 175 200 225 250 275 300 325 350 375 400 425 450 475 500 1000)
 # connss=(50)
 # rwnds=(2048 4096 8192 16384 32768 65536)
-rwnds=(2048 3072 4096 5120 6144 7168 8192 9216 10240 11264 12288 13312 14336 15360 16384 17408 18432 19456 20480)
+# rwnds=(2048 3072 4096 5120 6144 7168 8192 9216 10240 11264 12288 13312 14336 15360 16384 17408 18432 19456 20480)
+rwnds=(2048 3072 4096 5120 6144 7168 8192 9216 10240 11264 12288 13312 14336)
 # rwnds=(4096)
 for conns in "${connss[@]}"; do
     parallel --line-buffer "$scratch_dir/incast.sh" "$out_dir/sweep" "$conns" "static" {} "$dur_ms" yes ::: "${rwnds[@]}"
 done
 
-connss=(50 100 150 200 250 300 350 400 450 500 1000 2000)
-# connss=(50)
+# connss=(50 100 150 200 250 300 350 400 450 500)
+# connss=(1000)
 parallel --line-buffer "$scratch_dir/incast.sh" "$out_dir/sweep" {} "none" "0" "$dur_ms" yes ::: "${connss[@]}"

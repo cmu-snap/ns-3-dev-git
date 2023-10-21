@@ -12,18 +12,19 @@ fi
 
 skip_build="$6"
 burstDurationMs="$5"
-numBursts=6
+numBursts=11
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
 numBurstSenders="$2" # $((100 + 1))
 numBackgroundSenders=0
 cca="TcpDctcp"
-nicRateMbps=100000
-uplinkRateMbps=400000
-# nicRateMbps=10000
-# uplinkRateMbps=100000
+# nicRateMbps=100000
+# uplinkRateMbps=400000
+nicRateMbps=10000
+uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
-queueSizeBytes=2000000
+queueSizeBytes=1000000
+# queueSizeBytes=2000000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
@@ -42,7 +43,7 @@ rttSec="$(python -c "print($delayPerLinkUs * 6 / 1e6)")"
 # recommendedThresholdPackets="$(python -c "print($nicRatePps * $rttSec / 7)")"
 # thresholdPackets="$(python -c "import math; print(math.ceil($recommendedThresholdPackets))")"
 # ECN marking threshold:
-queueThresholdBytes=120000
+queueThresholdBytes=97500
 thresholdPackets="$(python -c "import math; print(math.ceil($queueThresholdBytes / $bytesPerPacket))")"
 
 # Pick the right DCTCP G parameter.
