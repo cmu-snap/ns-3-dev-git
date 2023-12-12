@@ -23,8 +23,8 @@ nicRateMbps=10000
 uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
-queueSizeBytes=1000000
-# queueSizeBytes=2000000
+# queueSizeBytes=1000000
+queueSizeBytes=2000000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
