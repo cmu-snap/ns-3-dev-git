@@ -220,6 +220,9 @@ class TcpSocketState : public Object
         0}; //!< The number of bytes acked and sacked as indicated by the current ACK received. This
             //!< is similar to acked_sacked variable in Linux
 
+    // ICTCP
+    TracedValue<uint32_t> m_rWnd               {0};            
+
     /**
      * \brief Get cwnd in segments rather than bytes
      *

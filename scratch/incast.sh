@@ -12,11 +12,11 @@ fi
 
 skip_build="$6"
 burstDurationMs="$5"
-numBursts=11
+numBursts=2
 # Note: Retransmits during slow start begin at 214 connections. < Is that true?
 numBurstSenders="$2" # $((100 + 1))
 numBackgroundSenders=0
-cca="TcpDctcp"
+cca="TcpIctcp"
 # nicRateMbps=100000
 # uplinkRateMbps=400000
 nicRateMbps=10000

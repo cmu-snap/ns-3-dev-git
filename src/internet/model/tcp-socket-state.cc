@@ -93,7 +93,13 @@ TcpSocketState::GetTypeId()
             .AddTraceSource("RTT",
                             "Last RTT sample",
                             MakeTraceSourceAccessor(&TcpSocketState::m_lastRtt),
-                            "ns3::TracedValueCallback::Time");
+                            "ns3::TracedValueCallback::Time")
+            // ICTCP
+            .AddTraceSource("ReceiveWindowSize",
+                    "The TCP connection's receive Window Size",
+                    MakeTraceSourceAccessor(&TcpSocketState::m_rWnd),
+                    "ns3::TracedValue::Uint32Callback");
+
     return tid;
 }
 
@@ -123,8 +129,9 @@ TcpSocketState::TcpSocketState(const TcpSocketState& other)
       m_ecnMode(other.m_ecnMode),
       m_useEcn(other.m_useEcn),
       m_ectCodePoint(other.m_ectCodePoint),
-      m_lastAckedSackedBytes(other.m_lastAckedSackedBytes)
-
+      m_lastAckedSackedBytes(other.m_lastAckedSackedBytes),
+      // ICTCP
+      m_rWnd(other.m_rWnd)
 {
 }
 
