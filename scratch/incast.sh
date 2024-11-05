@@ -13,17 +13,13 @@ fi
 skip_build="$6"
 burstDurationMs="$5"
 numBursts=11
-# Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numBurstSenders="$2" # $((100 + 1))
+numBurstSenders="$2"
 numBackgroundSenders=0
 cca="TcpDctcp"
-# nicRateMbps=100000
-# uplinkRateMbps=400000
 nicRateMbps=10000
 uplinkRateMbps=100000
 delayPerLinkUs=5
 jitterUs=100
-# queueSizeBytes=1000000
 queueSizeBytes=2000000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $bytesPerPacket))")"
