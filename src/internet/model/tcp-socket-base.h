@@ -332,6 +332,8 @@ class TcpSocketBase : public TcpSocket
 
     Ptr<TcpSocketState> GetTcpSocketState() const;
 
+    Ipv4EndPoint* GetIpv4EndPoint() const;
+
     /**
      * \brief Callback pointer for pacing rate trace chaining
      */
@@ -627,6 +629,15 @@ class TcpSocketBase : public TcpSocket
     typedef void (*TcpTxRxTracedCallback)(const Ptr<const Packet> packet,
                                           const TcpHeader& header,
                                           const Ptr<const TcpSocketBase> socket);
+
+    /**
+     * TracedCallback signature for tracing the bytes covered by a TCP ACK.
+     */
+    typedef void (*TcpBytesInAckTracedCallback)(Ipv4Address sender_ip,
+                                                uint16_t sender_port,
+                                                Ipv4Address aggregator_ip,
+                                                uint16_t aggregator_port,
+                                                uint32_t bytesInAck);
 
   protected:
     // Implementing ns3::TcpSocket -- Attribute get/set
@@ -1401,6 +1412,8 @@ class TcpSocketBase : public TcpSocket
     TracedValue<SequenceNumber32> m_ecnCESeq{
         0}; //!< Sequence number of the last received Congestion Experienced
     TracedValue<SequenceNumber32> m_ecnCWRSeq{0}; //!< Sequence number of the last sent CWR
+
+    TracedCallback<Ipv4Address, uint16_t, Ipv4Address, uint16_t, uint32_t> m_bytesInAckTrace; //!< Previously un-ACKed bytes covered by the current ACK
 
     uint16_t m_overrideWindowSize{65535}; //!< Override the receiver advertised window size (65535 == do not override)
 };

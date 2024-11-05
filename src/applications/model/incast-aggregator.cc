@@ -41,12 +41,6 @@ namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED(IncastAggregator);
 
-/**
- * Callback to log congestion window changes
- *
- * \param oldCwndBytes old congestion window
- * \param newCwndBytes new congestion window
- */
 void
 IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
   NS_LOG_FUNCTION(this << " old: " << oldCwndBytes << " new: " << newCwndBytes);
@@ -54,17 +48,28 @@ IncastAggregator::LogCwnd(uint32_t oldCwndBytes, uint32_t newCwndBytes) {
   m_cwndLog.push_back({Simulator::Now(), newCwndBytes});
 }
 
-/**
- * Callback to log round-trip time changes
- *
- * \param oldRtt old round-trip time
- * \param newRtt new round-trip time
- */
 void
 IncastAggregator::LogRtt(Time oldRtt, Time newRtt) {
   NS_LOG_FUNCTION(this << " old: " << oldRtt << " new: " << newRtt);
 
   m_rttLog.push_back({Simulator::Now(), newRtt});
+}
+
+void
+IncastAggregator::LogBytesInAck(
+    Ipv4Address sender_ip,
+    uint16_t sender_port,
+    Ipv4Address aggregator_ip,
+    uint16_t aggregator_port,
+    uint32_t bytesInAck) {
+  struct bytesInAckEntry entry;
+  entry.time = Simulator::Now();
+  entry.sender_ip = sender_ip;
+  entry.sender_port = sender_port;
+  entry.aggregator_ip = aggregator_ip;
+  entry.aggregator_port = aggregator_port;
+  entry.bytesInAck = bytesInAck;
+  m_bytesInAckLog.push_back(entry);
 }
 
 TypeId
@@ -92,10 +97,10 @@ IncastAggregator::GetTypeId() {
               MakeUintegerAccessor(&IncastAggregator::m_numBursts),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
-              "BytesPerSender",
+              "BytesPerBurstSender",
               "Number of bytes to request from each sender for each burst",
               UintegerValue(MSS),
-              MakeUintegerAccessor(&IncastAggregator::m_bytesPerSender),
+              MakeUintegerAccessor(&IncastAggregator::m_bytesPerBurstSender),
               MakeUintegerChecker<uint32_t>())
           .AddAttribute(
               "RequestJitterUs",
@@ -117,9 +122,9 @@ IncastAggregator::GetTypeId() {
               MakeTypeIdChecker())
           .AddAttribute(
               "CCA",
-              "TypeId of the CCA",
+              "TypeId of the CCA used by the burst senders",
               TypeIdValue(TcpSocketFactory::GetTypeId()),
-              MakeTypeIdAccessor(&IncastAggregator::m_cca),
+              MakeTypeIdAccessor(&IncastAggregator::m_burstSenderCca),
               MakeTypeIdChecker())
           .AddAttribute(
               "RwndStrategy",
@@ -159,22 +164,16 @@ IncastAggregator::GetTypeId() {
               "Time to delay the request for the first sender in each burst.",
               TimeValue(MilliSeconds(0)),
               MakeTimeAccessor(&IncastAggregator::m_firstFlowOffset),
-              MakeTimeChecker())
-          .AddAttribute(
-              "DctcpShiftG",
-              "Parameter G for updating dctcp_alpha",
-              DoubleValue(0.0625),
-              MakeDoubleAccessor(&IncastAggregator::m_dctcpShiftG),
-              MakeDoubleChecker<double>(0, 1));
+              MakeTimeChecker());
 
-  // TODO: Need to configure scheduled RWND tuning parameters.
+  // TODO: Configure scheduled RWND tuning parameters.
 
   return tid;
 }
 
 IncastAggregator::IncastAggregator()
     : m_numBursts(10),
-      m_bytesPerSender(MSS),
+      m_bytesPerBurstSender(MSS),
       m_totalBytesSoFar(0),
       m_port(8888),
       m_requestJitterUs(0),
@@ -184,8 +183,7 @@ IncastAggregator::IncastAggregator()
       m_physicalRtt(Seconds(0)),
       m_minRtt(Seconds(0)),
       m_probingRtt(false),
-      m_firstFlowOffset(MilliSeconds(0)),
-      m_dctcpShiftG(0.0625) {
+      m_firstFlowOffset(MilliSeconds(0)) {
   NS_LOG_FUNCTION(this);
 }
 
@@ -195,28 +193,43 @@ void
 IncastAggregator::DoDispose() {
   NS_LOG_FUNCTION(this);
 
-  m_sockets.clear();
+  m_burstSockets.clear();
   Application::DoDispose();
 }
 
 void
-IncastAggregator::SetSenders(
+IncastAggregator::SetBurstSenders(
     std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
-        *senders) {
+        *burstSenders) {
   NS_LOG_FUNCTION(this);
-  m_senders = senders;
+  m_burstSenders = burstSenders;
+}
+
+void
+IncastAggregator::SetBackgroundSenders(
+    std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+        *backgroundSenders) {
+  NS_LOG_FUNCTION(this);
+  m_backgroundSenders = backgroundSenders;
 }
 
 Ptr<Socket>
-IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
+IncastAggregator::SetupConnection(
+    Ipv4Address sender, bool canSchedule, bool isBurstSender, bool useEcn) {
   NS_LOG_FUNCTION(
-      this << " sender: " << sender
-           << " scheduleNextBurst: " << scheduleNextBurst);
+      this << " sender: " << sender << " canSchedule: " << canSchedule
+           << " isBurstSender: " << isBurstSender);
   NS_LOG_LOGIC("Aggregator: Setup connection to " << sender);
 
   Ptr<Socket> socket = Socket::CreateSocket(GetNode(), m_tid);
-
+  // Config::SetDefault(
+  //     "ns3::TcpSocketBase::UseEcn", EnumValue(TcpSocketState::On));
   NS_ASSERT(socket->GetSocketType() == Socket::NS3_SOCK_STREAM);
+
+  if (useEcn) {
+    // Enable support for this connection.
+    socket->SetAttribute("UseEcn", EnumValue(TcpSocketState::On));
+  }
 
   if (socket->Bind() == -1) {
     NS_FATAL_ERROR("Aggregator bind failed");
@@ -234,35 +247,32 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
                                  << " failed: " << socket->GetErrno());
   }
 
+  std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+      *toSearch;
+  std::unordered_map<Ptr<Socket>, uint32_t> *toSet;
+  if (isBurstSender) {
+    // This is a burst sender.
+    toSearch = m_burstSenders;
+    toSet = &m_burstSockets;
+  } else {
+    // This is a background sender.
+    toSearch = m_backgroundSenders;
+    toSet = &m_backgroundSockets;
+  }
   // Look up the node ID for this sender
   uint32_t nid = 0;
-
-  for (const auto &p : *m_senders) {
-    if (p.second.second == sender) {
-      nid = p.first;
+  for (const auto &[id, pair] : *toSearch) {
+    if (pair.second == sender) {
+      nid = id;
       break;
     }
   }
-
   // Map the socket to the sender node ID
   NS_ASSERT(nid != 0);
-  m_sockets[socket] = nid;
+  (*toSet)[socket] = nid;
 
   // Set the congestion control algorithm
   Ptr<TcpSocketBase> tcpSocket = DynamicCast<TcpSocketBase>(socket);
-  ObjectFactory ccaFactory;
-  ccaFactory.SetTypeId(m_cca);
-  Ptr<TcpCongestionOps> ccaPtr = ccaFactory.Create<TcpCongestionOps>();
-  tcpSocket->SetCongestionControlAlgorithm(ccaPtr);
-
-  // Set DctcpShiftG.
-  if (m_cca.GetName() == "ns3::TcpDctcp") {
-    PointerValue congOpsValue;
-    tcpSocket->GetAttribute("CongestionOps", congOpsValue);
-    Ptr<TcpCongestionOps> congsOps = congOpsValue.Get<TcpCongestionOps>();
-    Ptr<TcpDctcp> dctcp = DynamicCast<TcpDctcp>(congsOps);
-    dctcp->SetAttribute("DctcpShiftG", DoubleValue(m_dctcpShiftG));
-  }
 
   // Enable tracing for the CWND
   socket->TraceConnectWithoutContext(
@@ -272,12 +282,18 @@ IncastAggregator::SetupConnection(Ipv4Address sender, bool scheduleNextBurst) {
   socket->TraceConnectWithoutContext(
       "RTT", MakeCallback(&IncastAggregator::LogRtt, this));
 
+  // Enable tracing for ACK size.
+  socket->TraceConnectWithoutContext(
+      "BytesInAck", MakeCallback(&IncastAggregator::LogBytesInAck, this));
+
   // Enable TCP timestamp option
   tcpSocket->SetAttribute("Timestamp", BooleanValue(true));
 
-  if (scheduleNextBurst) {
-    // Schedule the first burst
-    ScheduleNextBurst();
+  if (canSchedule) {
+    // Kick off the simulation by scheduling the background flows and first
+    // burst. Start the background flows 10 ms before the first burst.
+    ScheduleBackground(MilliSeconds(10));
+    ScheduleNextBurst(MilliSeconds(20));
   }
 
   return socket;
@@ -287,41 +303,70 @@ void
 IncastAggregator::StartApplication() {
   NS_LOG_FUNCTION(this);
 
-  // Make sure that the burst index pointer is defined and set to 0.
   NS_ASSERT(m_currentBurstCount != nullptr && *m_currentBurstCount == 0);
-  NS_ASSERT(m_senders != nullptr);
-  // Make sure that we are not tracking any sockets.
-  m_sockets.clear();
+  NS_ASSERT(m_burstSenders != nullptr);
+  NS_ASSERT(m_backgroundSenders != nullptr);
 
-  NS_LOG_LOGIC("Aggregator: num senders: " << m_senders->size());
+  NS_LOG_LOGIC(
+      "Aggregator: num burst senders: " << m_burstSenders->size()
+                                        << ", num background senders: "
+                                        << m_backgroundSenders->size());
 
-  // Setup a connection with each sender.
+  m_backgroundSockets.clear();
+  m_burstSockets.clear();
+
+  // Setup all connections to the senders. Stagger connection setup by 1
+  // millisecond to avoid issues. Start with the background senders.
+
+  // Setup a connection with each background sender.
   uint32_t i = 0;
-
-  for (const auto &p : *m_senders) {
+  for (const auto &[id, pair] : *m_backgroundSenders) {
     Simulator::Schedule(
         MilliSeconds(1 + i),
         &IncastAggregator::SetupConnection,
         this,
-        p.second.second,
-        i == m_senders->size() - 1);
+        pair.second,
+        // The last burst sender (below) will take care of starting the
+        // background flows.
+        false,
+        false,
+        false);
     ++i;
   }
 
-  // Fill the available tokens.
+  // Setup a connection with each burst sender.
+  for (const auto &[id, pair] : *m_burstSenders) {
+    Simulator::Schedule(
+        MilliSeconds(1 + i),
+        &IncastAggregator::SetupConnection,
+        this,
+        pair.second,
+        // If this is the last burst sender that we connect to, then afterwards
+        // we can schedule the burst itself. Also start the background flows.
+        i - m_backgroundSenders->size() == m_burstSenders->size() - 1,
+        true,
+        m_burstSenderCca.GetName() == "ns3::TcpDctcp");
+    ++i;
+  }
+
+  // For scheduled RWND tuning, fill the available tokens.
   NS_LOG_LOGIC(
       "Aggregator: Fill available tokens: " << m_rwndScheduleMaxTokens);
   m_rwndScheduleAvailableTokens = m_rwndScheduleMaxTokens;
   // Make sure that no tokens are assigned.
-  m_sendersWithAToken.clear();
+  m_burstSendersWithAToken.clear();
 }
 
 void
 IncastAggregator::CloseConnections() {
   NS_LOG_FUNCTION(this);
 
-  for (const auto &p : m_sockets) {
-    p.first->Close();
+  for (const auto &[socket, nid] : m_burstSockets) {
+    socket->Close();
+  }
+
+  for (const auto &[socket, nid] : m_backgroundSockets) {
+    socket->Close();
   }
 
   Simulator::Schedule(
@@ -329,20 +374,21 @@ IncastAggregator::CloseConnections() {
 }
 
 void
-IncastAggregator::ScheduleNextBurst() {
+IncastAggregator::ScheduleNextBurst(Time when) {
   NS_LOG_FUNCTION(this);
 
-  if (*m_currentBurstCount == m_numBursts) {
+  ++(*m_currentBurstCount);
+
+  if (*m_currentBurstCount > m_numBursts) {
     Simulator::Schedule(
         MilliSeconds(10), &IncastAggregator::CloseConnections, this);
     return;
   }
 
-  ++(*m_currentBurstCount);
   m_totalBytesSoFar = 0;
-  m_sendersFinished = 0;
+  m_burstSendersFinished = 0;
 
-  for (const auto &p : m_sockets) {
+  for (const auto &p : m_burstSockets) {
     m_bytesReceived[p.first] = 0;
   }
 
@@ -350,12 +396,18 @@ IncastAggregator::ScheduleNextBurst() {
   std::unordered_map<uint32_t, std::vector<Time>> newFlowTimesEntry;
   m_flowTimes->push_back(newFlowTimesEntry);
 
-  // Schedule the next burst for 1 second later
-  Simulator::Schedule(Seconds(1), &IncastAggregator::StartBurst, this);
+  // Schedule the next burst for 100 ms later
+  Simulator::Schedule(when, &IncastAggregator::StartBurst, this);
+}
 
-  // Start the RTT probes 10ms before the next burst
-  // Simulator::Schedule(
-  //     MilliSeconds(990), &IncastAggregator::StartRttProbes, this);
+void
+IncastAggregator::ScheduleBackground(Time when) {
+  NS_LOG_FUNCTION(this);
+
+  // Start the background flows after the burst senders get connected
+  if (!m_startedBackground) {
+    Simulator::Schedule(when, &IncastAggregator::StartBackground, this);
+  }
 }
 
 void
@@ -378,7 +430,7 @@ IncastAggregator::SendRttProbe() {
   NS_LOG_FUNCTION(this);
 
   // Send a 1-byte packet to each sender
-  for (const auto &p : m_sockets) {
+  for (const auto &p : m_burstSockets) {
     Ptr<Packet> packet = Create<Packet>(1);
     p.first->Send(packet);
   }
@@ -398,22 +450,24 @@ IncastAggregator::StartBurst() {
 
   // Make sure that at the start of a burst, all tokens are available.
   NS_ASSERT(m_rwndScheduleAvailableTokens == m_rwndScheduleMaxTokens);
-  NS_ASSERT(m_sendersWithAToken.empty());
+  NS_ASSERT(m_burstSendersWithAToken.empty());
+
   // If doing scheduled RWND tuning, then assign initial tokens.
   ScheduledRwndTuning(nullptr, false);
 
-  // Get a list of sockets so that we do not modify m_sockets while iterating
-  // over it.
+  // Copy a list of burst sockets
   std::vector<Ptr<Socket>> sockets;
-  for (const auto &p : m_sockets) {
-    sockets.push_back(p.first);
+
+  for (const auto &[socket, nid] : m_burstSockets) {
+    sockets.push_back(socket);
   }
-  NS_ASSERT(sockets.size() == m_senders->size());
+
+  NS_ASSERT(sockets.size() == m_burstSenders->size());
 
   // Send a request to each socket.
   for (const auto &socket : sockets) {
     // Whether this the sender gets offset.
-    bool offsetThisSender = m_sockets[socket] == firstSender &&
+    bool offsetThisSender = m_burstSockets[socket] == firstSender &&
                             m_firstFlowOffset.GetMilliSeconds() > 0;
 
     // Add jitter to each request
@@ -426,48 +480,98 @@ IncastAggregator::StartBurst() {
     }
 
     Simulator::Schedule(
-        jitter, &IncastAggregator::SendRequest, this, socket, offsetThisSender);
+        jitter,
+        &IncastAggregator::SendRequest,
+        this,
+        socket,
+        offsetThisSender,
+        true);
   }
 }
 
 void
-IncastAggregator::SendRequest(Ptr<Socket> socket, bool createNewConn) {
+IncastAggregator::StartBackground() {
+  NS_LOG_FUNCTION(this);
+
+  // Copy a list of background sockets
+  std::vector<Ptr<Socket>> sockets;
+
+  for (const auto &[socket, nid] : m_backgroundSockets) {
+    sockets.push_back(socket);
+  }
+
+  NS_ASSERT(sockets.size() == m_backgroundSenders->size());
+
+  // Send a request to each socket.
+  for (const auto &socket : sockets) {
+    Simulator::Schedule(
+        Seconds(0), &IncastAggregator::SendRequest, this, socket, false, false);
+  }
+
+  m_startedBackground = true;
+}
+
+void
+IncastAggregator::SendRequest(
+    Ptr<Socket> socket, bool createNewConn, bool isBurstRequest) {
   NS_LOG_FUNCTION(
       this << " socket: " << socket << " createNewConn: " << createNewConn);
 
-  if (createNewConn) {
-    // Remove old socket from m_bytesReceived.
-    m_bytesReceived.erase(socket);
-    // Close old socket.
-    socket->Close();
-    Ptr<Socket> old_socket = socket;
-    // Create a new socket and add it to m_sockets.
-    socket = SetupConnection((*m_senders)[m_sockets[socket]].second, false);
-    // Remove the old socket from m_sockets.
-    m_sockets.erase(old_socket);
-    // Add the new socket to m_bytesReceived.
-    m_bytesReceived[socket] = 0;
-    // Give the socket time to do the handshake. Then call this function again.
-    Simulator::Schedule(
-        MilliSeconds(1), &IncastAggregator::SendRequest, this, socket, false);
-    return;
-  }
+  // The amount of data to request.
+  uint32_t requestBytes;
 
-  // If we are doing scheduled RWND tuning and this sender has not been assigned
-  // a token, then we need to set the RWND to 0
-  if (m_rwndStrategy == "scheduled" &&
-      m_sendersWithAToken.find(m_sockets[socket]) ==
-          m_sendersWithAToken.end()) {
-    SafelySetRwnd(DynamicCast<TcpSocketBase>(socket), 0, true);
+  if (isBurstRequest) {
+    // This is a request for a burst.
+    requestBytes = m_bytesPerBurstSender;
+
+    // Optionally create a new connection instead of reusuing the existing one.
+    if (createNewConn) {
+      // Close old socket.
+      socket->Close();
+      // Create a new socket and add it to m_burstSockets.
+      socket = SetupConnection(
+          (*m_burstSenders)[m_burstSockets[socket]].second,
+          false,
+          true,
+          m_burstSenderCca.GetName() == "ns3::TcpDctcp");
+      // Remove the old socket from m_burstSockets.
+      m_burstSockets.erase(socket);
+      // Add the new socket to m_bytesReceived.
+      m_bytesReceived[socket] = 0;
+      // Remove old socket from m_bytesReceived.
+      m_bytesReceived.erase(socket);
+      // Give the socket time to do the handshake. Then call this function
+      // again to send the actual request.
+      Simulator::Schedule(
+          MilliSeconds(1),
+          &IncastAggregator::SendRequest,
+          this,
+          socket,
+          false,
+          isBurstRequest);
+      return;
+    }
+
+    // If we are doing scheduled RWND tuning and this sender has not been
+    // assigned a token, then we need to set the RWND to 0
+    if (m_rwndStrategy == "scheduled" &&
+        m_burstSendersWithAToken.find(m_burstSockets[socket]) ==
+            m_burstSendersWithAToken.end()) {
+      SafelySetRwnd(DynamicCast<TcpSocketBase>(socket), 0, true);
+    } else {
+      StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
+    }
+
+    NS_LOG_LOGIC(
+        "Sending request to sender "
+        << (*m_burstSenders)[m_burstSockets[socket]].second);
   } else {
-    StaticRwndTuning(DynamicCast<TcpSocketBase>(socket));
+    // This is a request for background traffic.
+    requestBytes = 12500000;  // TODO: use a less arbitrary size
+    NS_LOG_INFO("Sending request to a background sender");
   }
 
-  NS_LOG_LOGIC(
-      "Sending request to sender " << (*m_senders)[m_sockets[socket]].second);
-  Ptr<Packet> packet =
-      Create<Packet>((uint8_t *)&m_bytesPerSender, sizeof(uint32_t));
-  socket->Send(packet);
+  socket->Send(Create<Packet>((uint8_t *)&requestBytes, sizeof(uint32_t)));
 }
 
 void
@@ -480,45 +584,51 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
 
   while ((packet = socket->Recv())) {
     auto size = packet->GetSize();
+
+    if (m_backgroundSockets.find(socket) != m_backgroundSockets.end()) {
+      return;
+    }
+
     m_totalBytesSoFar += size;
     m_bytesReceived[socket] += size;
 
     DynamicRwndTuning(DynamicCast<TcpSocketBase>(socket));
   }
 
-  bool socketDone = m_bytesReceived[socket] >= m_bytesPerSender;
+  bool socketDone = m_bytesReceived[socket] >= m_bytesPerBurstSender;
   ScheduledRwndTuning(DynamicCast<TcpSocketBase>(socket), socketDone);
 
   if (socketDone) {
-    ++m_sendersFinished;
+    ++m_burstSendersFinished;
 
     // Record when this flow finished.
-    (*m_flowTimes)[*m_currentBurstCount - 1][m_sockets[socket]][2] =
+    (*m_flowTimes)[*m_currentBurstCount - 1][m_burstSockets[socket]][2] =
         Simulator::Now();
 
     NS_LOG_INFO(
-        "Aggregator: " << m_sendersFinished << "/" << m_senders->size()
-                       << " senders finished");
+        "Aggregator: " << m_burstSendersFinished << "/"
+                       << m_burstSenders->size() << " senders finished");
 
-    // if (m_sendersFinished == m_senders->size() - 1) {
+    // if (m_burstSendersFinished == m_burstSenders->size() - 1) {
     //   Ptr<Socket> remainingSocket = nullptr;
     //   for (const auto &p : m_bytesReceived) {
-    //     if (p.second < m_bytesPerSender) {
+    //     if (p.second < m_bytesPerBurstSender) {
     //       remainingSocket = p.first;
     //       break;
     //     }
     //   }
     //   NS_ASSERT(remainingSocket != nullptr);
     //   NS_LOG_INFO(
-    //       "Remaining socket: " << m_sockets[remainingSocket] << " only sent "
+    //       "Remaining socket: " << m_burstSockets[remainingSocket] << " only
+    //       sent "
     //                            << m_bytesReceived[remainingSocket] << "/"
-    //                            << m_bytesPerSender << " bytes");
+    //                            << m_bytesPerBurstSender << " bytes");
     // }
 
-    if (m_bytesReceived[socket] > m_bytesPerSender) {
+    if (m_bytesReceived[socket] > m_bytesPerBurstSender) {
       NS_LOG_ERROR(
           "Aggregator: Received too many bytes from sender "
-          << (*m_senders)[m_sockets[socket]].second);
+          << (*m_burstSenders)[m_burstSockets[socket]].second);
     }
   }
 
@@ -530,17 +640,22 @@ IncastAggregator::HandleRead(Ptr<Socket> socket) {
     NS_LOG_ERROR("Aggregator: Received too many bytes");
   }
 
-  if (m_sendersFinished == m_senders->size()) {
+  if (m_burstSendersFinished == m_burstSenders->size()) {
     NS_LOG_INFO("Burst done.");
     m_burstTimesLog.push_back({m_currentBurstStartTime, Simulator::Now()});
 
     // Make sure that at the end of a burst, all tokens are available.
     NS_ASSERT(m_rwndScheduleAvailableTokens == m_rwndScheduleMaxTokens);
-    NS_ASSERT(m_sendersWithAToken.empty());
+    NS_ASSERT(m_burstSendersWithAToken.empty());
 
-    ScheduleNextBurst();
+    // Allow the RTT probes to run for 10 ms extra.
     Simulator::Schedule(
         MilliSeconds(10), &IncastAggregator::StopRttProbes, this);
+    // // Start the RTT probes 10 ms before the next burst, at 20 ms.
+    // Simulator::Schedule(
+    //     MilliSeconds(20), &IncastAggregator::StartRttProbes, this);
+    // Start the burst itself in 30 ms.
+    ScheduleNextBurst(MilliSeconds(1000));
   }
 }
 
@@ -570,11 +685,12 @@ IncastAggregator::WriteLogs() {
   NS_LOG_FUNCTION(this);
 
   for (const auto &p : m_bytesReceived) {
-    if (p.second < m_bytesPerSender) {
-      uint32_t nid = m_sockets[p.first];
+    if (p.second < m_bytesPerBurstSender) {
+      uint32_t nid = m_burstSockets[p.first];
       NS_LOG_ERROR(
-          "Sender " << nid << " (" << (*m_senders)[nid].second << ") only sent "
-                    << p.second << "/" << m_bytesPerSender << " bytes");
+          "Sender " << nid << " (" << (*m_burstSenders)[nid].second
+                    << ") only sent " << p.second << "/"
+                    << m_bytesPerBurstSender << " bytes");
     }
   }
 
@@ -616,6 +732,25 @@ IncastAggregator::WriteLogs() {
   }
 
   rttOut.close();
+
+  std::ofstream bytesInAckOut;
+  bytesInAckOut.open(
+      m_outputDirectory + "/" + m_traceDirectory +
+          "/logs/aggregator_bytes_in_ack.log",
+      std::ios::out);
+  bytesInAckOut << "# Time (s) , sender IP , sender port , aggregator IP , "
+                   "aggregator port , bytes in ack"
+                << std::endl;
+
+  for (const auto &entry : m_bytesInAckLog) {
+    bytesInAckOut << std::fixed << std::setprecision(12)
+                  << entry.time.GetSeconds() << " " << entry.sender_ip << " "
+                  << entry.sender_port << " " << entry.aggregator_ip << " "
+                  << entry.aggregator_port << " " << entry.bytesInAck
+                  << std::endl;
+  }
+
+  bytesInAckOut.close();
 }
 
 void
@@ -647,8 +782,8 @@ IncastAggregator::SafelySetRwnd(
   tcpSocket->SetOverrideWindowSize(rwndScaled);
   NS_LOG_LOGIC(
       "Aggregator: Set RWND for sender "
-      << (*m_senders)[m_sockets[tcpSocket]].second << " ("
-      << m_sockets[tcpSocket] << ") "
+      << (*m_burstSenders)[m_burstSockets[tcpSocket]].second << " ("
+      << m_burstSockets[tcpSocket] << ") "
       << " to " << rwndBytes << " bytes (scaled=" << rwndScaled << ")");
 }
 
@@ -670,6 +805,7 @@ IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
   if (m_rwndStrategy != "bdp+connections") {
     return;
   }
+
   // Set RWND based on the number of the BDP and number of connections.
   Time rtt = tcpSocket->GetRttEstimator()->GetEstimate();
 
@@ -692,7 +828,7 @@ IncastAggregator::DynamicRwndTuning(Ptr<TcpSocketBase> tcpSocket) {
 
   // auto rtt = tcpSocket->GetTcpSocketState()->m_minRtt;
   auto bdpBytes = rtt.GetSeconds() * m_bandwidthMbps * pow(10, 6) / 8;
-  auto numConns = m_sockets.size();
+  auto numConns = m_burstSockets.size();
   uint16_t rwndBytes = (uint16_t)std::floor(bdpBytes / numConns);
 
   NS_LOG_LOGIC(
@@ -719,15 +855,15 @@ IncastAggregator::ScheduledRwndTuning(
   if (tcpSocket != nullptr && socketDone) {
     // Make sure that this sender actually had a token.
     NS_ASSERT_MSG(
-        m_sendersWithAToken.find(m_sockets[tcpSocket]) !=
-            m_sendersWithAToken.end(),
-        "Sender " << (*m_senders)[m_sockets[tcpSocket]].second << " ("
-                  << m_sockets[tcpSocket]
+        m_burstSendersWithAToken.find(m_burstSockets[tcpSocket]) !=
+            m_burstSendersWithAToken.end(),
+        "Sender " << (*m_burstSenders)[m_burstSockets[tcpSocket]].second << " ("
+                  << m_burstSockets[tcpSocket]
                   << ") is attempting to release a token it does not own.");
 
     // Increment the available tokens.
     m_rwndScheduleAvailableTokens++;
-    m_sendersWithAToken.erase(m_sockets[tcpSocket]);
+    m_burstSendersWithAToken.erase(m_burstSockets[tcpSocket]);
 
     // Set the connection's RWND to 0 to prevent it from sending at the
     // beginning of the next burst.
@@ -745,47 +881,48 @@ IncastAggregator::ScheduledRwndTuning(
       "Aggregator: Available tokens: "
       << m_rwndScheduleAvailableTokens
       << " Max tokens: " << m_rwndScheduleMaxTokens
-      << " Senders with a token: " << m_sendersWithAToken.size());
+      << " Senders with a token: " << m_burstSendersWithAToken.size());
   NS_ASSERT(
-      m_sendersWithAToken.size() ==
+      m_burstSendersWithAToken.size() ==
       m_rwndScheduleMaxTokens - m_rwndScheduleAvailableTokens);
 
   // Look through the list of sockets and try to assign a token to one.
-  for (auto &p : m_sockets) {
+  for (auto &p : m_burstSockets) {
     // If no tokens are available, then abort.
     if (m_rwndScheduleAvailableTokens == 0) {
       break;
     }
 
     // If this socket is done already, then skip it.
-    if (m_bytesReceived[p.first] >= m_bytesPerSender) {
+    if (m_bytesReceived[p.first] >= m_bytesPerBurstSender) {
       continue;
     }
 
     // If this socket already has a token, then skip it.
-    if (m_sendersWithAToken.find(m_sockets[p.first]) !=
-        m_sendersWithAToken.end()) {
+    if (m_burstSendersWithAToken.find(m_burstSockets[p.first]) !=
+        m_burstSendersWithAToken.end()) {
       continue;
     }
 
     // Assign this sender a token.
     // Decrement the available tokens.
     m_rwndScheduleAvailableTokens--;
-    m_sendersWithAToken.insert(m_sockets[p.first]);
+    m_burstSendersWithAToken.insert(m_burstSockets[p.first]);
     // Set the socket's RWND to the configured value.
     SafelySetRwnd(
         DynamicCast<TcpSocketBase>(p.first), m_staticRwndBytes, false);
 
     NS_LOG_LOGIC(
         "Aggregator: Assigned token to sender "
-        << (*m_senders)[m_sockets[p.first]].second << " (" << m_sockets[p.first]
+        << (*m_burstSenders)[m_burstSockets[p.first]].second << " ("
+        << m_burstSockets[p.first]
         << "). Available "
            "tokens: "
         << m_rwndScheduleAvailableTokens);
   }
 
   NS_ASSERT(
-      m_sendersWithAToken.size() ==
+      m_burstSendersWithAToken.size() ==
       m_rwndScheduleMaxTokens - m_rwndScheduleAvailableTokens);
 }
 
@@ -807,23 +944,27 @@ IncastAggregator::SetFlowTimesRecord(
 uint32_t
 IncastAggregator::GetFirstSender() {
   NS_LOG_FUNCTION(this);
-  NS_ASSERT(m_senders != nullptr);
-  NS_ASSERT(m_senders->size() > 0);
+  NS_ASSERT(m_burstSenders != nullptr);
+  NS_ASSERT(m_burstSenders->size() > 0);
+
   // Create a list of node IDs.
   std::vector<uint32_t> nids;
-  for (const auto &p : *m_senders) {
+
+  for (const auto &p : *m_burstSenders) {
     nids.push_back(p.first);
   }
+
   // Find the min node ID.
   std::vector<uint32_t>::iterator result =
       std::min_element(nids.begin(), nids.end());
+
   return (*result);
 }
 
 uint32_t
 IncastAggregator::GetTotalExpectedBytesPerBurst() {
   NS_LOG_FUNCTION(this);
-  return m_bytesPerSender * m_senders->size();
+  return m_bytesPerBurstSender * m_burstSenders->size();
 }
 
 }  // Namespace ns3

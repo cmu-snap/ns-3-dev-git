@@ -20,18 +20,17 @@
 // Derived from: https://code.nsnam.org/adrian/ns-3-incast
 //
 // Run with:
-//  $ ./ns3 run "scratch/incast --bytesPerSender=100000 --numBursts=5
-//       --numSenders=100 --smallLinkBandwidthMbps=12500
+//  $ ./ns3 run "scratch/incast --bytesPerBurstSender=100000 --numBursts=5
+//       --numBurstSenders=100 --smallLinkBandwidthMbps=12500
 //       --largeLinkBandwidthMbps=100000"
 
 #include "ns3/applications-module.h"
 #include "ns3/core-module.h"
-#include "ns3/incast-aggregator.h"
-#include "ns3/incast-sender.h"
 #include "ns3/internet-module.h"
 #include "ns3/network-module.h"
 #include "ns3/point-to-point-layout-module.h"
 #include "ns3/point-to-point-module.h"
+#include "ns3/ppp-header.h"
 #include "ns3/traffic-control-module.h"
 
 #include <fstream>
@@ -42,11 +41,14 @@
 /*
  * Incast Topology
  *
- *    Left(i)            Left()             Right()          Right(i)
- * [aggregator] --1-- [ToR switch] ==2== [ToR switch] --1-- [senders]
+ *    Left(i)            Left()             Right()             Right(i)
+ * [aggregator]---1---[ToR switch]===2===[ToR switch]---1---[burst senders]
+ *                         ||
+ *                          ===3===[ToR switch]---1---[background senders]
  *
  * 1: small link
- * 2: large link
+ * 2: large burst link
+ * 3: large background link
  */
 
 using namespace ns3;
@@ -59,6 +61,7 @@ std::ofstream incastQueueMarkOut;
 std::ofstream uplinkQueueMarkOut;
 std::ofstream incastQueueDropOut;
 std::ofstream uplinkQueueDropOut;
+std::ofstream aggregatorRxOut;
 
 void
 LogQueueDepth(std::ofstream *out, uint32_t oldDepth, uint32_t newDepth) {
@@ -125,6 +128,28 @@ LogUplinkQueueDropAfterDequeue(Ptr<const QueueDiscItem>, const char *) {
   LogQueueDrop(&uplinkQueueDropOut, 2);
 }
 
+/**
+ * @brief Callback to log that a packet was received by the aggregator.
+ */
+void
+LogAggregatorRx(Ptr<const Packet> packet) {
+  Ptr<Packet> copy = packet->Copy();
+
+  // Headers must be removed in the order they're present.
+  PppHeader pppHeader;
+  copy->RemoveHeader(pppHeader);
+  Ipv4Header ipHeader;
+  copy->RemoveHeader(ipHeader);
+  TcpHeader tcpHeader;
+  copy->RemoveHeader(tcpHeader);
+
+  aggregatorRxOut << Simulator::Now().GetSeconds() << " "
+                  << ipHeader.GetSource() << " " << tcpHeader.GetSourcePort()
+                  << " " << ipHeader.GetDestination() << " "
+                  << tcpHeader.GetDestinationPort() << " " << packet->GetSize()
+                  << std::endl;
+}
+
 int
 main(int argc, char *argv[]) {
   // Define log configurations
@@ -132,7 +157,12 @@ main(int argc, char *argv[]) {
       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE | LOG_LEVEL_INFO);
   LogComponentEnable("IncastSim", logConfigInfo);
   LogComponentEnable("IncastAggregator", logConfigInfo);
+  LogComponentEnable("BurstSender", logConfigInfo);
   LogComponentEnable("IncastSender", logConfigInfo);
+  LogComponentEnable("BackgroundSender", logConfigInfo);
+//   LogComponentEnable("TcpRateOps", logConfigInfo);
+//   LogComponentEnable("TcpSocketBase", logConfigInfo);
+//   LogComponentEnable("TcpTxBuffer", logConfigInfo);
   //   LogLevel logConfigWarn =
   //       (LogLevel)(LOG_PREFIX_LEVEL | LOG_PREFIX_TIME | LOG_PREFIX_NODE |
   //       LOG_LEVEL_WARN);
@@ -140,9 +170,10 @@ main(int argc, char *argv[]) {
 
   // Parameters for the simulation
   std::string tcpTypeId = "TcpCubic";
-  uint32_t numBursts = 20;
-  uint32_t numSenders = 10;
-  uint32_t bytesPerSender = 500000;
+  uint32_t numBursts = 5;
+  uint32_t numBurstSenders = 10;
+  uint32_t numBackgroundSenders = 0;
+  uint32_t bytesPerBurstSender = 500000;
   float delayPerLinkUs = 5;
   uint32_t jitterUs = 100;
 
@@ -159,11 +190,17 @@ main(int argc, char *argv[]) {
   uint32_t smallQueueMinThresholdPackets = 80;
   uint32_t smallQueueMaxThresholdPackets = 80;
 
-  // Parameters for the large links (ToR to ToR)
-  uint32_t largeLinkBandwidthMbps = 100000;
-  uint32_t largeQueueSizePackets = 1200;
-  uint32_t largeQueueMinThresholdPackets = 80;
-  uint32_t largeQueueMaxThresholdPackets = 80;
+  // Parameters for the large burst links (ToR to ToR)
+  uint32_t largeBurstLinkBandwidthMbps = 100000;
+  uint32_t largeBurstQueueSizePackets = 1200;
+  uint32_t largeBurstQueueMinThresholdPackets = 80;
+  uint32_t largeBurstQueueMaxThresholdPackets = 80;
+
+  // Parameters for the large background links (ToR to ToR)
+  uint32_t largeBackgroundLinkBandwidthMbps = 100000;
+  uint32_t largeBackgroundQueueSizePackets = 2666;
+  uint32_t largeBackgroundQueueMinThresholdPackets = 150;
+  uint32_t largeBackgroundQueueMaxThresholdPackets = 150;
 
   // Parameters for RWND tuning
   std::string rwndStrategy = "none";
@@ -190,14 +227,19 @@ main(int argc, char *argv[]) {
       traceDirectory);
   cmd.AddValue(
       "cca",
-      "Congestion control algorithm (e.g., TcpCubic, TcpDctcp, etc.)",
+      "Congestion control algorithm for the burst senders (e.g., TcpCubic, "
+      "TcpDctcp, etc.)",
       tcpTypeId);
   cmd.AddValue("numBursts", "Number of bursts to simulate", numBursts);
-  cmd.AddValue("numSenders", "Number of incast senders", numSenders);
+  cmd.AddValue("numBurstSenders", "Number of burst senders", numBurstSenders);
   cmd.AddValue(
-      "bytesPerSender",
+      "numBackgroundSenders",
+      "Number of background senders",
+      numBackgroundSenders);
+  cmd.AddValue(
+      "bytesPerBurstSender",
       "Number of bytes for each sender to send for each burst",
-      bytesPerSender);
+      bytesPerBurstSender);
   cmd.AddValue(
       "jitterUs",
       "Maximum random jitter when sending requests (in microseconds)",
@@ -221,9 +263,13 @@ main(int argc, char *argv[]) {
       "Small link bandwidth (in Mbps)",
       smallLinkBandwidthMbps);
   cmd.AddValue(
-      "largeLinkBandwidthMbps",
-      "Large link bandwidth (in Mbps)",
-      largeLinkBandwidthMbps);
+      "largeBurstLinkBandwidthMbps",
+      "Large burst link bandwidth (in Mbps)",
+      largeBurstLinkBandwidthMbps);
+  cmd.AddValue(
+      "largeBackgroundLinkBandwidthMbps",
+      "Large background link bandwidth (in Mbps)",
+      largeBackgroundLinkBandwidthMbps);
   cmd.AddValue(
       "delayPerLinkUs",
       "Delay on each link (in microseconds). The RTT is 6 times this value.",
@@ -241,17 +287,34 @@ main(int argc, char *argv[]) {
       "Maximum average length threshold for the small queue (in packets/bytes)",
       smallQueueMaxThresholdPackets);
   cmd.AddValue(
-      "largeQueueSizePackets",
-      "Maximum number of packets accepted by queues on the large link",
-      largeQueueSizePackets);
+      "largeBurstQueueSizePackets",
+      "Maximum number of packets accepted by queues on the large burst link",
+      largeBurstQueueSizePackets);
   cmd.AddValue(
-      "largeQueueMinThresholdPackets",
-      "Minimum average length threshold for the large queue (in packets/bytes)",
-      largeQueueMinThresholdPackets);
+      "largeBackgroundQueueSizePackets",
+      "Maximum number of packets accepted by queues on the large background "
+      "link",
+      largeBackgroundQueueSizePackets);
   cmd.AddValue(
-      "largeQueueMaxThresholdPackets",
-      "Maximum average length threshold for the large queue (in packets/bytes)",
-      largeQueueMaxThresholdPackets);
+      "largeBurstQueueMinThresholdPackets",
+      "Minimum average length threshold for the large burst queue (in "
+      "packets/bytes)",
+      largeBurstQueueMinThresholdPackets);
+  cmd.AddValue(
+      "largeBackgroundQueueMinThresholdPackets",
+      "Minimum average length threshold for the large background queue (in "
+      "packets/bytes)",
+      largeBackgroundQueueMinThresholdPackets);
+  cmd.AddValue(
+      "largeBurstQueueMaxThresholdPackets",
+      "Maximum average length threshold for the large burst queue (in "
+      "packets/bytes)",
+      largeBurstQueueMaxThresholdPackets);
+  cmd.AddValue(
+      "largeBackgroundQueueMaxThresholdPackets",
+      "Maximum average length threshold for the large background queue (in "
+      "packets/bytes)",
+      largeBackgroundQueueMaxThresholdPackets);
   cmd.AddValue(
       "rwndStrategy",
       "RWND tuning strategy to use [none, static, bdp+connections, scheduled]",
@@ -278,14 +341,14 @@ main(int argc, char *argv[]) {
 
   cmd.Parse(argc, argv);
 
-  // Check if the large link will be overwhelmed
-  uint32_t totalIncastMbps = smallLinkBandwidthMbps * numSenders;
+  // Check if the large burst link will be overwhelmed
+  uint32_t totalIncastMbps = smallLinkBandwidthMbps * numBurstSenders;
 
-  if (totalIncastMbps > largeLinkBandwidthMbps) {
+  if (totalIncastMbps > largeBurstLinkBandwidthMbps) {
     NS_LOG_WARN(
-        "Total incast bandwidth (" << totalIncastMbps
-                                   << "Mbps) exceeds large link bandwidth ("
-                                   << largeLinkBandwidthMbps << "Mbps)");
+        "Total incast bandwidth ("
+        << totalIncastMbps << "Mbps) exceeds large burst link bandwidth ("
+        << largeBurstLinkBandwidthMbps << "Mbps)");
   }
 
   // Convert numeric values to NS3 values
@@ -299,20 +362,32 @@ main(int argc, char *argv[]) {
   StringValue smallLinkBandwidthMbpsStringValue =
       StringValue(smallLinkBandwidthMbpsString.str());
 
-  std::ostringstream largeLinkBandwidthMbpsString;
-  largeLinkBandwidthMbpsString << largeLinkBandwidthMbps << "Mbps";
-  StringValue largeLinkBandwidthMbpsStringValue =
-      StringValue(largeLinkBandwidthMbpsString.str());
+  std::ostringstream largeBurstLinkBandwidthMbpsString;
+  largeBurstLinkBandwidthMbpsString << largeBurstLinkBandwidthMbps << "Mbps";
+  StringValue largeBurstLinkBandwidthMbpsStringValue =
+      StringValue(largeBurstLinkBandwidthMbpsString.str());
+
+  std::ostringstream largeBackgroundLinkBandwidthMbpsString;
+  largeBackgroundLinkBandwidthMbpsString << largeBackgroundLinkBandwidthMbps
+                                         << "Mbps";
+  StringValue largeBackgroundLinkBandwidthMbpsStringValue =
+      StringValue(largeBackgroundLinkBandwidthMbpsString.str());
 
   std::ostringstream smallQueueSizePacketsString;
   smallQueueSizePacketsString << smallQueueSizePackets << "p";
   QueueSizeValue smallQueueSizePacketsValue =
       QueueSizeValue(QueueSize(smallQueueSizePacketsString.str()));
 
-  std::ostringstream largeQueueSizePacketsString;
-  largeQueueSizePacketsString << largeQueueSizePackets << "p";
-  QueueSizeValue largeQueueSizePacketsValue =
-      QueueSizeValue(QueueSize(largeQueueSizePacketsString.str()));
+  std::ostringstream largeBurstQueueSizePacketsString;
+  largeBurstQueueSizePacketsString << largeBurstQueueSizePackets << "p";
+  QueueSizeValue largeBurstQueueSizePacketsValue =
+      QueueSizeValue(QueueSize(largeBurstQueueSizePacketsString.str()));
+
+  std::ostringstream largeBackgroundQueueSizePacketsString;
+  largeBackgroundQueueSizePacketsString << largeBackgroundQueueSizePackets
+                                        << "p";
+  QueueSizeValue largeBackgroundQueueSizePacketsValue =
+      QueueSizeValue(QueueSize(largeBackgroundQueueSizePacketsString.str()));
 
   NS_LOG_INFO("Building incast topology...");
 
@@ -322,42 +397,70 @@ main(int argc, char *argv[]) {
       "DataRate", smallLinkBandwidthMbpsStringValue);
   smallLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
-  PointToPointHelper largeLinkHelper;
-  largeLinkHelper.SetDeviceAttribute(
-      "DataRate", largeLinkBandwidthMbpsStringValue);
-  largeLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
+  PointToPointHelper largeBurstLinkHelper;
+  largeBurstLinkHelper.SetDeviceAttribute(
+      "DataRate", largeBurstLinkBandwidthMbpsStringValue);
+  largeBurstLinkHelper.SetChannelAttribute("Delay", delayPerLinkUsStringValue);
 
-  // Create a dumbbell topology
-  PointToPointDumbbellHelper dumbbellHelper(
-      1, smallLinkHelper, numSenders, smallLinkHelper, largeLinkHelper);
+  PointToPointHelper largeBackgroundLinkHelper;
+  largeBackgroundLinkHelper.SetDeviceAttribute(
+      "DataRate", largeBackgroundLinkBandwidthMbpsStringValue);
+  largeBackgroundLinkHelper.SetChannelAttribute(
+      "Delay", delayPerLinkUsStringValue);
+
+  // Create dumbbell topologies
+  PointToPointDumbbellHelper burstDumbbellHelper(
+      1,
+      smallLinkHelper,
+      numBurstSenders,
+      smallLinkHelper,
+      largeBurstLinkHelper);
+
+  PointToPointDumbbellHelper backgroundDumbbellHelper(
+      1,
+      smallLinkHelper,
+      numBackgroundSenders,
+      smallLinkHelper,
+      largeBackgroundLinkHelper);
+
+  // Connect the background senders with the aggregator
+  NetDeviceContainer crossSwitchNetDevices = largeBackgroundLinkHelper.Install(
+      burstDumbbellHelper.GetLeft(), backgroundDumbbellHelper.GetRight());
 
   // Print global node IDs
   std::ostringstream leftNodeIds;
-  leftNodeIds << "Left nodes (aggregator): ";
-  for (uint32_t i = 0; i < dumbbellHelper.LeftCount(); ++i) {
-    leftNodeIds << dumbbellHelper.GetLeft(i)->GetId() << " ";
+  leftNodeIds << "Left node (aggregator): ";
+  leftNodeIds << burstDumbbellHelper.GetLeft(0)->GetId() << " ";
+
+  std::ostringstream rightBurstNodeIds;
+  rightBurstNodeIds << "Right nodes (burst senders): ";
+  for (uint32_t i = 0; i < burstDumbbellHelper.RightCount(); ++i) {
+    rightBurstNodeIds << burstDumbbellHelper.GetRight(i)->GetId() << " ";
   }
 
-  std::ostringstream rightNodeIds;
-  rightNodeIds << "Right nodes (senders): ";
-  for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    rightNodeIds << dumbbellHelper.GetRight(i)->GetId() << " ";
+  std::ostringstream rightBackgroundNodeIds;
+  rightBackgroundNodeIds << "Right nodes (background senders): ";
+  for (uint32_t i = 0; i < backgroundDumbbellHelper.RightCount(); ++i) {
+    rightBackgroundNodeIds << backgroundDumbbellHelper.GetRight(i)->GetId()
+                           << " ";
   }
 
   NS_LOG_INFO(
       "Node IDs:" << std::endl
                   << "\tLeft router (at the aggregator): "
-                  << dumbbellHelper.GetLeft()->GetId() << std::endl
-                  << "\tRight router (at the senders): "
-                  << dumbbellHelper.GetRight()->GetId() << std::endl
+                  << burstDumbbellHelper.GetLeft()->GetId() << std::endl
+                  << "\tRight router (at the burst senders): "
+                  << burstDumbbellHelper.GetRight()->GetId() << std::endl
                   << "\t" << leftNodeIds.str() << std::endl
-                  << "\t" << rightNodeIds.str());
+                  << "\t" << rightBurstNodeIds.str() << std::endl
+                  << "\t" << rightBackgroundNodeIds.str());
 
   NS_LOG_INFO("Installing the TCP stack on all nodes...");
 
   // Install the TCP stack on all nodes
   InternetStackHelper stackHelper;
-  dumbbellHelper.InstallStack(stackHelper);
+  burstDumbbellHelper.InstallStack(stackHelper);
+  backgroundDumbbellHelper.InstallStack(stackHelper);
 
   NS_LOG_INFO("Configuring TCP parameters...");
 
@@ -379,20 +482,18 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::TcpSocketBase::Timestamp", BooleanValue(true));
   Config::SetDefault("ns3::TcpSocketBase::WindowScaling", BooleanValue(true));
 
-  if (tcpTypeId == "TcpDctcp") {
-    // TODO: For non-DCTCP, try with and without
-    Config::SetDefault("ns3::TcpSocketBase::UseEcn", StringValue("On"));
-  }
-
   // Important: Must set up queues before configuring IP addresses.
   NS_LOG_INFO("Creating queues...");
 
   // Set default parameters for RED queue disc
-  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
   Config::SetDefault("ns3::RedQueueDisc::UseHardDrop", BooleanValue(false));
   Config::SetDefault("ns3::RedQueueDisc::MeanPktSize", UintegerValue(1500));
-  // DCTCP tracks instantaneous queue length only; so set QW = 1
+
+  // Set QW = 1 because DCTCP tracks the instantaneous queue length only
   Config::SetDefault("ns3::RedQueueDisc::QW", DoubleValue(1));
+
+  // Enable ECN for all queues.
+  Config::SetDefault("ns3::RedQueueDisc::UseEcn", BooleanValue(true));
 
   // Configure different queues for the small and large links
   TrafficControlHelper smallLinkQueueHelper;
@@ -411,49 +512,79 @@ main(int argc, char *argv[]) {
       "LInterm",
       DoubleValue(1));
 
-  TrafficControlHelper largeLinkQueueHelper;
-  largeLinkQueueHelper.SetRootQueueDisc(
+  TrafficControlHelper largeBurstLinkQueueHelper;
+  largeBurstLinkQueueHelper.SetRootQueueDisc(
       "ns3::RedQueueDisc",
       "LinkBandwidth",
-      largeLinkBandwidthMbpsStringValue,
+      largeBurstLinkBandwidthMbpsStringValue,
       "LinkDelay",
       delayPerLinkUsStringValue,
       "MaxSize",
-      largeQueueSizePacketsValue,
+      largeBurstQueueSizePacketsValue,
       "MinTh",
-      DoubleValue(largeQueueMinThresholdPackets),
+      DoubleValue(largeBurstQueueMinThresholdPackets),
       "MaxTh",
-      DoubleValue(largeQueueMaxThresholdPackets),
+      DoubleValue(largeBurstQueueMaxThresholdPackets),
+      "LInterm",
+      DoubleValue(1));
+
+  TrafficControlHelper largeBackgroundLinkQueueHelper;
+  largeBackgroundLinkQueueHelper.SetRootQueueDisc(
+      "ns3::RedQueueDisc",
+      "LinkBandwidth",
+      largeBackgroundLinkBandwidthMbpsStringValue,
+      "LinkDelay",
+      delayPerLinkUsStringValue,
+      "MaxSize",
+      largeBackgroundQueueSizePacketsValue,
+      "MinTh",
+      DoubleValue(largeBackgroundQueueMinThresholdPackets),
+      "MaxTh",
+      DoubleValue(largeBackgroundQueueMaxThresholdPackets),
       "LInterm",
       DoubleValue(1));
 
   // Install small queues on all the NetDevices connected to small links.
   QueueDiscContainer leftQueues =
-      smallLinkQueueHelper.Install(dumbbellHelper.GetLeftDevices());
+      smallLinkQueueHelper.Install(burstDumbbellHelper.GetLeftDevices());
   QueueDiscContainer leftRouterQueues =
-      smallLinkQueueHelper.Install(dumbbellHelper.GetLeftRouterDevices());
-  QueueDiscContainer rightQueues =
-      smallLinkQueueHelper.Install(dumbbellHelper.GetRightDevices());
-  QueueDiscContainer rightRouterQueues =
-      smallLinkQueueHelper.Install(dumbbellHelper.GetRightRouterDevices());
+      smallLinkQueueHelper.Install(burstDumbbellHelper.GetLeftRouterDevices());
+  QueueDiscContainer rightBurstQueues =
+      smallLinkQueueHelper.Install(burstDumbbellHelper.GetRightDevices());
+  QueueDiscContainer rightBurstRouterQueues =
+      smallLinkQueueHelper.Install(burstDumbbellHelper.GetRightRouterDevices());
+  QueueDiscContainer rightBackgroundQueues =
+      smallLinkQueueHelper.Install(backgroundDumbbellHelper.GetRightDevices());
+  QueueDiscContainer rightBackgroundRouterQueues = smallLinkQueueHelper.Install(
+      backgroundDumbbellHelper.GetRightRouterDevices());
 
   // Get the queue from the left switch to the aggregator.
   Ptr<QueueDisc> incastQueue = leftRouterQueues.Get(0);
 
   // Install large queues on all the NetDevices connected to large links.
-  QueueDiscContainer switchQueues =
-      largeLinkQueueHelper.Install(dumbbellHelper.GetRouterDevices());
+  QueueDiscContainer burstSwitchQueues =
+      largeBurstLinkQueueHelper.Install(burstDumbbellHelper.GetRouterDevices());
 
   // Get the queue from the right switch to the left switch.
-  Ptr<QueueDisc> uplinkQueue = switchQueues.Get(1);
+  Ptr<QueueDisc> uplinkQueue = burstSwitchQueues.Get(1);
 
   NS_LOG_INFO("Assigning IP addresses...");
 
   // Assign IP Addresses
-  dumbbellHelper.AssignIpv4Addresses(
+  Ipv4AddressHelper leftRouterIpHelper("12.0.0.0", "255.255.255.0");
+  burstDumbbellHelper.AssignIpv4Addresses(
       Ipv4AddressHelper("10.0.0.0", "255.255.255.0"),
       Ipv4AddressHelper("11.0.0.0", "255.255.255.0"),
-      Ipv4AddressHelper("12.0.0.0", "255.255.255.0"));
+      leftRouterIpHelper);
+
+  backgroundDumbbellHelper.AssignIpv4Addresses(
+      Ipv4AddressHelper("20.0.0.0", "255.255.255.0"),
+      Ipv4AddressHelper("21.0.0.0", "255.255.255.0"),
+      Ipv4AddressHelper("22.0.0.0", "255.255.255.0"));
+
+  // Assign IP addresses to the cross-link interfaces.
+  leftRouterIpHelper.NewNetwork();
+  Ipv4InterfaceContainer ifc = leftRouterIpHelper.Assign(crossSwitchNetDevices);
 
   NS_LOG_INFO("Configuring static global routing...");
 
@@ -462,12 +593,12 @@ main(int argc, char *argv[]) {
 
   NS_LOG_INFO("Creating applications...");
 
-  // Global record which burst is currently running.
-  uint32_t currentBurstCount = 0;
-  // Global record of senders, which maps the sender node ID to a pair of
+  // Global record of burst senders, which maps the sender node ID to a pair of
   // SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
-      senders;
+      burstSenders;
+  // Global record which burst is currently running.
+  uint32_t currentBurstCount = 0;
   // Global record of flow start and end times, which is a vector of burst info,
   // where each entry maps the sender node ID to a (start time, end time) pair.
   std::vector<std::unordered_map<uint32_t, std::vector<Time>>> flowTimes;
@@ -480,7 +611,8 @@ main(int argc, char *argv[]) {
   aggregatorApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
   aggregatorApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
   aggregatorApp->SetAttribute("NumBursts", UintegerValue(numBursts));
-  aggregatorApp->SetAttribute("BytesPerSender", UintegerValue(bytesPerSender));
+  aggregatorApp->SetAttribute(
+      "BytesPerBurstSender", UintegerValue(bytesPerBurstSender));
   aggregatorApp->SetAttribute("RequestJitterUs", UintegerValue(jitterUs));
   aggregatorApp->SetAttribute(
       "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
@@ -495,31 +627,59 @@ main(int argc, char *argv[]) {
       "PhysicalRTT", TimeValue(MicroSeconds(6 * delayPerLinkUs)));
   aggregatorApp->SetAttribute(
       "FirstFlowOffset", TimeValue(MilliSeconds(firstFlowOffsetMs)));
-  aggregatorApp->SetAttribute("DctcpShiftG", DoubleValue(dctcpShiftG));
-  dumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
+  burstDumbbellHelper.GetLeft(0)->AddApplication(aggregatorApp);
 
-  // Create the sender applications
-
-  for (size_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-    Ptr<IncastSender> senderApp = CreateObject<IncastSender>();
-    senders[dumbbellHelper.GetRight(i)->GetId()] = {
-        senderApp, dumbbellHelper.GetRightIpv4Address(i)};
+  // Create the burst sender applications
+  for (size_t i = 0; i < burstDumbbellHelper.RightCount(); ++i) {
+    Ptr<BurstSender> senderApp = CreateObject<BurstSender>();
+    burstSenders[burstDumbbellHelper.GetRight(i)->GetId()] = {
+        senderApp, burstDumbbellHelper.GetRightIpv4Address(i)};
 
     senderApp->SetCurrentBurstCount(&currentBurstCount);
     senderApp->SetFlowTimesRecord(&flowTimes);
     senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
     senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
+    senderApp->SetAttribute("NumBursts", UintegerValue(numBursts));
     senderApp->SetAttribute(
-        "Aggregator", Ipv4AddressValue(dumbbellHelper.GetLeftIpv4Address(0)));
+        "Aggregator",
+        Ipv4AddressValue(burstDumbbellHelper.GetLeftIpv4Address(0)));
     senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
     senderApp->SetAttribute(
         "CCA", TypeIdValue(TypeId::LookupByName("ns3::" + tcpTypeId)));
     senderApp->SetStartTime(Seconds(1.0));
     senderApp->SetAttribute("DctcpShiftG", DoubleValue(dctcpShiftG));
-    dumbbellHelper.GetRight(i)->AddApplication(senderApp);
+    burstDumbbellHelper.GetRight(i)->AddApplication(senderApp);
   }
 
-  aggregatorApp->SetSenders(&senders);
+  // Global record of background senders, which maps the sender node ID to a
+  // pair of SenderApp and sender IP address.
+  std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+      backgroundSenders;
+
+  // Create the background sender applications
+  for (size_t i = 0; i < backgroundDumbbellHelper.RightCount(); ++i) {
+    Ptr<BackgroundSender> senderApp = CreateObject<BackgroundSender>();
+    backgroundSenders[backgroundDumbbellHelper.GetRight(i)->GetId()] = {
+        senderApp, backgroundDumbbellHelper.GetRightIpv4Address(i)};
+
+    senderApp->SetCurrentBurstCount(&currentBurstCount);
+    senderApp->SetAttribute("OutputDirectory", StringValue(outputDirectory));
+    senderApp->SetAttribute("TraceDirectory", StringValue(traceDirectory));
+    senderApp->SetAttribute("NumBursts", UintegerValue(numBursts));
+    senderApp->SetAttribute(
+        "Aggregator",
+        Ipv4AddressValue(burstDumbbellHelper.GetLeftIpv4Address(0)));
+    senderApp->SetAttribute("ResponseJitterUs", UintegerValue(jitterUs));
+    senderApp->SetAttribute(
+        "CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpDctcp")));
+    // "CCA", TypeIdValue(TypeId::LookupByName("ns3::TcpCubic")));
+    senderApp->SetStartTime(Seconds(0.0));
+    backgroundDumbbellHelper.GetRight(i)->AddApplication(senderApp);
+  }
+
+  // Store burst and background senders
+  aggregatorApp->SetBurstSenders(&burstSenders);
+  aggregatorApp->SetBackgroundSenders(&backgroundSenders);
 
   NS_LOG_INFO("Enabling tracing...");
 
@@ -527,23 +687,31 @@ main(int argc, char *argv[]) {
   Config::SetDefault("ns3::PcapFileWrapper::NanosecMode", BooleanValue(true));
 
   // Enable tracing at the aggregator
-  largeLinkHelper.EnablePcap(
+  largeBurstLinkHelper.EnablePcap(
       outputDirectory + traceDirectory + "/pcap/incast",
-      dumbbellHelper.GetLeft(0)->GetId(),
+      burstDumbbellHelper.GetLeft(0)->GetId(),
       0);
 
-  // Enable tracing at each sender
   if (enableSenderPcap) {
-    for (uint32_t i = 0; i < dumbbellHelper.RightCount(); ++i) {
-      largeLinkHelper.EnablePcap(
+    // Enable tracing at each burst sender
+    for (uint32_t i = 0; i < burstDumbbellHelper.RightCount(); ++i) {
+      largeBurstLinkHelper.EnablePcap(
           outputDirectory + traceDirectory + "/pcap/incast",
-          dumbbellHelper.GetRight(i)->GetId(),
+          burstDumbbellHelper.GetRight(i)->GetId(),
+          0);
+    }
+
+    // Enable tracing at each background sender
+    for (uint32_t i = 0; i < backgroundDumbbellHelper.RightCount(); ++i) {
+      largeBackgroundLinkHelper.EnablePcap(
+          outputDirectory + traceDirectory + "/pcap/incast",
+          backgroundDumbbellHelper.GetRight(i)->GetId(),
           0);
     }
   }
 
   // Compute the data per burst
-  double totalBytesPerBurst = bytesPerSender * numSenders;
+  double totalBytesPerBurst = bytesPerBurstSender * numBurstSenders;
   double totalBytes = totalBytesPerBurst * numBursts;
   uint32_t megaToBase = pow(10, 6);
 
@@ -608,14 +776,29 @@ main(int argc, char *argv[]) {
   uplinkQueue->TraceConnectWithoutContext(
       "DropAfterDequeue", MakeCallback(&LogUplinkQueueDropAfterDequeue));
 
+  aggregatorRxOut.open(
+      outputDirectory + traceDirectory + "/logs/aggregator_bytes_received.log",
+      std::ios::out);
+  aggregatorRxOut << std::fixed << std::setprecision(12)
+                  << "# Time (s) , sender IP , sender port , aggregator IP "
+                     ", aggregator port , bytes received"
+                  << std::endl;
+
+  Ptr<NetDevice> aggregatorDev = burstDumbbellHelper.GetLeftDevice(0);
+  Ptr<PointToPointNetDevice> aggregatorP2PDev =
+      DynamicCast<PointToPointNetDevice>(aggregatorDev);
+  aggregatorP2PDev->TraceConnectWithoutContext(
+      "PhyRxEnd", MakeCallback(LogAggregatorRx));
+
   // Serialize all configuration parameters to a JSON file
   nlohmann::json configJson;
   configJson["outputDirectory"] = outputDirectory;
   configJson["traceDirectory"] = traceDirectory;
   configJson["cca"] = tcpTypeId;
   configJson["numBursts"] = numBursts;
-  configJson["numSenders"] = numSenders;
-  configJson["bytesPerSender"] = bytesPerSender;
+  configJson["numBurstSenders"] = numBurstSenders;
+  configJson["numBackgroundSenders"] = numBackgroundSenders;
+  configJson["bytesPerBurstSender"] = bytesPerBurstSender;
   configJson["jitterUs"] = jitterUs;
   configJson["segmentSizeBytes"] = segmentSizeBytes;
   configJson["delAckCount"] = delAckCount;
@@ -623,14 +806,24 @@ main(int argc, char *argv[]) {
   configJson["initialCwnd"] = initialCwndSegments;
   configJson["dctcpShiftG"] = dctcpShiftG;
   configJson["smallLinkBandwidthMbps"] = smallLinkBandwidthMbps;
-  configJson["largeLinkBandwidthMbps"] = largeLinkBandwidthMbps;
+  configJson["largeBurstLinkBandwidthMbps"] = largeBurstLinkBandwidthMbps;
+  configJson["largeBackgroundLinkBandwidthMbps"] =
+      largeBackgroundLinkBandwidthMbps;
   configJson["delayPerLinkUs"] = delayPerLinkUs;
   configJson["smallQueueSizePackets"] = smallQueueSizePackets;
   configJson["smallQueueMinThresholdPackets"] = smallQueueMinThresholdPackets;
   configJson["smallQueueMaxThresholdPackets"] = smallQueueMaxThresholdPackets;
-  configJson["largeQueueSizePackets"] = largeQueueSizePackets;
-  configJson["largeQueueMinThresholdPackets"] = largeQueueMinThresholdPackets;
-  configJson["largeQueueMaxThresholdPackets"] = largeQueueMaxThresholdPackets;
+  configJson["largeBurstQueueSizePackets"] = largeBurstQueueSizePackets;
+  configJson["largeBurstQueueMinThresholdPackets"] =
+      largeBurstQueueMinThresholdPackets;
+  configJson["largeBurstQueueMaxThresholdPackets"] =
+      largeBurstQueueMaxThresholdPackets;
+  configJson["largeBackgroundQueueSizePackets"] =
+      largeBackgroundQueueSizePackets;
+  configJson["largeBackgroundQueueMinThresholdPackets"] =
+      largeBackgroundQueueMinThresholdPackets;
+  configJson["largeBackgroundQueueMaxThresholdPackets"] =
+      largeBackgroundQueueMaxThresholdPackets;
   configJson["rwndStrategy"] = rwndStrategy;
   configJson["staticRwndBytes"] = staticRwndBytes;
   configJson["rwndScheduleMaxConns"] = rwndScheduleMaxConns;
@@ -654,8 +847,8 @@ main(int argc, char *argv[]) {
   aggregatorApp->WriteLogs();
   // This must take place before writing the flowTimes json below because this
   // function fills in the firstPacket time in the flowTimes data structure.
-  for (const auto &p : senders) {
-    p.second.first->WriteLogs();
+  for (const auto &[id, pair] : burstSenders) {
+    pair.first->WriteLogs();
   }
 
   Simulator::Destroy();
@@ -666,6 +859,7 @@ main(int argc, char *argv[]) {
   uplinkQueueMarkOut.close();
   incastQueueDropOut.close();
   uplinkQueueDropOut.close();
+  aggregatorRxOut.close();
 
   // Compute the ideal and actual burst durations
   uint32_t numBitsPerByte = 8;
@@ -673,15 +867,14 @@ main(int argc, char *argv[]) {
   uint32_t baseToMilli = pow(10, 3);
   uint32_t baseToMicro = pow(10, 6);
 
-  double burstTransmissionSec = (double)bytesPerSender * numSenders *
+  double burstTransmissionSec = (double)bytesPerBurstSender * numBurstSenders *
                                 numBitsPerByte /
                                 ((double)smallLinkBandwidthMbps * megaToBase);
   double firstRttSec = numHops * 2 * delayPerLinkUs / baseToMicro;
   double idealBurstDurationSec = burstTransmissionSec + firstRttSec;
+  double idealBurstDurationMs = idealBurstDurationSec * baseToMilli;
 
-  NS_LOG_INFO(
-      "Ideal burst duration: " << idealBurstDurationSec * baseToMilli << "ms");
-
+  NS_LOG_INFO("Ideal burst duration: " << idealBurstDurationMs << "ms");
   NS_LOG_INFO("Burst durations (x ideal):");
   for (const auto &p : aggregatorApp->GetBurstTimes()) {
     Time burstDuration = p.second - p.first;
@@ -691,13 +884,15 @@ main(int argc, char *argv[]) {
   }
 
   // Serialize the flow times to a JSON file. This must take place after writing
-  // the sender logs, above, because that function fills in the firstPacket time
+  // the sender logs above, because that function fills in the firstPacket time
   // in the flowTimes data structure.
   nlohmann::json flowTimesJson;
+
   for (uint32_t i = 0; i < flowTimes.size(); ++i) {
     nlohmann::json burstJson;
+
     for (const auto &flow : flowTimes[i]) {
-      Ipv4Address ip = senders[flow.first].second;
+      Ipv4Address ip = burstSenders[flow.first].second;
       std::ostringstream ipStr;
       ip.Print(ipStr);
 
@@ -707,6 +902,7 @@ main(int argc, char *argv[]) {
           {"firstPacket", flow.second[1].GetSeconds()},
           {"end", flow.second[2].GetSeconds()}};
     }
+
     flowTimesJson[std::to_string(i)] = burstJson;
   }
 

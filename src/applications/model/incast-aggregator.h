@@ -65,9 +65,16 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SetSenders(
+  void SetBurstSenders(
       std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
-          *senders);
+          *burstSenders);
+
+  /**
+   * @brief TODO
+   */
+  void SetBackgroundSenders(
+      std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+          *backgroundSenders);
 
   /**
    * @brief TODO
@@ -89,20 +96,24 @@ class IncastAggregator : public Application {
 
  private:
   /**
-   * Callback to log congestion window changes
-   *
-   * \param oldCwnd old congestion window
-   * \param newCwnd new congestion window
+   * @brief Callback to log congestion window changes
    */
   void LogCwnd(uint32_t oldCwnd, uint32_t newCwnd);
 
   /**
-   * Callback to log round-trip time changes
-   *
-   * \param oldRtt old round-trip time
-   * \param newRtt new round-trip time
+   * @brief Callback to log round-trip time changes
    */
   void LogRtt(Time oldRtt, Time newRtt);
+
+  /**
+   * @brief Callback to log the bytes covered by an ACK.
+   */
+  void LogBytesInAck(
+      Ipv4Address sender_ip,
+      uint16_t sender_port,
+      Ipv4Address aggregator_ip,
+      uint16_t aggregator_port,
+      uint32_t bytesInAck);
 
   /**
    * @brief TODO
@@ -117,7 +128,12 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void ScheduleNextBurst();
+  void ScheduleNextBurst(Time when);
+
+  /**
+   * @brief TODO
+   */
+  void ScheduleBackground(Time when);
 
   /**
    * @brief TODO
@@ -127,7 +143,12 @@ class IncastAggregator : public Application {
   /**
    * @brief TODO
    */
-  void SendRequest(Ptr<Socket> socket, bool createNewConn);
+  void StartBackground();
+
+  /**
+   * @brief TODO
+   */
+  void SendRequest(Ptr<Socket> socket, bool createNewConn, bool isBurstRequest);
 
   /**
    * @brief TODO
@@ -183,9 +204,24 @@ class IncastAggregator : public Application {
    */
   void ScheduledRwndTuning(Ptr<TcpSocketBase> tcpSocket, bool socketDone);
 
+  /**
+   * @brief TODO
+   */
   void CloseConnections();
 
-  Ptr<Socket> SetupConnection(Ipv4Address sender, bool scheduleNextBurst);
+  /**
+   * @brief Create a new connection a sender.
+   *
+   * \param sender IP address of sender
+   * \param canSchedule Whether we should, after setting up the connection,
+   * schedule the next action, such as starting a burst or starting the
+   * background flows.
+   * \param isBurstSender Whether this sender is a burst
+   * sender, as opposed to a background sender.
+   * \param useEcn Whether to enable ECN for this connection.
+   */
+  Ptr<Socket> SetupConnection(
+      Ipv4Address sender, bool canSchedule, bool isBurstSender, bool useEcn);
 
   /**
    * @brief Look up the node ID of the first sender (lowest ID we know about).
@@ -211,7 +247,7 @@ class IncastAggregator : public Application {
   uint32_t *m_currentBurstCount;
 
   // For each burst, the number of bytes to request from each sender
-  uint32_t m_bytesPerSender;
+  uint32_t m_bytesPerBurstSender;
 
   // The number of total bytes received from all workers in the current burst
   uint32_t m_totalBytesSoFar;
@@ -222,8 +258,11 @@ class IncastAggregator : public Application {
   // TypeId of the protocol used
   TypeId m_tid;
 
-  // Map from socket to remote node ID
-  std::unordered_map<Ptr<Socket>, uint32_t> m_sockets;
+  // Map from the socket to the burst sender node ID
+  std::unordered_map<Ptr<Socket>, uint32_t> m_burstSockets;
+
+  // Map from the socket to the background sender node ID
+  std::unordered_map<Ptr<Socket>, uint32_t> m_backgroundSockets;
 
   // Max random jitter in microseconds
   uint32_t m_requestJitterUs;
@@ -240,17 +279,17 @@ class IncastAggregator : public Application {
   // If m_rwndStrategy=bdp+connections, then this is the bottleneck bandwidth.
   uint32_t m_bandwidthMbps;
 
-  // If m_rwndStrategy=static, then this is the max number of tokens that can be
-  // claimed at once. Used to reset m_rwndScheduleAvailableTokens.
+  // If m_rwndStrategy=scheduled, then this is the max number of tokens that can
+  // be claimed at once. Used to reset m_rwndScheduleAvailableTokens.
   uint32_t m_rwndScheduleMaxTokens;
 
-  // If m_rwndStrategy=static, then this is the current number of tokens that
+  // If m_rwndStrategy=scheduled, then this is the current number of tokens that
   // can be claimed.
   uint32_t m_rwndScheduleAvailableTokens;
 
-  // If m_rwndStrategy=static, then this is the set of senders (node ID) that
+  // If m_rwndStrategy=scheduled, then this is the set of senders (node ID) that
   // have claimed a token.
-  std::unordered_set<uint32_t> m_sendersWithAToken;
+  std::unordered_set<uint32_t> m_burstSendersWithAToken;
 
   // Assumes that all senders have the same RTT.
   Time m_physicalRtt;
@@ -259,37 +298,54 @@ class IncastAggregator : public Application {
   // TODO
   bool m_probingRtt;
 
-  // TCP congestion control algorithm
-  TypeId m_cca;
+  // TCP congestion control algorithm used by the burst senders.
+  TypeId m_burstSenderCca;
+
+  // Struct for logging the bytes covered by an ACK, for a specific
+  // connection.
+  struct bytesInAckEntry {
+    Time time;
+    Ipv4Address sender_ip;
+    uint16_t sender_port;
+    Ipv4Address aggregator_ip;
+    uint16_t aggregator_port;
+    uint32_t bytesInAck;
+  };
 
   // Log streams
   std::vector<std::pair<Time, Time>> m_burstTimesLog;
   std::vector<std::pair<Time, uint32_t>> m_cwndLog;
   std::vector<std::pair<Time, Time>> m_rttLog;
+  std::vector<struct bytesInAckEntry> m_bytesInAckLog;
 
   // Maps sockets to the number of bytes received during the current burst
   std::unordered_map<Ptr<Socket>, uint32_t> m_bytesReceived;
 
   // Number of senders that have finished the current burst
-  uint32_t m_sendersFinished;
+  uint32_t m_burstSendersFinished;
 
   // Pointer to the global record of flow start and end times, which is a
   // vector of bursts, where each entry is a maps from sender node ID to
   // (start time, time of first packet, end time).
   std::vector<std::unordered_map<uint32_t, std::vector<Time>>> *m_flowTimes;
 
-  // Point to the global record of senders, which maps sender node ID to a
+  // Global record of burst senders, which maps the sender node ID to a pair
+  // of SenderApp and sender IP address.
+  std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
+      *m_burstSenders;
+
+  // Global record of background senders, which maps the sender node ID to a
   // pair of SenderApp and sender IP address.
   std::unordered_map<uint32_t, std::pair<Ptr<IncastSender>, Ipv4Address>>
-      *m_senders;
+      *m_backgroundSenders;
 
   // Time to delay the request for the first sender in each burst (in
   // milliseconds). Overrides any jitter at the aggregator node. 0 means no
   // delay, and use jitter instead.
   Time m_firstFlowOffset;
 
-  // Parameter G for updating dctcp_alpha.
-  double m_dctcpShiftG;
+  // Whether background flows have already started
+  bool m_startedBackground{false};
 };
 
 }  // namespace ns3

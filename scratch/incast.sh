@@ -1,19 +1,20 @@
 #!/usr/bin/env -S bash -x
 #
-# Run the incast simulation datacenter parameters.
+# Run the incast simulation.
 
 set -eoux pipefail
 
-# Enforce that there is a single argument.
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <output directory>"
+# Enforce that there are four arguments.
+if [ "$#" -ne 6 ]; then
+    echo "Usage: $0 <output directory> <num senders> <RWND policy> <static RWND clamp> <dur_ms> <skip build>"
     exit 1
 fi
 
-burstDurationMs=15
+skip_build="$6"
+burstDurationMs="$5"
 numBursts=11
-# Note: Retransmits during slow start begin at 214 connections. < Is that true?
-numSenders=200 # $((100 + 1))
+numBurstSenders="$2"
+numBackgroundSenders=0
 cca="TcpDctcp"
 nicRateMbps=10000
 uplinkRateMbps=100000
@@ -23,11 +24,11 @@ queueSizeBytes=2000000
 bytesPerPacket=1500
 queueSizePackets="$(python -c "import math; print(math.ceil($queueSizeBytes / $bytesPerPacket))")"
 # Convert burst duration to bytes per sender.
-bytesPerSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numSenders))")"
+bytesPerBurstSender="$(python -c "import math; print(math.ceil(($burstDurationMs / 1e3) * ($nicRateMbps * 1e6 / 8) / $numBurstSenders))")"
 icwnd=10
 firstFlowOffsetMs=0
-rwndStrategy="none"
-staticRwndBytes=65536
+rwndStrategy="$3"
+staticRwndBytes="$4"
 rwndScheduleMaxConns=20
 delAckCount=1
 delAckTimeoutMs=0
@@ -38,7 +39,7 @@ rttSec="$(python -c "print($delayPerLinkUs * 6 / 1e6)")"
 # recommendedThresholdPackets="$(python -c "print($nicRatePps * $rttSec / 7)")"
 # thresholdPackets="$(python -c "import math; print(math.ceil($recommendedThresholdPackets))")"
 # ECN marking threshold:
-queueThresholdBytes=120000
+queueThresholdBytes=97500
 thresholdPackets="$(python -c "import math; print(math.ceil($queueThresholdBytes / $bytesPerPacket))")"
 
 # Pick the right DCTCP G parameter.
@@ -51,12 +52,21 @@ dctcpShiftGExp="$(python -c "import math; print(math.ceil($dctcpShiftGExpRaw))")
 # dctcpShiftGExp=2
 dctcpShiftG="$(python -c "print(1 / 2**$dctcpShiftGExp)")"
 
-out_dir="$1"
-dir_name="${burstDurationMs}ms-$numSenders-$numBursts-$cca-${nicRateMbps}mbps-${queueSizeBytes}B-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
+# Get git branch
+ns3_dir="$(realpath "$(dirname "$0")/..")"
+pushd "$ns3_dir"
+git_branch="$(git branch --show-current)"
+popd
+if [ -z "$git_branch" ]; then
+    printf "Error: Unable to determine Git branch of simulator!\n"
+    exit 1
+fi
+
+out_dir="$1/$git_branch"
+dir_name="${burstDurationMs}ms-$numBurstSenders-$numBackgroundSenders-$numBursts-$cca-${nicRateMbps}mbps-${queueSizeBytes}B-${icwnd}icwnd-${firstFlowOffsetMs}offset-$rwndStrategy-rwnd${staticRwndBytes}B-${rwndScheduleMaxConns}tokens-${dctcpShiftGExp}g-${thresholdPackets}ecn-${delAckCount}_${delAckTimeoutMs}da"
 # We will store in-progress results in a tmpfs and move them to the final
 # location later.
-tmpfs="$out_dir"/tmpfs
-tmpfs_results_dir="$tmpfs/$dir_name"
+tmpfs="$out_dir"/tmpfs/${dir_name}_tmpfs
 results_dir="$out_dir/$dir_name"
 
 # If tmpfs exists, then clean it up.
@@ -72,45 +82,53 @@ fi
 # Prepare tmpfs.
 rm -rf "$tmpfs"
 mkdir -pv "$tmpfs"
-sudo mount -v -t tmpfs none "$tmpfs" -o size=10G
+sudo mount -v -t tmpfs none "$tmpfs" -o size=5G
 
 # Clean up previous results.
-rm -rfv "${tmpfs_results_dir:?}" "${results_dir:?}"
-mkdir -p "$tmpfs_results_dir/"{logs,pcap}
+rm -rfv "${tmpfs:?}/"* "${results_dir:?}"
+# mkdir -p "$tmpfs/"{logs,pcap}
+
+mkdir -pv "$tmpfs/$dir_name/"{logs,pcap}
 
 # Run simulation.
-ns3_dir="$(realpath "$(dirname "$0")/..")"
-"$ns3_dir/ns3" configure --build-profile=default
-"$ns3_dir/ns3" build "scratch/incast"
+if [ "$skip_build" != "yes" ]; then
+    # "$ns3_dir/ns3" configure --build-profile=debug
+    "$ns3_dir/ns3" configure --build-profile=default
+    "$ns3_dir/ns3" build "scratch/incast"
+fi
+# time "$ns3_dir"/build/scratch/ns3-dev-incast-debug \
 time "$ns3_dir"/build/scratch/ns3-dev-incast-default \
     --outputDirectory="$tmpfs/" \
     --traceDirectory="$dir_name" \
-    --numSenders=$numSenders \
-    --bytesPerSender="$bytesPerSender" \
-    --numBursts=$numBursts \
-    --delayPerLinkUs=$delayPerLinkUs \
-    --jitterUs=$jitterUs \
-    --smallLinkBandwidthMbps=$nicRateMbps \
-    --largeLinkBandwidthMbps=$uplinkRateMbps \
-    --cca=$cca \
+    --numBurstSenders="$numBurstSenders" \
+    --numBackgroundSenders="$numBackgroundSenders" \
+    --bytesPerBurstSender="$bytesPerBurstSender" \
+    --numBursts="$numBursts" \
+    --delayPerLinkUs="$delayPerLinkUs" \
+    --jitterUs="$jitterUs" \
+    --smallLinkBandwidthMbps="$nicRateMbps" \
+    --largeBurstLinkBandwidthMbps="$uplinkRateMbps" \
+    --cca="$cca" \
     --smallQueueSizePackets="$queueSizePackets" \
-    --largeQueueSizePackets="$queueSizePackets" \
+    --largeBurstQueueSizePackets="$queueSizePackets" \
     --smallQueueMinThresholdPackets="$thresholdPackets" \
     --smallQueueMaxThresholdPackets="$thresholdPackets" \
-    --largeQueueMinThresholdPackets="$thresholdPackets" \
-    --largeQueueMaxThresholdPackets="$thresholdPackets" \
-    --initialCwnd=$icwnd \
-    --firstFlowOffsetMs=$firstFlowOffsetMs \
-    --rwndStrategy=$rwndStrategy \
-    --staticRwndBytes=$staticRwndBytes \
-    --rwndScheduleMaxConns=$rwndScheduleMaxConns \
+    --largeBurstQueueMinThresholdPackets="$thresholdPackets" \
+    --largeBurstQueueMaxThresholdPackets="$thresholdPackets" \
+    --initialCwnd="$icwnd" \
+    --firstFlowOffsetMs="$firstFlowOffsetMs" \
+    --rwndStrategy="$rwndStrategy" \
+    --staticRwndBytes="$staticRwndBytes" \
+    --rwndScheduleMaxConns="$rwndScheduleMaxConns" \
     --dctcpShiftG="$dctcpShiftG" \
-    --delAckCount=$delAckCount \
-    --delAckTimeoutMs=$delAckTimeoutMs
+    --delAckCount="$delAckCount" \
+    --delAckTimeoutMs="$delAckTimeoutMs"
+#  \
+# --enableSenderPcap
 
-# Move results to out_dir.
-mkdir -pv "$out_dir"
-mv -f "$tmpfs_results_dir" "$results_dir"
+# Move results to results_dir.
+mkdir -pv "$results_dir"
+mv -f "$tmpfs/$dir_name/"* "$results_dir/"
 
 # Clean up tmpfs.
 rm -rf "${tmpfs:?}"/*
